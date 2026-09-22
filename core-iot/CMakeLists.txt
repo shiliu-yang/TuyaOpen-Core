@@ -6,9 +6,7 @@ file(GLOB_RECURSE _cloud_srcs CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/protocol/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/schema/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/cloud/*.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/file_storage/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/tls/*.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/weather/*.c"
 )
 
 if(NOT CONFIG_ENABLE_DEVICE_TIMER)
