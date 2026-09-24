@@ -11,11 +11,11 @@
 
 menu "tuyaopen-core"
 
-    rsource "core-common/Kconfig"
+    rsource "third_party/Kconfig"
     rsource "core-communication/Kconfig"
-    rsource "core-iot/Kconfig"
-    rsource "core-ai/Kconfig"
-    rsource "core-p2p/Kconfig"
+    rsource "iot-core/Kconfig"
+    rsource "agent-core/Kconfig"
+    rsource "p2p-core/Kconfig"
 
     config LITTLE_END
         bool "LITTLE_END: target is little-endian"

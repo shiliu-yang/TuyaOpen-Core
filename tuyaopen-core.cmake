@@ -58,11 +58,11 @@ endif()
 unset(_tuyaopen_switch_defs)
 unset(_tuyaopen_opt)
 
-add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/core-common ${CMAKE_CURRENT_BINARY_DIR}/tuyaopen-core/core-common)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/third_party ${CMAKE_CURRENT_BINARY_DIR}/tuyaopen-core/third_party)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/core-communication ${CMAKE_CURRENT_BINARY_DIR}/tuyaopen-core/core-communication)
-add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/core-iot ${CMAKE_CURRENT_BINARY_DIR}/tuyaopen-core/core-iot)
-add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/core-ai ${CMAKE_CURRENT_BINARY_DIR}/tuyaopen-core/core-ai)
-add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/core-p2p ${CMAKE_CURRENT_BINARY_DIR}/tuyaopen-core/core-p2p)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/iot-core ${CMAKE_CURRENT_BINARY_DIR}/tuyaopen-core/iot-core)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/agent-core ${CMAKE_CURRENT_BINARY_DIR}/tuyaopen-core/agent-core)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/p2p-core ${CMAKE_CURRENT_BINARY_DIR}/tuyaopen-core/p2p-core)
 
 set(_tuyaopen_core_libs)
 foreach(_tuyaopen_mod IN ITEMS
@@ -71,8 +71,6 @@ foreach(_tuyaopen_mod IN ITEMS
     libhttp
     libmqtt
     libtls
-    common
-    qrcode
     tal_system
     tal_network
     tal_kv

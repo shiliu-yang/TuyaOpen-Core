@@ -15,7 +15,7 @@ target_include_directories(tal_wifi_ulp
     PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
-set(_tal_wifi_ulp_deps tuyaopen-headers tal_system common tuya_cloud_service)
+set(_tal_wifi_ulp_deps tuyaopen-headers tal_system tuya_cloud_service)
 if(TARGET tal_wifi)
     list(APPEND _tal_wifi_ulp_deps tal_wifi)
 endif()
