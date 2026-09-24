@@ -16,17 +16,20 @@ target_include_directories(libcjson PUBLIC
 )
 target_link_libraries(libcjson PRIVATE tuyaopen-headers)
 
-# coreHTTP（官方 v2.0.1）：核心客户端 + 其 http_parser 依赖
+# coreHTTP（submodule，v3.1.3）：核心客户端 + 官方解析器 llhttp（嵌套 submodule）
 add_library(corehttp STATIC
     ${CMAKE_CURRENT_SOURCE_DIR}/coreHTTP/source/core_http_client.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/coreHTTP/source/dependency/3rdparty/http_parser/http_parser.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/coreHTTP/source/dependency/3rdparty/llhttp/src/api.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/coreHTTP/source/dependency/3rdparty/llhttp/src/llhttp.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/coreHTTP/source/dependency/3rdparty/llhttp/src/http.c
 )
 target_include_directories(corehttp
     PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/coreHTTP/source/include>
-    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/coreHTTP/source/dependency/3rdparty/http_parser
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/coreHTTP/source/dependency/3rdparty/llhttp/include
 )
 
-# coreMQTT（官方 v1.0.1）
+# coreMQTT（submodule，v5.0.2）
 file(GLOB _coremqtt_srcs CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/coreMQTT/source/*.c"
 )

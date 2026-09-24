@@ -13,17 +13,62 @@
 #define log_debug PR_DEBUG
 #define log_error PR_ERR
 
+#define MQTT_WRAPPER_MAX_PENDING 10
+
 typedef struct {
     mqtt_client_config_t config;
     MQTTContext_t mqclient;
     tuya_transporter_t network;
     uint8_t mqttbuffer[CORE_MQTT_BUFFER_SIZE];
+    /* v2.x 起 QoS1/QoS2 需要状态表（MQTT_InitStatefulQoS 初始化） */
+    MQTTPubAckInfo_t outgoing_records[MQTT_WRAPPER_MAX_PENDING];
+    MQTTPubAckInfo_t incoming_records[MQTT_WRAPPER_MAX_PENDING];
 } mqtt_client_context_t;
+
+/* v5.0.2 的 MQTTContext_t 无 userData 字段：wrapper 自建注册表，
+ * 事件回调按 pContext 指针反查 wrapper 上下文 */
+#define MQTT_WRAPPER_MAX_CLIENTS 4
+static mqtt_client_context_t *s_ctx_registry[MQTT_WRAPPER_MAX_CLIENTS];
+
+static void core_mqtt_registry_add(mqtt_client_context_t *context)
+{
+    for (int i = 0; i < MQTT_WRAPPER_MAX_CLIENTS; i++) {
+        if (s_ctx_registry[i] == NULL) {
+            s_ctx_registry[i] = context;
+            return;
+        }
+    }
+    log_error("mqtt wrapper registry full");
+}
+
+static void core_mqtt_registry_remove(mqtt_client_context_t *context)
+{
+    for (int i = 0; i < MQTT_WRAPPER_MAX_CLIENTS; i++) {
+        if (s_ctx_registry[i] == context) {
+            s_ctx_registry[i] = NULL;
+            return;
+        }
+    }
+}
+
+static mqtt_client_context_t *core_mqtt_registry_find(const MQTTContext_t *mqclient)
+{
+    for (int i = 0; i < MQTT_WRAPPER_MAX_CLIENTS; i++) {
+        if (s_ctx_registry[i] != NULL && &s_ctx_registry[i]->mqclient == mqclient) {
+            return s_ctx_registry[i];
+        }
+    }
+    return NULL;
+}
 
 static void core_mqtt_library_callback(struct MQTTContext *pContext, struct MQTTPacketInfo *pPacketInfo,
                                        struct MQTTDeserializedInfo *pDeserializedInfo)
 {
-    mqtt_client_context_t *context = (mqtt_client_context_t *)pContext->userData;
+    mqtt_client_context_t *context = core_mqtt_registry_find(pContext);
+    if (context == NULL) {
+        log_error("mqtt callback: context not found");
+        return;
+    }
 
     uint16_t msgid = pDeserializedInfo->packetIdentifier;
 
@@ -114,6 +159,10 @@ static int network_read(NetworkContext_t *pNetwork, unsigned char *pMsg, size_t 
         return 0;
     }
 
+    if (result <= 0) {
+        log_error("network_read fail: result=%d, len=%zu, timeout=%d", result, len, timeout);
+    }
+
     return result;
 }
 static uint32_t __mqtt_client_get_current_time(void)
@@ -127,6 +176,7 @@ mqtt_client_status_t mqtt_client_init(void *client, const mqtt_client_config_t *
 
     /* Clean memory */
     memset(context, 0, sizeof(mqtt_client_context_t));
+    core_mqtt_registry_add(context);
 
     /* Setting data */
     TUYA_TRANSPORT_TYPE_E transport_type = (config->cacert == NULL) ? TRANSPORT_TYPE_TCP : TRANSPORT_TYPE_TLS;
@@ -156,7 +206,7 @@ mqtt_client_status_t mqtt_client_init(void *client, const mqtt_client_config_t *
     /* Fill in TransportInterface send and receive function pointers.
      * For this demo, TCP sockets are used to send and receive data
      * from network. Network context is SSL context for OpenSSL.*/
-    TransportInterface_t transport;
+    TransportInterface_t transport = {0};
     transport.pNetworkContext = &context->network;
     transport.send = (TransportSend_t)network_write;
     transport.recv = (TransportRecv_t)network_read;
@@ -168,12 +218,21 @@ mqtt_client_status_t mqtt_client_init(void *client, const mqtt_client_config_t *
 
     /* Initialize MQTT library. */
     mqtt_status = MQTT_Init(&context->mqclient, &transport, (MQTTGetCurrentTimeFunc_t)__mqtt_client_get_current_time,
-                            core_mqtt_library_callback, &network_buffer, context);
+                            core_mqtt_library_callback, &network_buffer);
 
     if (mqtt_status != MQTTSuccess) {
         log_error("MQTT init failed: Status = %s.", MQTT_Status_strerror(mqtt_status));
         tuya_transporter_close(context->network);
         tuya_transporter_destroy(context->network);
+        return OPRT_COM_ERROR;
+    }
+
+    /* v2.x 起 QoS1/QoS2 订阅/发布需初始化在途记录表 */
+    mqtt_status = MQTT_InitStatefulQoS(&context->mqclient,
+                                       context->outgoing_records, MQTT_WRAPPER_MAX_PENDING,
+                                       context->incoming_records, MQTT_WRAPPER_MAX_PENDING);
+    if (mqtt_status != MQTTSuccess) {
+        log_error("MQTT_InitStatefulQoS failed: Status = %s.", MQTT_Status_strerror(mqtt_status));
         return OPRT_COM_ERROR;
     }
 
@@ -184,6 +243,7 @@ mqtt_client_status_t mqtt_client_deinit(void *client)
 {
     mqtt_client_context_t *context = (mqtt_client_context_t *)client;
 
+    core_mqtt_registry_remove(context);
     tuya_transporter_close(context->network);
     tuya_transporter_destroy(context->network);
     return MQTT_STATUS_SUCCESS;
@@ -217,7 +277,8 @@ mqtt_client_status_t mqtt_client_connect(void *client)
     if (MQTTSuccess != mqtt_status) {
         log_error("mqtt connect err: %s(%d)", MQTT_Status_strerror(mqtt_status), mqtt_status);
         tuya_transporter_close(context->network);
-        if (MQTTNotAuthorized == mqtt_status) {
+        /* v5.0.2 对 CONNACK 拒绝（含 reason code 5 未授权）统一报 ServerRefused */
+        if (MQTTServerRefused == mqtt_status) {
             return MQTT_STATUS_NOT_AUTHORIZED;
         }
         return MQTT_STATUS_CONNECT_FAILED;
@@ -313,7 +374,8 @@ mqtt_client_status_t mqtt_client_yield(void *client)
     mqtt_client_context_t *context = (mqtt_client_context_t *)client;
     MQTTStatus_t mqtt_status;
 
-    mqtt_status = MQTT_ProcessLoop(&context->mqclient, context->config.timeout_ms);
+    /* v5.0.2 的 ProcessLoop 无超时参数：收包超时由 transport recv 控制 */
+    mqtt_status = MQTT_ProcessLoop(&context->mqclient);
     if (mqtt_status != MQTTSuccess) {
         log_error("MQTT_ProcessLoop returned with status = %s.", MQTT_Status_strerror(mqtt_status));
         mqtt_client_disconnect(context);

@@ -289,6 +289,44 @@ static OPERATE_RET http_connect_session_internal(http_session_ctx_t *ctx)
     return OPRT_OK;
 }
 
+OPERATE_RET http_url_parse(const char *url, http_url_parts_t *parts)
+{
+    memset(parts, 0, sizeof(*parts));
+
+    const char *p = strstr(url, "://");
+    if (p == NULL) {
+        return OPRT_INVALID_PARM;
+    }
+
+    parts->schema = url;
+    parts->schema_len = (uint16_t)(p - url);
+    parts->is_ssl = (parts->schema_len == 5 && memcmp("https", url, 5) == 0);
+    parts->port = parts->is_ssl ? 443 : 80;
+
+    p += 3; /* skip "://" */
+    parts->host = p;
+    const char *host_end = p;
+    while (*host_end != '\0' && *host_end != '/' && *host_end != ':') {
+        host_end++;
+    }
+    parts->host_len = (uint16_t)(host_end - p);
+
+    if (*host_end == ':') {
+        parts->port = (uint16_t)atoi(host_end + 1);
+        p = strchr(host_end, '/');
+    } else {
+        p = host_end;
+    }
+    if (p == NULL) {
+        p = url + strlen(url);
+    }
+
+    parts->path = p;
+    parts->path_len = strlen(p);
+
+    return OPRT_OK;
+}
+
 OPERATE_RET http_open_session(http_session_t *session, const char *url, uint32_t timeout_ms)
 {
     if (!session || !url) {
@@ -438,12 +476,12 @@ OPERATE_RET http_send_request(http_session_t session, const http_req_t *req, uin
     PR_DEBUG("Sending HTTP %s request to %s", method_str, ctx->host);
 
     // Send request
-    // Use HTTP_SEND_DISABLE_RECV_BODY_FLAG for streaming mode to only receive headers
-    uint32_t send_flags = HTTP_SEND_DISABLE_RECV_BODY_FLAG ;
-    httpStatus = HTTPClient_Request(&ctx->transport, &requestHeaders,
-                                   (const uint8_t *)req->content, 
-                                   (req->content && req->content_len > 0) ? (size_t)req->content_len : 0,
-                                   &ctx->response, send_flags);
+    // Streaming mode: only receive headers (body read on-demand via http_read_content)
+    ctx->response.respOptionFlags = HTTP_RESPONSE_DO_NOT_PARSE_BODY_FLAG;
+    httpStatus = HTTPClient_Send(&ctx->transport, &requestHeaders,
+                                 (const uint8_t *)req->content,
+                                 (req->content && req->content_len > 0) ? (size_t)req->content_len : 0,
+                                 &ctx->response, 0);
 
     HTTP_FREE(requestHeaders.pBuffer);
 
@@ -628,9 +666,18 @@ int http_read_content(http_session_t session, void *buf, unsigned int max_len)
         return 0; // EOF
     }
 
-    // Use HTTPClient_Recv to read data directly into caller's buffer
-    int32_t bytes_read = HTTPClient_Recv(&ctx->transport, &ctx->response,
-                                         (uint8_t *)buf, (size_t)max_len);
+    /* 先吐 Send(DO_NOT_PARSE_BODY) 时预收进 pBuffer 的 body 片段（若有），
+     * 之后直接经 transport recv 裸读 body（头已收完，body 为纯数据流） */
+    if (ctx->response.bodyLen > 0 && ctx->response.pBody != NULL) {
+        size_t copy_len = (ctx->response.bodyLen < (size_t)max_len) ? ctx->response.bodyLen : (size_t)max_len;
+        memcpy(buf, ctx->response.pBody, copy_len);
+        memmove(ctx->response.pBody, ctx->response.pBody + copy_len, ctx->response.bodyLen - copy_len);
+        ctx->response.bodyLen -= copy_len;
+        ctx->bytes_read += copy_len;
+        return (int32_t)copy_len;
+    }
+
+    int32_t bytes_read = ctx->transport.recv(ctx->transport.pNetworkContext, (uint8_t *)buf, max_len);
 
     if (bytes_read < 0) {
         PR_ERR("HTTPClient_Recv failed: %d", bytes_read);

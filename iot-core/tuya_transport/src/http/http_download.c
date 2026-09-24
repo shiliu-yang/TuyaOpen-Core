@@ -4,7 +4,7 @@
 #include "core_http_client.h"
 #include "transport_interface.h"
 #include "http_download.h"
-#include "http_parser.h"
+#include "http_session.h"
 
 typedef enum {
     DL_STATE_IDLE,
@@ -82,7 +82,11 @@ static int http_download_filesize_get(http_download_t *ctx)
     PR_DEBUG("Getting file object size from host...");
     TUYA_CALL_ERR_GOTO(HTTPClient_InitializeRequestHeaders(&ctx->requestHeaders, &ctx->requestInfo), __exit);
     TUYA_CALL_ERR_GOTO(HTTPClient_AddRangeHeader(&ctx->requestHeaders, 0, 0), __exit);
-    TUYA_CALL_ERR_GOTO(HTTPClient_Request(&ctx->transport, &ctx->requestHeaders, NULL, 0, &ctx->response, 0), __exit);
+    /* Range: 0-0 的 body 仅 1 字节，收完整响应；pBuffer 用下载缓冲承接 */
+    ctx->response.pBuffer = ctx->buffer;
+    ctx->response.bufferLen = ctx->config.range_length;
+    ctx->response.respOptionFlags = 0;
+    TUYA_CALL_ERR_GOTO(HTTPClient_Send(&ctx->transport, &ctx->requestHeaders, NULL, 0, &ctx->response, 0), __exit);
     PR_DEBUG("Received HTTP response from %s%s...", ctx->host, ctx->path);
     PR_DEBUG("Response Headers:\n%.*s", (int32_t)ctx->response.headersLen, ctx->response.pHeaders);
     if (ctx->response.statusCode != HTTP_STATUS_CODE_PARTIAL_CONTENT) {
@@ -105,9 +109,7 @@ static int http_download_filesize_get(http_download_t *ctx)
     pFileSizeStr += sizeof(char);
     ctx->file_size = (size_t)strtoul(pFileSizeStr, NULL, 10);
     PR_INFO("The file is %d bytes long.", (int32_t)ctx->file_size);
-    if (ctx->response.pBuffer) {
-        tal_free(ctx->response.pBuffer);
-    }
+    /* pBuffer 即 ctx->buffer（不释放），仅重置响应状态供下次请求使用 */
     memset(&ctx->response, 0, sizeof(ctx->response));
 __exit:
     return rt;
@@ -121,8 +123,11 @@ static int http_download_range_request(http_download_t *ctx, uint32_t range_star
     TUYA_CALL_ERR_GOTO(HTTPClient_InitializeRequestHeaders(&ctx->requestHeaders, &ctx->requestInfo), __exit);
     TUYA_CALL_ERR_GOTO(HTTPClient_AddRangeHeader(&ctx->requestHeaders, range_start, range_end), __exit);
     PR_TRACE("Request Headers:\n%.*s", (int32_t)ctx->requestHeaders.headersLen, (char *)ctx->requestHeaders.pBuffer);
-    TUYA_CALL_ERR_GOTO(HTTPClient_Request(&ctx->transport, &ctx->requestHeaders, NULL, 0, &ctx->response,
-                                          HTTP_SEND_DISABLE_RECV_BODY_FLAG),
+    /* 只收头：body 留在 socket，由 DATE_GET 状态裸读（等价旧 DISABLE_RECV_BODY） */
+    ctx->response.pBuffer = ctx->buffer;
+    ctx->response.bufferLen = ctx->config.range_length;
+    ctx->response.respOptionFlags = HTTP_RESPONSE_DO_NOT_PARSE_BODY_FLAG;
+    TUYA_CALL_ERR_GOTO(HTTPClient_Send(&ctx->transport, &ctx->requestHeaders, NULL, 0, &ctx->response, 0),
                        __exit);
     PR_TRACE("Received HTTP response from %s%s...", ctx->host, ctx->path);
     PR_TRACE("Response Headers:\n%.*s", (int32_t)ctx->response.headersLen, ctx->response.pHeaders);
@@ -147,42 +152,23 @@ static int http_file_download_init(http_download_t *ctx, http_download_config_t 
     }
     ctx->event.user_data = ctx->config.user_data;
 
-    /* url parse to host port path */
-    struct http_parser_url purl;
+    /* url parse to host port path (http(s)://host[:port]/path) */
+    http_url_parts_t parts;
+    TUYA_CALL_ERR_RETURN(http_url_parse(config->url, &parts));
 
-    http_parser_url_init(&purl);
-    TUYA_CALL_ERR_RETURN(http_parser_parse_url(config->url, strlen(config->url), 0, &purl));
-
-    char *p_schema = config->url + purl.field_data[UF_SCHEMA].off;
-    uint16_t schema_len = purl.field_data[UF_SCHEMA].len;
-    uint16_t default_port = 0;
-    // TUYA_CALL_ERR_RETURN(memcmp("https", p_schema, schema_len));
-    if (0 == memcmp("https", p_schema, strlen("https"))) {
-        default_port = 443;
-    } else {
-        default_port = 80;
-    }
-
-    char *p_host = config->url + purl.field_data[UF_HOST].off;
-    uint16_t host_len = purl.field_data[UF_HOST].len;
-    char *p_path = config->url + purl.field_data[UF_PATH].off;
-    uint16_t path_len = strlen(config->url) - purl.field_data[UF_PATH].off;
-    // uint16_t path_len  = purl.field_data[UF_PATH].len;
-
-    PR_DEBUG("UF_SCHEMA: %.*s", schema_len, p_schema);
-    PR_DEBUG("UF_HOST: %.*s", host_len, p_host);
-    PR_DEBUG("UF_PATH: %.*s", path_len, p_path);
-    PR_DEBUG("PORT: %d", purl.port);
-    ctx->port = purl.port == 0 ? default_port : purl.port;
-    ctx->host = tal_malloc(host_len + 1);
+    PR_DEBUG("UF_SCHEMA: %.*s", parts.schema_len, parts.schema);
+    PR_DEBUG("UF_HOST: %.*s", parts.host_len, parts.host);
+    PR_DEBUG("UF_PATH: %s", parts.path);
+    PR_DEBUG("PORT: %d", parts.port);
+    ctx->port = parts.port;
+    ctx->host = tal_malloc(parts.host_len + 1);
     TUYA_CHECK_NULL_RETURN(ctx->host, OPRT_MALLOC_FAILED);
-    memcpy(ctx->host, p_host, host_len);
-    ctx->host[host_len] = 0;
+    memcpy(ctx->host, parts.host, parts.host_len);
+    ctx->host[parts.host_len] = 0;
 
-    ctx->path = tal_malloc(path_len + 1);
+    ctx->path = tal_malloc(parts.path_len + 1);
     TUYA_CHECK_NULL_RETURN(ctx->path, OPRT_MALLOC_FAILED);
-    memcpy(ctx->path, p_path, path_len);
-    ctx->path[path_len] = 0;
+    strcpy(ctx->path, parts.path);
 
     ctx->buffer = tal_malloc(ctx->config.range_length + 1);
     TUYA_CHECK_NULL_RETURN(ctx->buffer, OPRT_MALLOC_FAILED);
@@ -281,8 +267,17 @@ int http_file_download(http_download_config_t *config)
             ctx->state = DL_STATE_DATE_GET;
 
         case DL_STATE_DATE_GET: {
-            read_size = HTTPClient_Recv(&ctx->transport, &ctx->response, ctx->buffer + ctx->remain_len,
-                                        ctx->config.range_length - ctx->remain_len);
+            /* 首轮先消费 Send(DO_NOT_PARSE_BODY) 时预收进 pBuffer 的 body 片段
+             * （pBody 指向 pBuffer 内 body 区），之后经 transport 裸读
+             * （头已收完，body 为纯数据流，等价旧 HTTPClient_Recv） */
+            if (ctx->response.bodyLen > 0 && ctx->response.pBody != NULL) {
+                memmove(ctx->buffer, ctx->response.pBody, ctx->response.bodyLen);
+                read_size = (int32_t)ctx->response.bodyLen;
+                ctx->response.bodyLen = 0;
+            } else {
+                read_size = tuya_transporter_read(network, ctx->buffer + ctx->remain_len,
+                                                  ctx->config.range_length - ctx->remain_len, config->timeout_ms);
+            }
 
             if (read_size <= 0) {
                 PR_WARN("file download range get error:%d, goto retry", rt);

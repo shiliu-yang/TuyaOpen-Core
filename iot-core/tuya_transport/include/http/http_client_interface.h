@@ -3,6 +3,10 @@
 
 #include "tuya_cloud_types.h"
 #include "tal_memory.h"
+
+/* 一次性请求的响应缓冲大小（头+体共用，v3.1.3 需应用提供） */
+#define HTTP_CLIENT_RESPONSE_BUFFER_SIZE (8 * 1024)
+
 /**
  * @ingroup http_enum_types
  * @brief The HTTP interface return status.

@@ -52,8 +52,8 @@ static http_client_status_t core_http_request_send(const TransportInterface_t *p
               (int32_t)requestInfo->hostLen, requestInfo->pHost);
 
     /* Send the request and receive the response. */
-    httpStatus = HTTPClient_Request(pTransportInterface, &requestHeaders, (uint8_t *)pRequestBodyBuf, reqBodyBufLen,
-                                    response, 0);
+    httpStatus = HTTPClient_Send(pTransportInterface, &requestHeaders, (uint8_t *)pRequestBodyBuf, reqBodyBufLen,
+                                 response, 0);
 
     /* Release headers buffer */
     tal_free(requestHeaders.pBuffer);
@@ -143,6 +143,16 @@ http_client_status_t http_client_request(const http_client_request_t *request, h
 
     HTTPResponse_t http_response = {0};
 
+    /* v3.1.3 需应用提供响应缓冲（头+体共用），所有权随 response->buffer
+     * 交给调用者，由 http_client_free 释放 */
+    http_response.pBuffer = tal_malloc(HTTP_CLIENT_RESPONSE_BUFFER_SIZE);
+    if (NULL == http_response.pBuffer) {
+        tuya_transporter_close(network);
+        tuya_transporter_destroy(network);
+        return HTTP_CLIENT_MALLOC_FAULT;
+    }
+    http_response.bufferLen = HTTP_CLIENT_RESPONSE_BUFFER_SIZE;
+
     /* HTTP request send */
     log_debug("http request send!");
     rt = core_http_request_send((const TransportInterface_t *)&pTransportInterface,
@@ -176,12 +186,10 @@ int http_client_free(http_client_response_t *response)
         return OPRT_INVALID_PARM;
     }
 
+    /* v3.1.3：body/headers 均指向 buffer 内部，只释放 buffer 一份 */
     if (response->buffer) {
         tal_free(response->buffer);
-    }
-
-    if (response->body) {
-        tal_free(response->body);
+        response->buffer = NULL;
     }
 
     return OPRT_OK;

@@ -10,7 +10,6 @@
 
 #include "tuya_cloud_types.h"
 #include "core_http_client.h"
-#include "http_parser.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -36,9 +35,38 @@ typedef struct {
     const char *value;
 } http_custom_header_t;
 
+/* HTTP request method（原 http_parser 的 enum http_method，改自定义） */
+typedef enum {
+    HTTP_GET,
+    HTTP_POST,
+    HTTP_PUT,
+    HTTP_DELETE,
+    HTTP_HEAD,
+} http_method_t;
+
+/* URL 解析结果（各字段指向 url 内部，port 为显式端口或默认 80/443） */
+typedef struct {
+    const char *schema;
+    uint16_t schema_len;
+    const char *host;
+    uint16_t host_len;
+    const char *path;
+    size_t path_len;
+    bool is_ssl;
+    uint16_t port;
+} http_url_parts_t;
+
+/**
+ * @brief Parse "http(s)://host[:port]/path" into parts.
+ * @param[in] url url string
+ * @param[out] parts parsed parts (point into url)
+ * @return OPRT_OK on success, OPRT_INVALID_PARM on malformed url
+ */
+OPERATE_RET http_url_parse(const char *url, http_url_parts_t *parts);
+
 // HTTP request structure
 typedef struct {
-    enum http_method type;        // HTTP method (HTTP_GET, HTTP_POST, etc.)
+    http_method_t type;            // HTTP method (HTTP_GET, HTTP_POST, etc.)
     http_ver_t version;            // HTTP version
     const char *content;          // Request body content
     int content_len;              // Content length
