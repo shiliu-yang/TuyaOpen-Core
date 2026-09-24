@@ -6,8 +6,7 @@ add_library(tal_system STATIC)
 target_sources(tal_system PRIVATE ${_tal_system_srcs})
 target_include_directories(tal_system PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    # 通用小工具（crc/random/dev_evt 等，原 common 库并入）
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/utilities>
+
 )
 # tal_api.h 伞形头引用兄弟模块头（esp-idf 的 REQUIRES 语义，需 PUBLIC 传播）；
 # tal_network/tal_security 已并入 tuya_transport（连接服务层）

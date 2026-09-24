@@ -16,11 +16,11 @@ target_include_directories(tuya_transport PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/tls>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/http>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/mqtt>
+    # 通用工具（crc/random/mix_method/dev_evt，原 tal_system/utilities 并入）
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/utilities>
     # 用户提供型配置头：MBEDTLS_CONFIG_FILE / core_http/mqtt_config.h 展开点
     # 不止官方库（本目标与消费者亦有），须随 INTERFACE 传播
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/config>
-    # http wrap 公共头（http_session.h 等）引官方 http_parser
-    $<BUILD_INTERFACE:${TUYAOPEN_THIRD_PARTY_DIR}/coreHTTP/source/dependency/3rdparty/http_parser>
 )
 
 # 官方库目标（third_party 注册）链接自研侧；CONFIG 门控的 mbedtls 可能不存在。
