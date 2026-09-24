@@ -788,6 +788,8 @@ OPERATE_RET tuya_cert_manager_init(void)
 #endif
 
     s_tuya_cert_mng.event_cb = __ty_tls_event_cb;
+    /* 云层向连接层注册 CA 证书加载（连接层不反向依赖云层） */
+    tuya_tls_set_cert_load_cb(tuya_cert_manager_load);
     tal_workq_init_delayed(WORKQ_HIGHTPRI, __update_tls_url_cb, NULL, &s_tuya_cert_mng.tm_update_tls_url);
     tuya_cert_kv_to_ram();
 

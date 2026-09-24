@@ -1,4 +1,9 @@
 
+# tal_system 随 iot-core 分组（third_party 不再托管），系统参数符号在此挂入
+rsource "tal_system/Kconfig"
+# 连接服务层（tuya_transport）的 mbedtls 配置菜单
+rsource "tuya_transport/Kconfig"
+
 menu "configure tuya cloud service"
 
     config TUYA_SECURITY_LEVEL

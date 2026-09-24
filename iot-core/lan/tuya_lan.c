@@ -30,7 +30,7 @@
 #include "tuya_iot_dp.h"
 #include "crc32i.h"
 #include "cJSON.h"
-#include "tal_network_register.h"
+#include "tal_network.h"
 
 #define SERV_PORT_TCP           6668 // device listens for the APP TCP connection
 #define SERV_PORT_APP_UDP_BCAST 7000 // APP broadcast, device listening port
@@ -551,9 +551,8 @@ static void lan_make_udp_packets(uint8_t **out, int *p_olen)
 
     memset(&ip, 0, sizeof(NW_IP_S));
 
-    //! TODO:
-    /* 本机 IP：port/应用层在链路就绪时经 tal_network_card_set_active_ip 同步，
-     * 替代原 netmgr_conn_get(NETCONN_AUTO, NETCONN_CMD_IP) */
+    /* 本机 IP：链路管理方（应用/port 层）在链路事件时经
+     * tal_network_card_set_active_ip 推送，替代原 netmgr_conn_get */
     TUYA_IP_ADDR_T active_ip = tal_network_card_get_active_ip();
     if (active_ip != 0) {
         char *ipstr = tal_net_addr2str(active_ip);

@@ -1,10 +1,9 @@
-# 通用层开关：加密库、KV 存储、系统参数
-# （qrcode 已移至应用层 examples/switch_demo/qrcode）
+# 通用层开关：KV 存储
+# （qrcode 已移至应用层 examples/switch_demo/qrcode，tal_system 与
+#  mbedtls 配置菜单随连接服务层 tuya_transport 归入 iot-core）
 
 menu "third party"
 
-    rsource "tal_security/libtls/Kconfig"
     rsource "tal_kv/Kconfig"
-    rsource "tal_system/Kconfig"
 
 endmenu

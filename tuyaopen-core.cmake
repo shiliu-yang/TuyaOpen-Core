@@ -13,6 +13,9 @@ endif()
 
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/TuyaOpenOptions.cmake)
 
+# 官方库根路径（third_party 各 submodule），全作用域可用
+set(TUYAOPEN_THIRD_PARTY_DIR ${CMAKE_CURRENT_LIST_DIR}/third_party)
+
 # 环境基底（角色同 esp-idf 的 esp_common）：宿主注入 port 头路径，模块统一
 # PRIVATE 依赖它。模块间依赖各自显式声明（esp-idf REQUIRES/PRIV_REQUIRES
 # 的纯 CMake 形态）。
@@ -68,13 +71,12 @@ set(_tuyaopen_core_libs)
 foreach(_tuyaopen_mod IN ITEMS
     libcjson
     tuya_transport
-    libhttp
-    libmqtt
-    libtls
+    corehttp
+    coremqtt
+    backoff_algorithm
+    mbedtls
     tal_system
-    tal_network
     tal_kv
-    tal_security
     tal_wifi
     tal_wired
     tal_bluetooth

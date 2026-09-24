@@ -8,5 +8,5 @@ target_include_directories(svc_streaming_p2p PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 )
 target_compile_options(svc_streaming_p2p PRIVATE ${_p2p_warn_opts})
-target_link_libraries(svc_streaming_p2p PRIVATE tuyaopen-headers libcjson tuya_cloud_service tuya_ai_service lib_rtp base_ice tal_system tal_kv libtls)
+target_link_libraries(svc_streaming_p2p PRIVATE tuyaopen-headers libcjson tuya_cloud_service tuya_ai_service lib_rtp base_ice tal_system tal_kv tuya_transport)
 unset(_svc_streaming_p2p_srcs)

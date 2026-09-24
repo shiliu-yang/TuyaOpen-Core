@@ -22,7 +22,7 @@ target_include_directories(tal_kv
 if(NOT CONFIG_ENABLE_FILE_SYSTEM)
     target_compile_definitions(tal_kv PRIVATE LFS_CONFIG=lfs_config.h)
 endif()
-target_link_libraries(tal_kv PRIVATE tuyaopen-headers libcjson tal_system tal_security)
+target_link_libraries(tal_kv PRIVATE tuyaopen-headers libcjson tal_system tuya_transport)
 unset(_tal_kv_srcs)
 unset(_tal_kv_public)
 unset(_tal_kv_private)

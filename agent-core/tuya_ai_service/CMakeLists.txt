@@ -47,13 +47,9 @@ target_include_directories(tuya_ai_service PUBLIC
 target_link_libraries(tuya_ai_service PRIVATE
     tuyaopen-headers
     libcjson
-    libhttp
-    libmqtt
-    libtls
+    tuya_transport
     tal_system
-    tal_network
     tal_kv
-    tal_security
     tuya_cloud_service
 )
 unset(_ai_srcs)

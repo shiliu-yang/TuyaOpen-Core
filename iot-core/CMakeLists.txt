@@ -1,11 +1,15 @@
 # tuya_cloud_service 源码已拍平：原模块子目录（cloud/ netmgr/ netcfg/ ble/ ...）
 # 直接位于 iot-core/ 下，因此目标在此定义，而不是在模块子目录里。
+
+# 本分组自带的基础库：tal_system（系统抽象）与 tuya_transport（连接服务层，
+# 已吸收 tal_network / tal_security / libtls / http&mqtt wrap）。
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tal_system)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tuya_transport)
 file(GLOB_RECURSE _cloud_srcs CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/lan/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/protocol/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/schema/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/cloud/*.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/tls/*.c"
 )
 
 if(NOT CONFIG_ENABLE_DEVICE_TIMER)
@@ -49,14 +53,13 @@ target_include_directories(tuya_cloud_service PUBLIC ${_cloud_incs})
 set(_cloud_deps
     tuyaopen-headers
     tuya_transport
+    corehttp
+    coremqtt
+    backoff_algorithm
+    mbedtls
     libcjson
-    libhttp
-    libmqtt
-    libtls
     tal_system
-    tal_network
     tal_kv
-    tal_security
 )
 # 网络模块的公共头泄漏：netconn_*.h 引对应 tal_* 头，开启时需 PUBLIC 传播
 if(TARGET tal_wifi)
@@ -76,7 +79,7 @@ if(TARGET tal_cellular)
     target_link_libraries(tuya_cloud_service PUBLIC tal_cellular)
 endif()
 target_link_libraries(tuya_cloud_service
-    PUBLIC tuya_transport libcjson tal_system libmqtt libhttp libtls
+    PUBLIC tuya_transport libcjson tal_system corehttp coremqtt backoff_algorithm mbedtls
     PRIVATE ${_cloud_deps}
 )
 unset(_cloud_srcs)
