@@ -243,54 +243,6 @@ OPERATE_RET tal_log_set_ms_info(BOOL_T if_ms_level);
  */
 OPERATE_RET tal_log_get_level(TAL_LOG_LEVEL_E *level);
 
-/**
- * @brief add one module's log level
- *
- * @param[in] module_name, module name
- * @param[in] logLevel, this module's log level
- *
- * @note This API is used for adding one module's log level.
- *
- * @return OPRT_OK on success. Others on error, please refer to
- * tuya_error_code.h
- */
-OPERATE_RET tal_log_add_module_level(const char *module_name, const TAL_LOG_LEVEL_E level);
-
-/**
- * @brief This API is used for adding one module's log level.
- *
- * @param[in] module_name: module_name
- * @param[in] level: level
- *
- * @return OPRT_OK on success. Others on error, please refer to
- * tuya_error_code.h
- */
-OPERATE_RET tal_log_set_module_level(const char *module_name, TAL_LOG_LEVEL_E level);
-/**
- * @brief get one module's log level
- *
- * @param[in] pModuleName, module name
- * @param[in] logLevel, this module's log level
- *
- * @note This API is used for getting one module's log level.
- *
- * @return OPRT_OK on success. Others on error, please refer to
- * tuya_error_code.h
- */
-OPERATE_RET tal_log_get_module_level(const char *module_name, TAL_LOG_LEVEL_E *level);
-
-/**
- * @brief delete one module's log level
- *
- * @param[in] pModuleName, module name
- *
- * @note This API is used for deleting one module's log level.
- *
- * @return OPRT_OK on success. Others on error, please refer to
- * tuya_error_code.h
- */
-OPERATE_RET tal_log_delete_module_level(const char *module_name);
-
 PRINTF_CHECK(1, 2)
 
 /**

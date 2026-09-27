@@ -92,17 +92,6 @@ OPERATE_RET tal_ota_data_process(TUYA_OTA_DATA_T *pack, uint32_t *remain_len);
  */
 OPERATE_RET tal_ota_end_notify(BOOL_T reset);
 
-/**
- * @brief This API is used for old firmware info, and only used in resumes
- * transmission at break-points
- *
- * @param[in] **info: **info
- *
- * @return OPRT_OK on success. Others on error, please refer to
- * tuya_error_code.h
- */
-OPERATE_RET tal_ota_get_old_firmware_info(TUYA_OTA_FIRMWARE_INFO_T **info);
-
 #ifdef __cplusplus
 }
 #endif

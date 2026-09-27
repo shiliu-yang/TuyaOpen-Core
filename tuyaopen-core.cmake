@@ -62,7 +62,6 @@ unset(_tuyaopen_switch_defs)
 unset(_tuyaopen_opt)
 
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/third_party ${CMAKE_CURRENT_BINARY_DIR}/tuyaopen-core/third_party)
-add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/core-communication ${CMAKE_CURRENT_BINARY_DIR}/tuyaopen-core/core-communication)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/iot-core ${CMAKE_CURRENT_BINARY_DIR}/tuyaopen-core/iot-core)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/agent-core ${CMAKE_CURRENT_BINARY_DIR}/tuyaopen-core/agent-core)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/p2p-core ${CMAKE_CURRENT_BINARY_DIR}/tuyaopen-core/p2p-core)
@@ -77,11 +76,6 @@ foreach(_tuyaopen_mod IN ITEMS
     mbedtls
     tal_system
     tal_kv
-    tal_wifi
-    tal_wired
-    tal_bluetooth
-    tal_cellular
-    tal_wifi_ulp
     tuya_cloud_service
     tuya_ai_service
     utility

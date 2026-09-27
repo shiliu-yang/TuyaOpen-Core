@@ -88,7 +88,7 @@ typedef struct {
     uint32_t stackDepth; // stack size
     uint8_t priority;    // thread priority
     char *thrdname;      // thread name
-    uint8_t psram_mode : 1; // run in psram
+    uint8_t psram_mode : 1; // dead 字段：仅 ENABLE_EXT_RAM（PSRAM 栈）分支消费，本仓库无该宏定义；为对上 API 兼容保留
 } THREAD_CFG_T;
 
 /**
@@ -115,16 +115,6 @@ OPERATE_RET tal_thread_create_and_start(THREAD_HANDLE *handle, const THREAD_ENTE
  * tuya_error_code.h
  */
 OPERATE_RET tal_thread_delete(const THREAD_HANDLE handle);
-
-/**
- * @brief check the function caller is in the input thread context
- *
- * @param[in] handle: the input thread context
- * @param[in] bl: run in self space
- * @return OPRT_OK on success. Others on error, please refer to
- * tuya_error_code.h
- */
-OPERATE_RET tal_thread_is_self(const THREAD_HANDLE handle, BOOL_T *bl);
 
 /**
  * @brief get the thread context running status

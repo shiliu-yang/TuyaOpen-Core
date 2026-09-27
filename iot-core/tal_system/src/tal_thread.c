@@ -33,7 +33,7 @@
 #include <string.h>
 #include "tuya_list.h"
 #include "tal_thread.h"
-#include "tkl_thread.h"
+#include "tal_api_ops.h"
 #include "tal_mutex.h"
 #include "tal_log.h"
 #include "tal_memory.h"
@@ -103,7 +103,10 @@ static void __inner_del_thread(THREAD_HANDLE thrdID)
 {
     PR_DEBUG("real delete thread:%p", thrdID);
     // delete thread process
-    tkl_thread_release(thrdID);
+    TAL_API_OPS_T *ops = tal_api_get_ops();
+    if (NULL != ops && ops->thread_release) {
+        ops->thread_release(thrdID);
+    }
 }
 
 static void __free_all_del_thrd_node(void)
@@ -116,6 +119,7 @@ static void __free_all_del_thrd_node(void)
     THRD_MANAGE *self_node = NULL;
     BOOL_T is_self = FALSE;
     THREAD_HANDLE thrdID = NULL;
+    TAL_API_OPS_T *ops = tal_api_get_ops();
 
     tal_mutex_lock(s_del_thrd_mag->mutex);
 
@@ -129,7 +133,9 @@ static void __free_all_del_thrd_node(void)
             PR_DEBUG("Thread:%s is still running..", tmp_node->thread_name);
             continue;
         }
-        tkl_thread_is_self(tmp_node->thrdID, &is_self);
+        if (NULL != ops && ops->thread_is_self) {
+            ops->thread_is_self(tmp_node->thrdID, &is_self);
+        }
         PR_DEBUG("Final Free Thread:%s, is_self:%d", tmp_node->thread_name, is_self);
         DeleteNode(tmp_node, node);
         if (is_self) {
@@ -202,18 +208,13 @@ OPERATE_RET tal_thread_create_and_start(THREAD_HANDLE *handle, const THREAD_ENTE
     tal_mutex_unlock(s_del_thrd_mag->mutex);
 
     int opRet;
-#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
-    if (cfg->psram_mode == 1) {
-        PR_INFO("thread_create %s: psram_mode=1, using PSRAM stack", cfg->thrdname);
-        opRet = tkl_thread_create_in_psram(&(pMgr->thrdID), cfg->thrdname, cfg->stackDepth, cfg->priority,
-                                           __WrapRunFunc, pMgr);
+    TAL_API_OPS_T *ops = tal_api_get_ops();
+    if (NULL != ops && ops->thread_create) {
+        opRet = ops->thread_create(&(pMgr->thrdID), cfg->thrdname, cfg->stackDepth, cfg->priority, __WrapRunFunc, pMgr);
     } else {
-        opRet = tkl_thread_create(&(pMgr->thrdID), cfg->thrdname, cfg->stackDepth, cfg->priority, __WrapRunFunc, pMgr);
+        PR_ERR("thread_create not available");
+        opRet = OPRT_COM_ERROR;
     }
-#else
-    PR_INFO("thread_create %s: ENABLE_EXT_RAM not set", cfg->thrdname);
-    opRet = tkl_thread_create(&(pMgr->thrdID), cfg->thrdname, cfg->stackDepth, cfg->priority, __WrapRunFunc, pMgr);
-#endif
     if (opRet != 0) {
         PR_ERR("Create Thrd Fail:%d", opRet);
         tal_mutex_lock(s_del_thrd_mag->mutex);
@@ -239,7 +240,10 @@ static void __WrapRunFunc(void *pArg)
     P_THRD_MANAGE pThrdManage = (P_THRD_MANAGE)pArg;
 
 #if OPERATING_SYSTEM == SYSTEM_LINUX
-    tkl_thread_set_self_name(pThrdManage->thread_name);
+    TAL_API_OPS_T *ops = tal_api_get_ops();
+    if (NULL != ops && ops->thread_set_self_name) {
+        ops->thread_set_self_name(pThrdManage->thread_name);
+    }
 #endif
     if (pThrdManage->enter) {
         PR_DEBUG("enter Thread:%s func call", pThrdManage->thread_name);
@@ -322,41 +326,6 @@ OPERATE_RET tal_thread_delete(const THREAD_HANDLE handle)
 }
 
 /**
- * @brief Checks if the current thread is the same as the specified thread
- * handle.
- *
- * This function checks if the current thread is the same as the specified
- * thread handle.
- *
- * @param handle The thread handle to check.
- * @param bl Pointer to a BOOL_T variable to store the result. TRUE if the
- * current thread is the same, FALSE otherwise.
- *
- * @return OPERATE_RET Returns OPRT_OK on success, or an error code on failure.
- */
-OPERATE_RET tal_thread_is_self(const THREAD_HANDLE handle, BOOL_T *bl)
-{
-    if (NULL == handle || NULL == bl) {
-        return OPRT_INVALID_PARM;
-    }
-
-    P_THRD_MANAGE pThrdManage = (P_THRD_MANAGE)handle;
-    BOOL_T is_self = false;
-    int ret = tkl_thread_is_self(pThrdManage->thrdID, &is_self);
-    if (ret != 0) {
-        return ret;
-    }
-
-    if (is_self) {
-        *bl = TRUE;
-    } else {
-        *bl = FALSE;
-    }
-
-    return OPRT_OK;
-}
-
-/**
  * @brief Diagnose a thread.
  *
  * This function diagnoses a thread identified by the given handle.
@@ -375,7 +344,11 @@ OPERATE_RET tal_thread_diagnose(const THREAD_HANDLE handle)
     }
 
     P_THRD_MANAGE pThrdManage = (P_THRD_MANAGE)handle;
-    ret = tkl_thread_diagnose(pThrdManage->thrdID);
+    TAL_API_OPS_T *ops = tal_api_get_ops();
+    if (NULL == ops || NULL == ops->thread_diagnose) {
+        return OPRT_COM_ERROR;
+    }
+    ret = ops->thread_diagnose(pThrdManage->thrdID);
 
     return ret;
 }
@@ -397,12 +370,16 @@ void tal_thread_dump_watermark(void)
     THRD_MANAGE *tmp_node = NULL;
     uint32_t watermark = 0;
     int op_ret;
+    TAL_API_OPS_T *ops = tal_api_get_ops();
 
     tal_mutex_lock(s_del_thrd_mag->mutex);
     tuya_list_for_each(pos, &s_all_thrd_mag)
     {
         tmp_node = tuya_list_entry(pos, THRD_MANAGE, node);
-        op_ret = tkl_thread_get_watermark(tmp_node->thrdID, &watermark);
+        if (NULL == ops || NULL == ops->thread_get_watermark) {
+            break;
+        }
+        op_ret = ops->thread_get_watermark(tmp_node->thrdID, &watermark);
         if (OPRT_OK == op_ret) {
             PR_DEBUG("thread[%-16s] stack[%5d] free[%5d]", tmp_node->thread_name, tmp_node->stackDepth, watermark);
         } else {

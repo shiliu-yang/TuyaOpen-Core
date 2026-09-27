@@ -61,23 +61,6 @@ set(_cloud_deps
     tal_system
     tal_kv
 )
-# 网络模块的公共头泄漏：netconn_*.h 引对应 tal_* 头，开启时需 PUBLIC 传播
-if(TARGET tal_wifi)
-    list(APPEND _cloud_deps tal_wifi)
-    target_link_libraries(tuya_cloud_service PUBLIC tal_wifi)
-endif()
-if(TARGET tal_wired)
-    list(APPEND _cloud_deps tal_wired)
-    target_link_libraries(tuya_cloud_service PUBLIC tal_wired)
-endif()
-if(TARGET tal_bluetooth)
-    list(APPEND _cloud_deps tal_bluetooth)
-    target_link_libraries(tuya_cloud_service PUBLIC tal_bluetooth)
-endif()
-if(TARGET tal_cellular)
-    list(APPEND _cloud_deps tal_cellular)
-    target_link_libraries(tuya_cloud_service PUBLIC tal_cellular)
-endif()
 target_link_libraries(tuya_cloud_service
     PUBLIC tuya_transport libcjson tal_system corehttp coremqtt backoff_algorithm mbedtls
     PRIVATE ${_cloud_deps}

@@ -454,23 +454,6 @@ OPERATE_RET tal_aes_gcm_decode(const uint8_t *key, uint32_t key_len,
                                uint8_t *output, uint32_t *output_len,
                                uint8_t *tag, uint32_t tag_len);
 
-/**
- * @brief Performs a self-test for the AES encryption algorithm.
- *
- * This function tests the correctness of the AES encryption algorithm
- * implementation. It returns an error code indicating the success or failure of
- * the self-test.
- *
- * @param verbose A flag indicating whether to print verbose output during the
- * self-test. Set to a non-zero value to enable verbose output, or 0 to disable
- * it.
- *
- * @return An error code indicating the success or failure of the self-test.
- *         Returns OPRT_OK if the self-test passed successfully, or an error
- * code if it failed.
- */
-OPERATE_RET tal_aes_self_test(int32_t verbose);
-
 #ifdef __cplusplus
 } // extern "C"
 #endif

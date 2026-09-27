@@ -27,53 +27,10 @@
  *
  */
 
-#include "tkl_system.h"
-#include "tkl_memory.h"
 #include "tal_system.h"
-#include "tal_sleep.h"
 #include "tal_log.h"
 #include "tal_memory.h"
-
-/**
- * @brief Enter a critical section by disabling interrupts.
- *
- * This function enters a critical section by disabling interrupts and returns
- * the current interrupt mask. Critical sections are used to protect shared
- * resources from being accessed concurrently by interrupt handlers and the main
- * execution context. The returned interrupt mask should be saved and passed
- * to tal_system_exit_critical() when exiting the critical section.
- *
- * This function is typically used in conjunction with tal_system_exit_critical()
- * to protect code sections that must execute atomically. It can also be used
- * with the TAL_ENTER_CRITICAL() and TAL_EXIT_CRITICAL() macros for convenience.
- *
- * @return The current interrupt mask value that should be passed to
- *         tal_system_exit_critical() when exiting the critical section.
- */
-uint32_t tal_system_enter_critical(void)
-{
-    return tkl_system_enter_critical();
-}
-
-/**
- * @brief Exit a critical section by restoring interrupts.
- *
- * This function exits a critical section by restoring the interrupt state
- * using the interrupt mask that was returned by tal_system_enter_critical().
- * This restores the system to its previous interrupt state, allowing interrupts
- * to be processed again.
- *
- * The interrupt mask parameter must be the value returned by the corresponding
- * call to tal_system_enter_critical(). Mismatched calls or incorrect mask
- * values may result in incorrect interrupt state restoration.
- *
- * @param irq_mask The interrupt mask value returned by tal_system_enter_critical()
- *                 when entering the critical section.
- */
-void tal_system_exit_critical(uint32_t irq_mask)
-{
-    tkl_system_exit_critical(irq_mask);
-}
+#include "tal_api_ops.h"
 
 /**
  * @brief Allocates a block of memory of the specified size.
@@ -91,7 +48,10 @@ void *tal_malloc(size_t size)
     }
 
     void *ptr = NULL;
-    ptr = tkl_system_malloc(size);
+    TAL_API_OPS_T *ops = tal_api_get_ops();
+    if (NULL != ops && ops->malloc) {
+        ptr = ops->malloc(size);
+    }
     if (NULL == ptr) {
         PR_ERR("0x%x malloc failed:0x%x free:0x%x", __builtin_return_address(0), size, tal_system_get_free_heap_size());
     }
@@ -114,7 +74,10 @@ void tal_free(void *ptr)
         return;
     }
 
-    tkl_system_free(ptr);
+    TAL_API_OPS_T *ops = tal_api_get_ops();
+    if (NULL != ops && ops->free) {
+        ops->free(ptr);
+    }
 }
 
 /**
@@ -129,128 +92,13 @@ void tal_free(void *ptr)
  */
 void *tal_calloc(size_t nitems, size_t size)
 {
-    return tkl_system_calloc(nitems, size);
-}
-
-/**
- * @brief Reallocates a block of memory.
- *
- *
- * @param ptr   Pointer to the memory block to be reallocated.
- * @param size  New size for the memory block, in bytes.
- * @return      Pointer to the reallocated memory block, or `NULL` if the
- * operation fails.
- */
-void *tal_realloc(void *ptr, size_t size)
-{
-    return tkl_system_realloc(ptr, size);
-}
-
-#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
-/**
- * @brief Allocate memory from PSRAM (Pseudo Static RAM)
- *
- * This function allocates a block of memory of the specified size from the
- * external PSRAM heap. PSRAM is typically used for large memory allocations
- * that don't fit in the internal RAM, such as image buffers, audio buffers,
- * or other large data structures.
- *
- * @param[in] size: The size of memory to allocate in bytes
- *
- * @return Pointer to the allocated memory block on success, NULL on failure
- */
-void *tal_psram_malloc(size_t size)
-{
-    if (0 == size) {
-        return NULL;
+    TAL_API_OPS_T *ops = tal_api_get_ops();
+    if (NULL != ops && ops->calloc) {
+        return ops->calloc(nitems, size);
     }
 
-    void *ptr = NULL;
-    ptr = tkl_system_psram_malloc(size);
-
-    if (NULL == ptr) {
-        PR_ERR("0x%x psram malloc failed:0x%x free:0x%x", __builtin_return_address(0), size, tal_system_get_free_heap_size());
-    }
-
-    return ptr;
+    return NULL;
 }
-
-/**
- * @brief Free memory allocated from PSRAM
- *
- * This function deallocates a memory block that was previously allocated
- * using tal_psram_malloc(), tal_psram_calloc(), or tal_psram_realloc().
- * The pointer must have been returned by one of these functions.
- *
- * @param[in] ptr: Pointer to the memory block to be freed. If NULL, the
- *                 function does nothing.
- *
- * @return none
- */
-void tal_psram_free(void *ptr)
-{
-    if (NULL == ptr) {
-        return;
-    }
-
-    tkl_system_psram_free(ptr);
-}
-
-/**
- * @brief Allocate and zero-initialize memory from PSRAM
- *
- * This function allocates memory for an array of elements from PSRAM, where
- * each element is of the specified size. The allocated memory is initialized
- * to zero. This is equivalent to calling tal_psram_malloc() followed by
- * memset() to zero.
- *
- * @param[in] nitems: The number of elements to allocate
- * @param[in] size: The size of each element in bytes
- *
- * @return Pointer to the allocated and zero-initialized memory block on
- *         success, NULL on failure
- */
-void *tal_psram_calloc(size_t nitems, size_t size)
-{
-    return tkl_system_psram_calloc(nitems, size);
-}
-
-/**
- * @brief Reallocate memory block in PSRAM
- *
- * This function changes the size of a memory block previously allocated in
- * PSRAM. The contents of the memory block are preserved up to the minimum
- * of the old and new sizes. If the new size is larger, the additional memory
- * is not initialized.
- *
- * @param[in] ptr: Pointer to the memory block to be reallocated. If NULL,
- *                 the function behaves like tal_psram_malloc(size)
- * @param[in] size: The new size for the memory block in bytes
- *
- * @return Pointer to the reallocated memory block on success, NULL on
- *         failure. The original pointer may become invalid after this call.
- */
-void *tal_psram_realloc(void *ptr, size_t size)
-{
-    return tkl_system_psram_realloc(ptr, size);
-}
-
-/**
- * @brief Get the amount of free heap memory in PSRAM
- *
- * This function returns the total amount of free memory available in the
- * PSRAM heap. This can be useful for monitoring memory usage and debugging
- * memory-related issues.
- *
- * @param[in] param: none
- *
- * @return The amount of free heap memory in PSRAM in bytes
- */
-int tal_psram_get_free_heap_size(void)
-{
-    return tkl_system_psram_get_free_heap_size();
-}
-#endif
 
 /**
  * @brief Sleeps for the specified amount of time in milliseconds.
@@ -262,7 +110,10 @@ int tal_psram_get_free_heap_size(void)
  */
 void tal_system_sleep(uint32_t time_ms)
 {
-    tkl_system_sleep(time_ms);
+    TAL_API_OPS_T *ops = tal_api_get_ops();
+    if (NULL != ops && ops->sleep) {
+        ops->sleep(time_ms);
+    }
 }
 
 /**
@@ -275,7 +126,10 @@ void tal_system_sleep(uint32_t time_ms)
  */
 void tal_system_reset(void)
 {
-    tkl_system_reset();
+    TAL_API_OPS_T *ops = tal_api_get_ops();
+    if (NULL != ops && ops->reset) {
+        ops->reset();
+    }
 }
 
 /**
@@ -287,19 +141,12 @@ void tal_system_reset(void)
  */
 int tal_system_get_free_heap_size(void)
 {
-    return tkl_system_get_free_heap_size();
-}
+    TAL_API_OPS_T *ops = tal_api_get_ops();
+    if (NULL != ops && ops->get_free_heap_size) {
+        return ops->get_free_heap_size();
+    }
 
-/**
- * @brief Retrieves the system tick count.
- *
- * This function returns the current system tick count.
- *
- * @return The system tick count.
- */
-SYS_TICK_T tal_system_get_tick_count(void)
-{
-    return tkl_system_get_tick_count();
+    return 0;
 }
 
 SYS_TIME_T g_sys_time_offset = 0; // used for debug
@@ -313,7 +160,12 @@ SYS_TIME_T g_sys_time_offset = 0; // used for debug
  */
 SYS_TIME_T tal_system_get_millisecond(void)
 {
-    return tkl_system_get_millisecond() + g_sys_time_offset;
+    TAL_API_OPS_T *ops = tal_api_get_ops();
+    if (NULL != ops && ops->get_millisecond) {
+        return ops->get_millisecond() + g_sys_time_offset;
+    }
+
+    return g_sys_time_offset;
 }
 
 /**
@@ -326,38 +178,11 @@ SYS_TIME_T tal_system_get_millisecond(void)
  */
 int tal_system_get_random(uint32_t range)
 {
-    return tkl_system_get_random(range);
+    TAL_API_OPS_T *ops = tal_api_get_ops();
+    if (NULL != ops && ops->get_random) {
+        return ops->get_random(range);
+    }
+
+    return 0;
 }
 
-/**
- * @brief Retrieves the reset reason of the system.
- *
- * This function calls the tkl_system_get_reset_reason() function to get the
- * reset reason of the system.
- *
- * @param[out] describe A pointer to a character pointer that will be updated
- * with the reset reason description.
- *
- * @return The reset reason of the system.
- */
-TUYA_RESET_REASON_E tal_system_get_reset_reason(char **describe)
-{
-    return tkl_system_get_reset_reason(describe);
-}
-
-/**
- * @brief Get CPU information.
- *
- * This function retrieves the CPU information and returns it in the `cpu_ary`
- * array. The number of CPUs found is stored in the `cpu_cnt` variable.
- *
- * @param[out] cpu_ary Pointer to the array that will store the CPU information.
- * @param[out] cpu_cnt Pointer to the variable that will store the number of
- * CPUs found.
- * @return The result of the operation. Possible values are defined by the
- * `OPERATE_RET` enum.
- */
-OPERATE_RET tal_system_get_cpu_info(TUYA_CPU_INFO_T **cpu_ary, int32_t *cpu_cnt)
-{
-    return tkl_system_get_cpu_info(cpu_ary, (int *)cpu_cnt);
-}

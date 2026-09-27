@@ -107,16 +107,6 @@ OPERATE_RET tuya_x509_get_serial(uint8_t *buf, uint32_t buflen, uint8_t out[32],
  */
 OPERATE_RET tuya_x509_get_fingerprint(uint8_t *buf, uint32_t buflen, X509_fingerprint type, uint8_t out[64],
                                       uint32_t *outlen);
-/**
- * @brief Performs a self-test for the X509 module.
- *
- * This function is used to perform a self-test for the X509 module in the Tuya
- * Open SDK for Device. It returns an OPERATE_RET value indicating the success
- * or failure of the self-test.
- *
- * @return OPERATE_RET - The result of the self-test.
- */
-OPERATE_RET tuya_x509_self_test(void);
 
 #ifdef __cplusplus
 }

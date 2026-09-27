@@ -4,8 +4,8 @@
  *
  * This header file defines a set of memory management functions that abstract
  * the underlying memory allocation mechanisms. It provides a simplified
- * interface for dynamic memory allocation, deallocation, and reallocation,
- * including functions for allocating zero-initialized memory. These functions
+ * interface for dynamic memory allocation and deallocation, including
+ * functions for allocating zero-initialized memory. These functions
  * are designed to be used across the Tuya IoT SDK to ensure consistent and
  * efficient memory management practices. Additionally, it includes a function
  * to retrieve the system's current free heap size, aiding in memory usage
@@ -35,15 +35,9 @@ extern "C" {
 /***********************************************************************
  ********************* constant ( macro and enum ) *********************
  **********************************************************************/
-#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
-#define Malloc(req_size)             tal_psram_malloc(req_size)
-#define Calloc(req_count, req_size)  tal_psram_calloc(req_count, req_size)
-#define Free(ptr)                    tal_psram_free(ptr)
-#else
 #define Malloc(req_size)             tal_malloc(req_size)
 #define Calloc(req_count, req_size)  tal_calloc(req_count, req_size)
 #define Free(ptr)                    tal_free(ptr)
-#endif
 
 /***********************************************************************
  ********************* struct ******************************************
@@ -87,25 +81,6 @@ void tal_free(void *ptr);
  */
 void *tal_calloc(size_t nitems, size_t size);
 
-/**
- * @brief Re-allocate the memory
- *
- * @param[in]       nitems      source memory address
- * @param[in]       size        the size after re-allocate
- *
- * @return void
- */
-void *tal_realloc(void *ptr, size_t size);
-
-#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
-void *tal_psram_malloc(size_t size);
-
-void tal_psram_free(void *ptr);
-
-void *tal_psram_calloc(size_t nitems, size_t size);
-
-void *tal_psram_realloc(void *ptr, size_t size);
-#endif
 
 /**
  * @brief Get system free heap size

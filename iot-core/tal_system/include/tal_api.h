@@ -17,7 +17,7 @@
  * - Concurrency primitives (tal_mutex.h, tal_semaphore.h, tal_thread.h)
  * - OTA updates (tal_ota.h)
  * - Inter-thread communication (tal_queue.h, tal_workqueue.h)
- * - Time and timers (tal_sleep.h, tal_sw_timer.h, tal_time_service.h)
+ * - Time and timers (tal_sw_timer.h, tal_time_service.h)
  * - System utilities (tal_system.h)
  * - Hardware interfaces (tal_uart.h)
  * - Configuration storage (tal_kv.h)
@@ -47,7 +47,6 @@
 #include "tal_ota.h"
 #include "tal_queue.h"
 #include "tal_semaphore.h"
-#include "tal_sleep.h"
 #include "tal_system.h"
 #include "tal_thread.h"
 #include "tal_time_service.h"
