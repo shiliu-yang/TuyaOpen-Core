@@ -31,9 +31,10 @@
 #include "tal_ota.h"
 #include "tal_log.h"
 #include "tal_api_ops.h"
+#include "tal_ota_ops.h"
 
 /* 标准平台 ops 卡（port 的 tkl_api_ops.c 定义，成员指向其 tkl_semaphore、
- * tkl_mutex、tkl_ota、tkl_queue 实现） */
+ * tkl_mutex、tkl_queue 等实现） */
 extern TAL_API_OPS_T tal_api_ops_platform;
 
 TAL_API_OPS_T *tal_api_get_ops(void)
@@ -41,43 +42,58 @@ TAL_API_OPS_T *tal_api_get_ops(void)
     return &tal_api_ops_platform;
 }
 
+/* OTA 平台 ops 卡（port 的 tkl_ota.c 定义；OTA 为平台可选能力，独立于主卡） */
+extern TAL_OTA_OPS_T tal_ota_ops_platform;
+
+TAL_OTA_OPS_T *tal_ota_get_ops(void)
+{
+    return &tal_ota_ops_platform;
+}
+
 /***********************************************************
 ************************macro define************************
 ***********************************************************/
 
 /**
- * @brief Macro to execute tal_api operation with error handling
+ * @brief Macro to execute a TAL operation on a given ops card with error handling
  *
- * This macro simplifies the repetitive pattern of getting the platform ops,
+ * This macro simplifies the repetitive pattern of getting the ops card,
  * checking if the operation exists, and calling it with parameters.
  *
- * @param op_name: The operation name in TAL_API_OPS_T struct
+ * @param ops_ptr: pointer to the ops card (main card or a subsystem card)
+ * @param op_name: The operation name in the ops struct
  * @param default_ret: Default return value if operation is not available
  * @param ...: Parameters to pass to the operation function
  */
-#define TAL_API_EXEC_OP(op_name, default_ret, ...)                                                                     \
+#define TAL_EXEC_OP(ops_ptr, op_name, default_ret, ...)                                                                \
     do {                                                                                                               \
-        TAL_API_OPS_T *ops = tal_api_get_ops();                                                                        \
-        if (NULL != ops && ops->op_name) {                                                                             \
-            return ops->op_name(__VA_ARGS__);                                                                          \
+        if (NULL != (ops_ptr) && (ops_ptr)->op_name) {                                                                 \
+            return (ops_ptr)->op_name(__VA_ARGS__);                                                                    \
         }                                                                                                              \
         PR_ERR("TAL API operation %s not available", #op_name);                                                        \
         return default_ret;                                                                                            \
     } while (0)
 
 /**
- * @brief Macro to execute tal_api operation that returns void
+ * @brief Macro to execute a TAL operation on a given ops card that returns void
  *
- * @param op_name: The operation name in TAL_API_OPS_T struct
+ * @param ops_ptr: pointer to the ops card (main card or a subsystem card)
+ * @param op_name: The operation name in the ops struct
  * @param ...: Parameters to pass to the operation function
  */
-#define TAL_API_EXEC_OP_VOID(op_name, ...)                                                                             \
+#define TAL_EXEC_OP_VOID(ops_ptr, op_name, ...)                                                                        \
     do {                                                                                                               \
-        TAL_API_OPS_T *ops = tal_api_get_ops();                                                                        \
-        if (NULL != ops && ops->op_name) {                                                                             \
-            ops->op_name(__VA_ARGS__);                                                                                 \
+        if (NULL != (ops_ptr) && (ops_ptr)->op_name) {                                                                 \
+            (ops_ptr)->op_name(__VA_ARGS__);                                                                           \
         }                                                                                                              \
     } while (0)
+
+/* 主卡（tal_api_ops_platform）便捷宏 */
+#define TAL_API_EXEC_OP(op_name, default_ret, ...) TAL_EXEC_OP(tal_api_get_ops(), op_name, default_ret, __VA_ARGS__)
+#define TAL_API_EXEC_OP_VOID(op_name, ...)         TAL_EXEC_OP_VOID(tal_api_get_ops(), op_name, __VA_ARGS__)
+
+/* OTA 卡（tal_ota_ops_platform，平台可选）便捷宏 */
+#define TAL_OTA_EXEC_OP(op_name, default_ret, ...) TAL_EXEC_OP(tal_ota_get_ops(), op_name, default_ret, __VA_ARGS__)
 
 //! sem
 OPERATE_RET tal_semaphore_create_init(SEM_HANDLE *handle, uint32_t sem_cnt, uint32_t sem_max)
@@ -124,22 +140,22 @@ OPERATE_RET tal_mutex_release(const MUTEX_HANDLE handle)
 //! ota
 OPERATE_RET tal_ota_get_ability(uint32_t *image_size, TUYA_OTA_TYPE_E *type)
 {
-    TAL_API_EXEC_OP(ota_get_ability, OPRT_COM_ERROR, image_size, type);
+    TAL_OTA_EXEC_OP(get_ability, OPRT_COM_ERROR, image_size, type);
 }
 
 OPERATE_RET tal_ota_start_notify(uint32_t image_size, TUYA_OTA_TYPE_E type, TUYA_OTA_PATH_E path)
 {
-    TAL_API_EXEC_OP(ota_start_notify, OPRT_COM_ERROR, image_size, type, path);
+    TAL_OTA_EXEC_OP(start_notify, OPRT_COM_ERROR, image_size, type, path);
 }
 
 OPERATE_RET tal_ota_data_process(TUYA_OTA_DATA_T *pack, uint32_t *remain_len)
 {
-    TAL_API_EXEC_OP(ota_data_process, OPRT_COM_ERROR, pack, remain_len);
+    TAL_OTA_EXEC_OP(data_process, OPRT_COM_ERROR, pack, remain_len);
 }
 
 OPERATE_RET tal_ota_end_notify(BOOL_T reset)
 {
-    TAL_API_EXEC_OP(ota_end_notify, OPRT_COM_ERROR, reset);
+    TAL_OTA_EXEC_OP(end_notify, OPRT_COM_ERROR, reset);
 }
 
 //! queue

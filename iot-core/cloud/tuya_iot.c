@@ -37,7 +37,6 @@
 #include "tuya_tls.h"
 #include "tuya_cert_manager.h"
 #include "tuya_lan.h"
-#include "tuya_health.h"
 #if defined(ENABLE_BLUETOOTH) && (ENABLE_BLUETOOTH == 1)
 #include "ble_mgr.h"
 #include "ble_netcfg.h"
@@ -631,8 +630,6 @@ int tuya_iot_init(tuya_iot_client_t *client, const tuya_iot_config_t *config)
     ota_config.event_cb = client->config.ota_handler;
 
     tuya_ota_init(&ota_config);
-
-    tuya_health_monitor_init();
 
     /* Auto check upgrade timer init */
     ret = tal_sw_timer_create(check_auto_upgrade_timeout_on, client, &client->check_upgrade_timer);

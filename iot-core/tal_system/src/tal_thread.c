@@ -352,39 +352,3 @@ OPERATE_RET tal_thread_diagnose(const THREAD_HANDLE handle)
 
     return ret;
 }
-
-/**
- * @brief Dumps the watermark information for each thread managed by the system.
- *        The watermark represents the amount of free stack space available for
- * each thread. This function iterates through all the threads and prints the
- * thread name, stack depth, and watermark. Note: This function requires the
- * thread management system to be initialized.
- */
-void tal_thread_dump_watermark(void)
-{
-    if (!s_del_thrd_mag) {
-        return;
-    }
-
-    LIST_HEAD *pos = NULL;
-    THRD_MANAGE *tmp_node = NULL;
-    uint32_t watermark = 0;
-    int op_ret;
-    TAL_API_OPS_T *ops = tal_api_get_ops();
-
-    tal_mutex_lock(s_del_thrd_mag->mutex);
-    tuya_list_for_each(pos, &s_all_thrd_mag)
-    {
-        tmp_node = tuya_list_entry(pos, THRD_MANAGE, node);
-        if (NULL == ops || NULL == ops->thread_get_watermark) {
-            break;
-        }
-        op_ret = ops->thread_get_watermark(tmp_node->thrdID, &watermark);
-        if (OPRT_OK == op_ret) {
-            PR_DEBUG("thread[%-16s] stack[%5d] free[%5d]", tmp_node->thread_name, tmp_node->stackDepth, watermark);
-        } else {
-            break;
-        }
-    }
-    tal_mutex_unlock(s_del_thrd_mag->mutex);
-}

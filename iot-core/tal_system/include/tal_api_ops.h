@@ -1,13 +1,13 @@
 /**
  * @file tal_api_ops.h
  * @brief tal_api 的平台 ops 契约：log output / memory / system / semaphore /
- *        mutex / thread / queue / ota 八组
+ *        mutex / thread / queue 七组（OTA 见 tal_ota_ops.h，独立卡）
  *
  * 定义 TAL_API_OPS_T：port 据此组装平台 ops 实例 tal_api_ops_platform
  * （成员绑定到 port 的 tkl_output、tkl_memory、tkl_system、tkl_semaphore、
- * tkl_mutex、tkl_thread、tkl_queue、tkl_ota 实现），core 侧经 extern 引用
- * 完成各族 tal_* 分发，对上 tal_* API 签名不变。移植新平台时在各自 port 中
- * 提供同名实例即可。
+ * tkl_mutex、tkl_thread、tkl_queue 实现），core 侧经 extern 引用完成各族
+ * tal_* 分发，对上 tal_* API 签名不变。移植新平台时在各自 port 中提供同名
+ * 实例即可。
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *
@@ -31,8 +31,8 @@ extern "C" {
 
 /**
  * @brief tal_api 平台 ops：成员与 port 的 tkl_output、tkl_memory、
- *        tkl_system、tkl_semaphore、tkl_mutex、tkl_thread、tkl_queue、
- *        tkl_ota 实现一一对应，只收编实际被 tal 层分发的接口
+ *        tkl_system、tkl_semaphore、tkl_mutex、tkl_thread、tkl_queue
+ *        实现一一对应，只收编实际被 tal 层分发的接口（OTA 见 tal_ota_ops.h）
  *
  * @note 句柄/回调类型沿用 tal 层定义（SEM_HANDLE/MUTEX_HANDLE/
  *       THREAD_HANDLE/QUEUE_HANDLE 与 TKL 层的 TKL_SEM_HANDLE 等同为
@@ -66,7 +66,6 @@ typedef struct {
     OPERATE_RET (*thread_create)(THREAD_HANDLE *thread, const char *name, uint32_t stack_size, uint32_t priority,
                                  THREAD_FUNC_CB func, void *const arg);
     OPERATE_RET (*thread_release)(const THREAD_HANDLE thread);
-    OPERATE_RET (*thread_get_watermark)(const THREAD_HANDLE thread, uint32_t *watermark);
     OPERATE_RET (*thread_set_self_name)(const char *name);
     OPERATE_RET (*thread_is_self)(const THREAD_HANDLE thread, BOOL_T *is_self);
     OPERATE_RET (*thread_diagnose)(const THREAD_HANDLE thread);
@@ -75,11 +74,6 @@ typedef struct {
     OPERATE_RET (*queue_post)(const QUEUE_HANDLE queue, void *data, uint32_t timeout);
     OPERATE_RET (*queue_fetch)(const QUEUE_HANDLE queue, void *msg, uint32_t timeout);
     void (*queue_free)(const QUEUE_HANDLE queue);
-    //! ota
-    OPERATE_RET (*ota_get_ability)(uint32_t *image_size, TUYA_OTA_TYPE_E *type);
-    OPERATE_RET (*ota_start_notify)(uint32_t image_size, TUYA_OTA_TYPE_E type, TUYA_OTA_PATH_E path);
-    OPERATE_RET (*ota_data_process)(TUYA_OTA_DATA_T *pack, uint32_t *remain_len);
-    OPERATE_RET (*ota_end_notify)(BOOL_T reset);
 } TAL_API_OPS_T;
 
 /**
