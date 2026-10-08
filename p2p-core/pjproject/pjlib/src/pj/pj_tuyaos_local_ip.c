@@ -16,7 +16,7 @@
 #include "tal_wifi.h"
 #endif
 #if defined(ENABLE_WIRED) && (ENABLE_WIRED == 1)
-#include "tal_wired.h"
+#include "tal_netif.h"
 #endif
 
 /**
@@ -93,7 +93,7 @@ int tal_compat_get_sta_ipv4_nbo(unsigned int *addr_nbo)
 
 #if defined(ENABLE_WIRED) && (ENABLE_WIRED == 1)
     memset(&ip, 0, sizeof(ip));
-    if (tal_wired_get_ip(&ip) == OPRT_OK && ip.ip[0] != '\0') {
+    if (tal_netif_get_ip(&ip) == OPRT_OK && ip.ip[0] != '\0') {
         if (__parse_ipv4_nbo(ip.ip, &a) == 0 && __reject_bad_host(a) == 0) {
             *addr_nbo = (unsigned int)a;
             return 0;
