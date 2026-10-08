@@ -10,6 +10,14 @@
  * 内存约定：tal_kv_get 成功时返回堆内存（*value），调用者用 tal_free 释放；
  * 失败时 *value 置 NULL、*length 置 0。
  *
+ * key 契约：key 为 C 字符串（非 NULL）。长度上限与字符集由平台决定——
+ * Linux/littlefs：≤255 且不含 '/'；NVS 类平台：≤15 字符，此类平台必须由 port
+ * 做 key 映射（如 SHA-256 取前 16 字节 hex），否则 core 现用 key 会写入失败
+ * （实测超限样例："<namespace>.devid" 26 字符、云端下发的 schemaId 长度不受控）。
+ *
+ * init 约定：tal_kv_init 必须先于其它接口调用、单线程、只调一次（用不同 cfg
+ * 重复 init 会使已写数据无法解密）；init 失败后其它接口不可用。
+ *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *
  */
@@ -35,6 +43,9 @@ typedef struct {
 
 /**
  * @brief 初始化 KV 存储（挂载介质 / 打开芯片 KV）
+ *
+ * @note 必须先于其它接口调用、单线程、只调一次；init 失败后其它接口不可用
+ *       （详见文件头的 init 约定）
  *
  * @param kv_cfg 配置（不可为 NULL）
  * @return OPRT_OK 成功，负值为错误码

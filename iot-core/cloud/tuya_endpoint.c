@@ -146,7 +146,7 @@ int tuya_endpoint_cert_set(tuya_endpoint_t *endpoint)
     return ret;
 }
 
-/* 逐 key 读字符串字段：值含结尾 '\0' 一起存，读回后按缓冲容量截断拷贝 */
+/* 逐 key 读字符串字段：值含结尾 '\0' 一起存；超长不截断，直接报错 */
 static int tuya_endpoint_kv_str_read(const char *key, char *buf, size_t buf_size)
 {
     uint8_t *value = NULL;
@@ -157,9 +157,16 @@ static int tuya_endpoint_kv_str_read(const char *key, char *buf, size_t buf_size
         return ret;
     }
 
-    size_t copy = (len < buf_size) ? len : buf_size - 1;
-    memcpy(buf, value, copy);
-    buf[copy] = 0;
+    /* 旧实现语义：存进去放不下就报错，不静默截断（截断后的 host/path 会被当成
+     * 有效值使用）；buf_size == 0 单独判，防 buf_size - 1 下溢 */
+    if (0 == buf_size || len > buf_size - 1) {
+        PR_ERR("tal_kv_get %s value too long: %u > %u", key, (unsigned int)len, (unsigned int)buf_size);
+        tal_free(value);
+        return OPRT_COM_ERROR;
+    }
+
+    memcpy(buf, value, len);
+    buf[len] = 0;
     tal_free(value);
 
     return OPRT_OK;
@@ -329,6 +336,8 @@ int tuya_endpoint_remove(void)
     tal_kv_del("atop.path");
     tal_kv_del("mqtt.host");
     tal_kv_del("mqtt.port");
+    /* 过渡期清理旧 key：旧固件把 domain 整体存成单 key，不删则降级回旧固件会读到陈旧数据 */
+    tal_kv_del("endpoint.domain");
 
     return OPRT_OK;
 }

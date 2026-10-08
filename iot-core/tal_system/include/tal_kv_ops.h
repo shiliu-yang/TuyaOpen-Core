@@ -8,6 +8,9 @@
  * 存储介质、记录格式、加密、序列化全部是 port 内部细节：换平台 = 换一个
  * tkl_kv.c（Linux = littlefs + AES；NVS 类平台直接映射芯片 KV），core 零改动。
  *
+ * key 是平台相关资源：长度上限与字符集由平台决定（见 tal_kv.h 的 key 契约），
+ * port 可对 core 传入的 key 做映射（如超长 key 哈希后再落盘）。
+ *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *
  */
