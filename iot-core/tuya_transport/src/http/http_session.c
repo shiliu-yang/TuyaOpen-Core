@@ -603,9 +603,11 @@ OPERATE_RET http_close_session(http_session_t *session)
         ctx->response.pBody = NULL;
     }
     
-    // Free response buffer (allocated by coreHTTP)
-    // Note: pBuffer is always allocated by HTTPClient_Request in HTTP_RECV_INIT
-    // (HTTP_MALLOC(HTTP_MAX_RESPONSE_HEADERS_SIZE_BYTES + 1))
+    /* 释放 response 缓冲。注意（已核实）：本模块当前**不分配**
+     * ctx->response.pBuffer——coreHTTP 要求调用方提供（core_http_client.c 对
+     * pResponse->pBuffer == NULL 直接判参失败），故此处恒为 NULL；连带
+     * http_send_request 的"预收 body 片段"分支（本文件下方 :672 起）当前不可达，
+     * 流式 HTTP 尚未接入。将来补上分配后该分支即生效。 */
     if (ctx->response.pBuffer) {
         HTTP_FREE(ctx->response.pBuffer);
         ctx->response.pBuffer = NULL;
@@ -668,7 +670,8 @@ int http_read_content(http_session_t session, void *buf, unsigned int max_len)
     }
 
     /* 先吐 Send(DO_NOT_PARSE_BODY) 时预收进 pBuffer 的 body 片段（若有），
-     * 之后直接经 transport recv 裸读 body（头已收完，body 为纯数据流） */
+     * 之后直接经 transport recv 裸读 body（头已收完，body 为纯数据流）。
+     * 注：该分支当前不可达——response.pBuffer 尚未分配，见本文件释放处注释 */
     if (ctx->response.bodyLen > 0 && ctx->response.pBody != NULL) {
         size_t copy_len = (ctx->response.bodyLen < (size_t)max_len) ? ctx->response.bodyLen : (size_t)max_len;
         memcpy(buf, ctx->response.pBody, copy_len);
