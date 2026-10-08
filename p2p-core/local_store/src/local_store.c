@@ -6,7 +6,7 @@
  * @copyright Copyright (c) Tuya Inc.
  */
 #include "local_store.h"
-#include "tkl_fs.h"
+#include "tal_fs.h"
 #include "tal_log.h"
 #include "tal_memory.h"
 #include "tal_mutex.h"
@@ -167,7 +167,7 @@ static OPERATE_RET __path_join(const char *parent, const char *child, char *out,
     return OPRT_OK;
 }
 
-/* tkl_fs_is_exist("/sdcard") fails even when FAT is mounted; never mkdir a mount root */
+/* tal_fs_is_exist("/sdcard") fails even when FAT is mounted; never mkdir a mount root */
 static BOOL_T __is_fs_mount_root(const char *path)
 {
     return (path != NULL && strcmp(path, "/sdcard") == 0) ? TRUE : FALSE;
@@ -184,18 +184,18 @@ static OPERATE_RET __mkdir_one(const char *path)
     if (strcmp(path, ".") == 0 || __is_fs_mount_root(path)) {
         return OPRT_OK;
     }
-    (void)tkl_fs_is_exist(path, &exists);
+    (void)tal_fs_is_exist(path, &exists);
     if (exists) {
         return OPRT_OK;
     }
-    rt = tkl_fs_mkdir(path);
+    rt = tal_fs_mkdir(path);
     if (rt != 0) {
         exists = FALSE;
-        (void)tkl_fs_is_exist(path, &exists);
+        (void)tal_fs_is_exist(path, &exists);
         if (exists) {
             return OPRT_OK;
         }
-        TAL_PR_ERR("tkl_fs_mkdir %s failed: %d", path, rt);
+        TAL_PR_ERR("tal_fs_mkdir %s failed: %d", path, rt);
         return OPRT_COM_ERROR;
     }
     return OPRT_OK;
@@ -390,7 +390,7 @@ OPERATE_RET local_store_commit(const char *tmp_path, const char *final_path)
     if (tmp_path == NULL || final_path == NULL) {
         return OPRT_INVALID_PARM;
     }
-    rt = tkl_fs_rename(tmp_path, final_path);
+    rt = tal_fs_rename(tmp_path, final_path);
     if (rt != 0) {
         TAL_PR_ERR("local_store_commit rename %s -> %s failed: %d", tmp_path, final_path, rt);
         return OPRT_COM_ERROR;
@@ -434,16 +434,16 @@ OPERATE_RET local_store_index_append(uint32_t start_ts, uint32_t end_ts, uint16_
     if (n < 0 || (uint32_t)n >= sizeof(line)) {
         return OPRT_BUFFER_NOT_ENOUGH;
     }
-    fp = tkl_fopen(idx_path, "a");
+    fp = tal_fopen(idx_path, "a");
     if (fp == NULL) {
         TAL_PR_ERR("open index %s failed", idx_path);
         return OPRT_FILE_OPEN_FAILED;
     }
-    if (tkl_fwrite((void *)line, n, fp) != n) {
-        tkl_fclose(fp);
+    if (tal_fwrite((void *)line, n, fp) != n) {
+        tal_fclose(fp);
         return OPRT_FILE_WRITE_FAILED;
     }
-    tkl_fclose(fp);
+    tal_fclose(fp);
     return OPRT_OK;
 }
 
@@ -462,15 +462,15 @@ static OPERATE_RET __index_scan(uint32_t year, uint32_t month, uint32_t day, LS_
     if (rt != OPRT_OK) {
         return rt;
     }
-    (void)tkl_fs_is_exist(idx_path, &exists);
+    (void)tal_fs_is_exist(idx_path, &exists);
     if (!exists) {
         return OPRT_OK;
     }
-    fp = tkl_fopen(idx_path, "r");
+    fp = tal_fopen(idx_path, "r");
     if (fp == NULL) {
         return OPRT_FILE_OPEN_FAILED;
     }
-    while (tkl_fgets(line, (int)sizeof(line), fp) != NULL) {
+    while (tal_fgets(line, (int)sizeof(line), fp) != NULL) {
         if (line[0] == '#' || line[0] == '\n' || line[0] == '\0') {
             continue;
         }
@@ -487,7 +487,7 @@ static OPERATE_RET __index_scan(uint32_t year, uint32_t month, uint32_t day, LS_
             break;
         }
     }
-    tkl_fclose(fp);
+    tal_fclose(fp);
     return OPRT_OK;
 }
 
@@ -686,26 +686,26 @@ static OPERATE_RET __remove_dir_files(const char *dir_path)
     char path[LOCAL_STORE_PATH_MAX];
     BOOL_T is_dir = FALSE;
 
-    if (tkl_dir_open(dir_path, &dir) != 0) {
+    if (tal_dir_open(dir_path, &dir) != 0) {
         return OPRT_FILE_OPEN_FAILED;
     }
-    while (tkl_dir_read(dir, &info) == 0 && info != NULL) {
-        if (tkl_dir_name(info, &name) != 0 || name == NULL) {
+    while (tal_dir_read(dir, &info) == 0 && info != NULL) {
+        if (tal_dir_name(info, &name) != 0 || name == NULL) {
             continue;
         }
         if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) {
             continue;
         }
         is_dir = FALSE;
-        (void)tkl_dir_is_directory(info, &is_dir);
+        (void)tal_dir_is_directory(info, &is_dir);
         if (is_dir) {
             continue;
         }
         if (__path_join(dir_path, name, path, sizeof(path)) == OPRT_OK) {
-            (void)tkl_fs_remove(path);
+            (void)tal_fs_remove(path);
         }
     }
-    tkl_dir_close(dir);
+    tal_dir_close(dir);
     return OPRT_OK;
 }
 
@@ -719,7 +719,7 @@ OPERATE_RET local_store_remove_day(uint32_t year, uint32_t month, uint32_t day)
     if (rt != OPRT_OK) {
         return rt;
     }
-    (void)tkl_fs_is_exist(day_path, &exists);
+    (void)tal_fs_is_exist(day_path, &exists);
     if (!exists) {
         return OPRT_NOT_FOUND;
     }
@@ -727,7 +727,7 @@ OPERATE_RET local_store_remove_day(uint32_t year, uint32_t month, uint32_t day)
     if (rt != OPRT_OK) {
         return rt;
     }
-    if (tkl_fs_remove(day_path) != 0) {
+    if (tal_fs_remove(day_path) != 0) {
         TAL_PR_WARN("local_store rmdir %s failed", day_path);
         return OPRT_COM_ERROR;
     }
@@ -778,11 +778,11 @@ static OPERATE_RET __for_each_day(LS_DAY_CB cb, void *ctx)
     if (__rec_base(rec_base, sizeof(rec_base)) != OPRT_OK) {
         return OPRT_COM_ERROR;
     }
-    if (tkl_dir_open(rec_base, &dir) != 0) {
+    if (tal_dir_open(rec_base, &dir) != 0) {
         return OPRT_FILE_OPEN_FAILED;
     }
-    while (tkl_dir_read(dir, &info) == 0 && info != NULL) {
-        if (tkl_dir_name(info, &name) != 0 || name == NULL) {
+    while (tal_dir_read(dir, &info) == 0 && info != NULL) {
+        if (tal_dir_name(info, &name) != 0 || name == NULL) {
             continue;
         }
         if (!__parse_day_name(name, &y, &m, &d)) {
@@ -792,7 +792,7 @@ static OPERATE_RET __for_each_day(LS_DAY_CB cb, void *ctx)
             break;
         }
     }
-    tkl_dir_close(dir);
+    tal_dir_close(dir);
     return OPRT_OK;
 }
 
@@ -879,15 +879,15 @@ static OPERATE_RET __idx_write(const char *media_path, const LS_IDX_ENT_T *ents,
     if (__idx_path_of(media_path, path, sizeof(path)) != OPRT_OK) {
         return OPRT_COM_ERROR;
     }
-    fp = tkl_fopen(path, "wb");
+    fp = tal_fopen(path, "wb");
     if (fp == NULL) {
         return OPRT_FILE_OPEN_FAILED;
     }
-    if (bytes > 0 && tkl_fwrite((void *)ents, bytes, fp) != bytes) {
-        tkl_fclose(fp);
+    if (bytes > 0 && tal_fwrite((void *)ents, bytes, fp) != bytes) {
+        tal_fclose(fp);
         return OPRT_FILE_WRITE_FAILED;
     }
-    tkl_fclose(fp);
+    tal_fclose(fp);
     return OPRT_OK;
 }
 
@@ -901,12 +901,12 @@ static uint32_t __idx_read(const char *media_path, LS_IDX_ENT_T *ents, uint32_t 
     if (__idx_path_of(media_path, path, sizeof(path)) != OPRT_OK) {
         return 0;
     }
-    fp = tkl_fopen(path, "rb");
+    fp = tal_fopen(path, "rb");
     if (fp == NULL) {
         return 0;
     }
-    n = tkl_fread(ents, (int32_t)(cap * sizeof(LS_IDX_ENT_T)), fp);
-    tkl_fclose(fp);
+    n = tal_fread(ents, (int32_t)(cap * sizeof(LS_IDX_ENT_T)), fp);
+    tal_fclose(fp);
     if (n <= 0) {
         return 0;
     }
@@ -918,7 +918,7 @@ static void __idx_remove(const char *media_path)
     char path[LOCAL_STORE_PATH_MAX];
 
     if (__idx_path_of(media_path, path, sizeof(path)) == OPRT_OK) {
-        (void)tkl_fs_remove(path);
+        (void)tal_fs_remove(path);
     }
 }
 
@@ -939,7 +939,7 @@ static void __reader_fill(LOCAL_STORE_READER_T *rd)
         rd->used = 0;
     }
     while (!rd->eof && rd->valid < LS_READ_BYTES) {
-        n = tkl_fread(rd->buf + rd->valid, (int32_t)(LS_READ_BYTES - rd->valid), rd->fp);
+        n = tal_fread(rd->buf + rd->valid, (int32_t)(LS_READ_BYTES - rd->valid), rd->fp);
         if (n <= 0) {
             rd->eof = TRUE;
             break;
@@ -950,7 +950,7 @@ static void __reader_fill(LOCAL_STORE_READER_T *rd)
 
 static void __reader_reposition(LOCAL_STORE_READER_T *rd, uint64_t off)
 {
-    (void)tkl_fseek(rd->fp, (int64_t)off, SEEK_SET);
+    (void)tal_fseek(rd->fp, (int64_t)off, SEEK_SET);
     rd->base = off;
     rd->valid = 0;
     rd->used = 0;
@@ -974,7 +974,7 @@ LOCAL_STORE_READER_T *local_store_reader_open(const char *path)
         tal_free(rd);
         return NULL;
     }
-    rd->fp = tkl_fopen(path, "rb");
+    rd->fp = tal_fopen(path, "rb");
     if (rd->fp == NULL) {
         Free(rd->buf);
         tal_free(rd);
@@ -990,7 +990,7 @@ void local_store_reader_close(LOCAL_STORE_READER_T *rd)
         return;
     }
     if (rd->fp != NULL) {
-        tkl_fclose(rd->fp);
+        tal_fclose(rd->fp);
     }
     if (rd->buf != NULL) {
         Free(rd->buf);
@@ -1171,11 +1171,11 @@ static BOOL_T __recover_day_cb(uint32_t y, uint32_t m, uint32_t d, void *ctx)
     if (__index_scan(y, m, d, __starts_cb, c) != OPRT_OK) {
         return TRUE;
     }
-    if (__day_dir(y, m, d, day_path, sizeof(day_path)) != OPRT_OK || tkl_dir_open(day_path, &dir) != 0) {
+    if (__day_dir(y, m, d, day_path, sizeof(day_path)) != OPRT_OK || tal_dir_open(day_path, &dir) != 0) {
         return TRUE;
     }
-    while (tkl_dir_read(dir, &info) == 0 && info != NULL) {
-        if (tkl_dir_name(info, &name) != 0 || name == NULL) {
+    while (tal_dir_read(dir, &info) == 0 && info != NULL) {
+        if (tal_dir_name(info, &name) != 0 || name == NULL) {
             continue;
         }
         if (!__leaf_start_ts(name, &start) || __starts_has(c, start)) {
@@ -1186,7 +1186,7 @@ static BOOL_T __recover_day_cb(uint32_t y, uint32_t m, uint32_t d, void *ctx)
         }
         if (!__media_last_rel_ms(path, &rel_ms)) {
             TAL_PR_WARN("local_store recover: drop empty %s", path);
-            (void)tkl_fs_remove(path);
+            (void)tal_fs_remove(path);
             __idx_remove(path);
             continue;
         }
@@ -1194,7 +1194,7 @@ static BOOL_T __recover_day_cb(uint32_t y, uint32_t m, uint32_t d, void *ctx)
             TAL_PR_NOTICE("local_store recover: indexed %s (%u s)", path, rel_ms / 1000u + 1u);
         }
     }
-    tkl_dir_close(dir);
+    tal_dir_close(dir);
     return TRUE;
 }
 
@@ -1326,11 +1326,11 @@ static OPERATE_RET __stage_flush(void)
         return OPRT_OK;
     }
     t0 = tal_system_get_millisecond();
-    n = tkl_fwrite(s_stage, (int32_t)s_stage_used, s_fp);
+    n = tal_fwrite(s_stage, (int32_t)s_stage_used, s_fp);
     if (n != (int32_t)s_stage_used) {
         TAL_PR_WARN("local_store write %u got %d, pruning oldest day", s_stage_used, n);
         if (__prune_oldest()) {
-            n = tkl_fwrite(s_stage, (int32_t)s_stage_used, s_fp);
+            n = tal_fwrite(s_stage, (int32_t)s_stage_used, s_fp);
         }
     }
     dt = tal_system_get_millisecond() - t0;
@@ -1354,8 +1354,8 @@ static void __file_sync(void)
     if (s_fp == NULL) {
         return;
     }
-    (void)tkl_fflush(s_fp);
-    (void)tkl_fsync(tkl_fileno(s_fp));
+    (void)tal_fflush(s_fp);
+    (void)tal_fsync(tal_fileno(s_fp));
     (void)__idx_write(s_path, s_idx, s_idx_cnt);
     s_dirty = FALSE;
     s_last_sync_ms = tal_system_get_millisecond();
@@ -1390,12 +1390,12 @@ static void __seg_close(void)
         return;
     }
     __file_sync();
-    tkl_fclose(s_fp);
+    tal_fclose(s_fp);
     s_fp = NULL;
 
     if (s_file_bytes == 0) {
         TAL_PR_WARN("local_store rec discard empty %s", s_path);
-        (void)tkl_fs_remove(s_path);
+        (void)tal_fs_remove(s_path);
         __idx_remove(s_path);
     } else {
         end_ts = s_file_start + s_last_rel_ms / 1000u + 1u;
@@ -1438,11 +1438,11 @@ static void __seg_open(uint32_t start_sec)
     if (__path_join(day_path, s_leaf, s_path, sizeof(s_path)) != OPRT_OK) {
         goto fail;
     }
-    s_fp = tkl_fopen(s_path, "wb");
+    s_fp = tal_fopen(s_path, "wb");
     if (s_fp == NULL) {
         TAL_PR_WARN("local_store rec open %s failed, pruning oldest day", s_path);
         if (__prune_oldest()) {
-            s_fp = tkl_fopen(s_path, "wb");
+            s_fp = tal_fopen(s_path, "wb");
         }
     }
     if (s_fp == NULL) {
@@ -1916,7 +1916,7 @@ static void __annexb_fill(LS_ANNEXB_T *a)
     a->valid = keep;
     a->used = 0;
     while (!a->eof && a->valid < LS_SEED_BUF) {
-        n = tkl_fread(a->buf + a->valid, (int32_t)(LS_SEED_BUF - a->valid), a->fin);
+        n = tal_fread(a->buf + a->valid, (int32_t)(LS_SEED_BUF - a->valid), a->fin);
         if (n <= 0) {
             a->eof = TRUE;
             break;
@@ -1953,13 +1953,13 @@ static int __annexb_read_au(LS_ANNEXB_T *a, BOOL_T *is_key, uint32_t *start, uin
 static BOOL_T __annexb_open(LS_ANNEXB_T *a, const char *src_path)
 {
     memset(a, 0, sizeof(*a));
-    a->fin = tkl_fopen(src_path, "rb");
+    a->fin = tal_fopen(src_path, "rb");
     if (a->fin == NULL) {
         return FALSE;
     }
     a->buf = (uint8_t *)Malloc(LS_SEED_BUF);
     if (a->buf == NULL) {
-        tkl_fclose(a->fin);
+        tal_fclose(a->fin);
         a->fin = NULL;
         return FALSE;
     }
@@ -1969,7 +1969,7 @@ static BOOL_T __annexb_open(LS_ANNEXB_T *a, const char *src_path)
 static void __annexb_close(LS_ANNEXB_T *a)
 {
     if (a->fin != NULL) {
-        tkl_fclose(a->fin);
+        tal_fclose(a->fin);
     }
     if (a->buf != NULL) {
         Free(a->buf);
@@ -2018,7 +2018,7 @@ OPERATE_RET local_store_seed_h264(const char *src_path, const char *leaf, uint32
     if (duration_sec == 0) {
         duration_sec = 60;
     }
-    (void)tkl_fs_is_exist(src_path, &src_exists);
+    (void)tal_fs_is_exist(src_path, &src_exists);
     if (!src_exists) {
         TAL_PR_ERR("seed src missing: %s", src_path);
         return OPRT_FILE_OPEN_FAILED;
@@ -2062,9 +2062,9 @@ OPERATE_RET local_store_seed_h264(const char *src_path, const char *leaf, uint32
     if (rt != OPRT_OK) {
         return rt;
     }
-    (void)tkl_fs_is_exist(dst, &dst_exists);
+    (void)tal_fs_is_exist(dst, &dst_exists);
     if (dst_exists) {
-        (void)tkl_fs_remove(dst);
+        (void)tal_fs_remove(dst);
     }
 
     if (!__annexb_open(&a, src_path)) {
@@ -2082,12 +2082,12 @@ OPERATE_RET local_store_seed_h264(const char *src_path, const char *leaf, uint32
     if (!__annexb_open(&a, src_path)) {
         return OPRT_FILE_OPEN_FAILED;
     }
-    fout = tkl_fopen(dst, "wb");
+    fout = tal_fopen(dst, "wb");
     idx = (LS_IDX_ENT_T *)tal_malloc(LS_IDX_MAX * sizeof(LS_IDX_ENT_T));
     if (fout == NULL || idx == NULL) {
         __annexb_close(&a);
         if (fout != NULL) {
-            tkl_fclose(fout);
+            tal_fclose(fout);
         }
         if (idx != NULL) {
             tal_free(idx);
@@ -2107,8 +2107,8 @@ OPERATE_RET local_store_seed_h264(const char *src_path, const char *leaf, uint32
             idx[idx_cnt].off = (uint32_t)off;
             idx_cnt++;
         }
-        n = tkl_fwrite(&fh, (int32_t)sizeof(fh), fout);
-        if (n != (int32_t)sizeof(fh) || tkl_fwrite(a.buf + au_start, (int32_t)au_len, fout) != (int32_t)au_len) {
+        n = tal_fwrite(&fh, (int32_t)sizeof(fh), fout);
+        if (n != (int32_t)sizeof(fh) || tal_fwrite(a.buf + au_start, (int32_t)au_len, fout) != (int32_t)au_len) {
             rt = OPRT_FILE_WRITE_FAILED;
             break;
         }
@@ -2116,10 +2116,10 @@ OPERATE_RET local_store_seed_h264(const char *src_path, const char *leaf, uint32
         i++;
     }
     __annexb_close(&a);
-    tkl_fclose(fout);
+    tal_fclose(fout);
     if (rt != OPRT_OK) {
         tal_free(idx);
-        (void)tkl_fs_remove(dst);
+        (void)tal_fs_remove(dst);
         return rt;
     }
     (void)__idx_write(dst, idx, idx_cnt);
