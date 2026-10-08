@@ -49,7 +49,6 @@ target_link_libraries(tuya_ai_service PRIVATE
     libcjson
     tuya_transport
     tal_system
-    tal_kv
     tuya_cloud_service
 )
 unset(_ai_srcs)

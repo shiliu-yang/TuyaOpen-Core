@@ -7,7 +7,6 @@
 # （TUYAOPEN_THIRD_PARTY_DIR 已由 tuyaopen-core.cmake 在顶层定义）
 
 # 自研 KV 存储（历史遗留仍居于此，非官方库）
-add_subdirectory(tal_kv)
 
 # cJSON（submodule，v1.7.18）：单文件库，目标名沿用 libcjson
 add_library(libcjson STATIC ${CMAKE_CURRENT_SOURCE_DIR}/cJSON/cJSON.c)

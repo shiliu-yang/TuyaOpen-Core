@@ -59,7 +59,6 @@ set(_cloud_deps
     mbedtls
     libcjson
     tal_system
-    tal_kv
 )
 target_link_libraries(tuya_cloud_service
     PUBLIC tuya_transport libcjson tal_system corehttp coremqtt backoff_algorithm mbedtls

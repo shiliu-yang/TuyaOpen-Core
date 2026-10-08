@@ -75,7 +75,6 @@ foreach(_tuyaopen_mod IN ITEMS
     backoff_algorithm
     mbedtls
     tal_system
-    tal_kv
     tuya_cloud_service
     tuya_ai_service
     utility

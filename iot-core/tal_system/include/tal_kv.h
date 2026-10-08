@@ -2,6 +2,14 @@
  * @file tal_kv.h
  * @brief Provides key-value storage functionality for Tuya applications.
  *
+ * 对外 API 与旧 tal_kv（third_party/tal_kv）逐字一致：init / set / get / free /
+ * del / serialize_set / serialize_get、kv_db_t / kv_tp_t / tal_kv_cfg_t /
+ * TAL_LV_KEY_LEN 全部保持旧签名与旧语义，上层调用点零改动。
+ *
+ * 实现已替换为内部新引擎：日志式记录（追加 + 墓碑 + seq + CRC）+ AES，存储细节
+ * 不再外露，port 只提供一块可读写擦的数据区（见 tal_kv_ops.h）。相对旧头删除两项：
+ * tal_kv_cmd（CLI，零调用方）与 tal_lfs_get（littlefs 句柄，littlefs 已随旧链路删除）。
+ *
  * This header file defines the interface for Tuya's key-value (KV) storage
  * system, which is designed to serialize and deserialize data to and from JSON
  * format for efficient storage and retrieval. It supports various data types
@@ -23,9 +31,7 @@ extern "C" {
 #endif
 
 #include "tuya_cloud_types.h"
-#if !(defined(ENABLE_FILE_SYSTEM) && (ENABLE_FILE_SYSTEM == 1))
-#include "lfs.h"
-#endif
+
 /**
  * @brief tuya key-value database type define, used for serialize/deserialize
  * data to json format
@@ -154,26 +160,6 @@ int tal_kv_serialize_set(const char *key, kv_db_t *db, size_t dbcnt);
  * @return The number of key-value pairs found in the database.
  */
 int tal_kv_serialize_get(const char *key, kv_db_t *db, size_t dbcnt);
-
-/**
- * @brief Executes the TAL KV command.
- *
- * This function is responsible for executing the TAL KV command based on the
- * provided arguments.
- *
- * @param argc The number of command-line arguments.
- * @param argv An array of strings containing the command-line arguments.
- */
-void tal_kv_cmd(int argc, char *argv[]);
-
-/**
- * @brief Get the LFS handle, can be used for file system opeation
- *
- * @return lfs_t *
- */
-#if !(defined(ENABLE_FILE_SYSTEM) && (ENABLE_FILE_SYSTEM == 1))
-lfs_t *tal_lfs_get();
-#endif
 
 #ifdef __cplusplus
 }
