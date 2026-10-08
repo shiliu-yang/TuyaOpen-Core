@@ -7,7 +7,7 @@
  * port/src/tkl_ota.c 组装 tal_ota_ops_platform（成员绑定到本平台 tkl_ota_*
  * 实现），core 的 tal_api.c 经 extern 引用完成 tal_ota_* 分发，对上
  * tal_ota_* API 签名不变。与主卡 TAL_API_OPS_T（tal_api_ops.h）解耦，
- * 不混入 tkl_api_ops.c。
+ * 不混入 tkl_runtime.c。
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *
