@@ -5,6 +5,8 @@
  * 对外：tal_kv_init/set/get/free/del/serialize_set/serialize_get 与旧
  * third_party/tal_kv 逐字一致（含 get 的"堆分配返回 + tal_kv_free"语义），
  * 上层调用点零改动；serialize 用 cJSON 重新实现（语义照旧 kv_serialize.c）。
+ * 线程安全与旧实现同构：公开 API 入口持一把互斥量（init 建锁），引擎内部 static
+ * 函数不加锁（避免重入死锁）；tal_kv_get 的"探测 + 分配 + 复读"整段在同一锁内。
  *
  * 对内：区域 = 纯线性日志，write/erase 只在尾部追加，从不回卷、不压缩、不擦除；
  * 区域满时返回 OPRT_COM_ERROR（绝不覆盖已有记录）——flash 不做回收，由平台开足够
@@ -16,6 +18,7 @@
 #include "tal_kv_ops.h"
 #include "tal_log.h"
 #include "tal_memory.h"
+#include "tal_mutex.h"
 #include "tal_security.h"
 
 #include <inttypes.h>
@@ -59,6 +62,8 @@ static uint32_t s_region_size;
 static uint8_t  s_key[16];
 static uint8_t  s_iv[16];
 static int      s_inited;
+/* 公开 API 的统一互斥量（init 建锁；引擎内部 static 函数由公开 API 持锁后再调用） */
+static MUTEX_HANDLE s_kv_mutex;
 
 /* ---- 小工具：小端读写 ---- */
 static uint16_t __rd16(const uint8_t *p) { return (uint16_t)(p[0] | (p[1] << 8)); }
@@ -807,38 +812,35 @@ ERR_EXIT:
 
 /* ===========================================================================
  * 公开 API（与旧 tal_kv 逐字一致）：旧 API over 内部引擎
+ * 线程安全：入口持 s_kv_mutex（init 建锁，与旧实现持 lfs_mutex 同构）；
+ * 引擎内部 static 函数一律不加锁，由本层统一持有，避免重入死锁。
  * =========================================================================== */
 
-int tal_kv_init(tal_kv_cfg_t *kv_cfg)
+static void __kv_lock(void)
 {
-    if (NULL == kv_cfg) {
-        return OPRT_INVALID_PARM;
+    if (NULL != s_kv_mutex) {
+        tal_mutex_lock(s_kv_mutex);
     }
-    return __engine_init(kv_cfg->seed, kv_cfg->key);
 }
 
-int tal_kv_set(const char *key, const uint8_t *value, size_t length)
+static void __kv_unlock(void)
 {
-    if (NULL == key || NULL == value || 0 == length) {
-        return OPRT_INVALID_PARM;
+    if (NULL != s_kv_mutex) {
+        tal_mutex_unlock(s_kv_mutex);
     }
-    return __engine_write(key, value, length);
 }
 
-int tal_kv_get(const char *key, uint8_t **value, size_t *length)
+/* 引擎读 + 旧 get 的堆分配语义（探测尺寸 → malloc(len+1) → 读入 → 末尾补 '\0'）。
+ * 调用方须已持锁；tal_kv_get 与 tal_kv_serialize_get 共用（整段在同一锁内）。 */
+static OPERATE_RET __kv_get_alloc(const char *key, uint8_t **value, size_t *length)
 {
     uint8_t *buf = NULL;
     size_t len = 0;
     OPERATE_RET result;
 
-    if (NULL == key || NULL == value || NULL == length) {
-        return OPRT_INVALID_PARM;
-    }
     *value = NULL;
     *length = 0;
 
-    /* 旧语义：调用方拿到堆指针（tal_kv_free 释放）且末尾补 '\0'（便于当字符串用）。
-     * 内部引擎要求调用方给缓冲区 → 先探测尺寸，再分配 len+1 读入。 */
     result = __engine_read(key, NULL, 0, &len);
     if (OPRT_OK != result) {
         return result;
@@ -858,8 +860,49 @@ int tal_kv_get(const char *key, uint8_t **value, size_t *length)
     return OPRT_OK;
 }
 
+int tal_kv_init(tal_kv_cfg_t *kv_cfg)
+{
+    if (NULL == kv_cfg) {
+        return OPRT_INVALID_PARM;
+    }
+    /* 与旧实现同构：init 建锁；幂等，已建不重建 */
+    if (NULL == s_kv_mutex && OPRT_OK != tal_mutex_create_init(&s_kv_mutex)) {
+        return OPRT_COM_ERROR;
+    }
+    return __engine_init(kv_cfg->seed, kv_cfg->key);
+}
+
+int tal_kv_set(const char *key, const uint8_t *value, size_t length)
+{
+    OPERATE_RET result;
+
+    if (NULL == key || NULL == value || 0 == length) {
+        return OPRT_INVALID_PARM;
+    }
+    __kv_lock();
+    result = __engine_write(key, value, length);
+    __kv_unlock();
+    return result;
+}
+
+int tal_kv_get(const char *key, uint8_t **value, size_t *length)
+{
+    OPERATE_RET result;
+
+    if (NULL == key || NULL == value || NULL == length) {
+        return OPRT_INVALID_PARM;
+    }
+    /* 旧语义：出参为堆指针（tal_kv_free 释放）且末尾补 '\0'；"探测 + 分配 + 复读"
+     * 整段持锁，避免与并发写交错导致尺寸/内容不一致 */
+    __kv_lock();
+    result = __kv_get_alloc(key, value, length);
+    __kv_unlock();
+    return result;
+}
+
 int tal_kv_free(uint8_t *value)
 {
+    /* 只释放调用方内存，不碰引擎状态 → 无需持锁（与旧实现一致） */
     if (NULL == value) {
         return OPRT_INVALID_PARM;
     }
@@ -870,10 +913,15 @@ int tal_kv_free(uint8_t *value)
 
 int tal_kv_del(const char *key)
 {
+    OPERATE_RET result;
+
     if (NULL == key) {
         return OPRT_INVALID_PARM;
     }
-    return __engine_erase(key);
+    __kv_lock();
+    result = __engine_erase(key);
+    __kv_unlock();
+    return result;
 }
 
 int tal_kv_serialize_set(const char *key, kv_db_t *db, size_t dbcnt)
@@ -886,13 +934,16 @@ int tal_kv_serialize_set(const char *key, kv_db_t *db, size_t dbcnt)
         return OPRT_INVALID_PARM;
     }
 
+    __kv_lock();
     result = kv_serialize(db, dbcnt, &buf, &len);
     if (OPRT_OK != result) {
+        __kv_unlock();
         PR_ERR("kv_serialize failed: %d", result);
         return result;
     }
-
-    result = tal_kv_set(key, (const uint8_t *)buf, len);
+    /* 直接调引擎（不调 tal_kv_set，避免同锁重入） */
+    result = __engine_write(key, (const uint8_t *)buf, len);
+    __kv_unlock();
     tal_free(buf);
     return result;
 }
@@ -907,13 +958,15 @@ int tal_kv_serialize_get(const char *key, kv_db_t *db, size_t dbcnt)
         return OPRT_INVALID_PARM;
     }
 
-    result = tal_kv_get(key, &buf, &len);
+    __kv_lock();
+    result = __kv_get_alloc(key, &buf, &len);
     if (OPRT_OK != result) {
+        __kv_unlock();
         PR_ERR("kv_get failed %s: %d", key, result);
         return result;
     }
-
     result = kv_deserialize((char *)buf, db, dbcnt);
+    __kv_unlock();
     tal_kv_free(buf);
     if (OPRT_OK != result) {
         PR_ERR("kv_deserialize failed: %d", result);
