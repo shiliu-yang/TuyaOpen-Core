@@ -227,8 +227,9 @@ static OPERATE_RET __scan(void)
 
     s_index_cnt = 0;
     while (off + 16 <= s_region_size) {
-        uint8_t state = 0, name[TAL_DATA_NAME_MAX + 1] = {0};
-        uint32_t seq = 0, data_off = 0, data_len = 0, rec_len = 0, hdr_read;
+        uint8_t state = 0;
+        char name[TAL_DATA_NAME_MAX + 1] = {0};
+        uint32_t seq = 0, data_off = 0, data_len = 0, rec_len = 0;
 
         /* 先读 8 字节定长头，拿到 namelen 后读整条 */
         if (OPRT_OK != ops->read(off, buf, 8)) {
@@ -256,9 +257,7 @@ static OPERATE_RET __scan(void)
         }
         uint32_t dlen = __rd32(hdr + 8 + namelen);
         uint32_t total = __rec_len(namelen, dlen);
-        hdr_read = need;
         tal_free(hdr);
-        (void)hdr_read;
 
         if (off + total > s_region_size || total > TAL_DATA_PLAIN_MAX + 128) {
             break;
@@ -287,7 +286,10 @@ static OPERATE_RET __scan(void)
             __index_put(&item);
         } else if (TAL_DATA_ST_TOMB == state) {
             /* 墓碑参与 seq 比较：seq 更大（或相等）的墓碑移除同名索引项；
-             * 否则 erase 会在重启后被旧 VALID 记录"复活" */
+             * 否则 erase 会在重启后被旧 VALID 记录"复活"。
+             * 依赖扫描顺序内 seq 单调（后扫到的记录 seq 不大于先扫到的）；GC 把副本
+             * 追加到更高偏移且分配新 seq，该不变量仍成立。若将来 GC 布局破坏它，
+             * 需改为扫描末尾按 name 归并。 */
             int idx = __index_find(name);
             if (idx >= 0 && seq >= s_index[idx].seq) {
                 for (uint32_t i = (uint32_t)idx; i + 1 < s_index_cnt; i++) {
@@ -354,24 +356,153 @@ OPERATE_RET tal_data_init(const char *seed, const char *key)
     return OPRT_OK;
 }
 
+static OPERATE_RET __compact(void);
+static OPERATE_RET __append_rec(const uint8_t *rec, uint32_t rec_len);
+
+/* 追加一条记录；空间不足时先压缩，再尝试；跨区尾时先写 PAD 回卷 */
 static OPERATE_RET __append(const uint8_t *rec, uint32_t rec_len)
+{
+    OPERATE_RET ret;
+
+    ret = __append_rec(rec, rec_len);
+    if (OPRT_OK == ret) {
+        return OPRT_OK;
+    }
+    if (OPRT_OK != __compact()) {
+        return OPRT_COM_ERROR;                       /* 压缩也无法腾出空间 → 区域满 */
+    }
+    ret = __append_rec(rec, rec_len);
+    if (OPRT_OK != ret) {
+        return OPRT_COM_ERROR;
+    }
+    return OPRT_OK;
+}
+
+static OPERATE_RET __append_rec(const uint8_t *rec, uint32_t rec_len)
 {
     TAL_DATA_OPS_T *ops = tal_data_get_ops();
     uint32_t free_space = (s_head - s_tail + s_region_size) % s_region_size;
 
     if (0 == free_space) {
-        free_space = s_region_size;                  /* 空区域 */
+        free_space = s_region_size;
+    }
+    /* 跨区尾：写 PAD 记录填满剩余，再回卷到 0 */
+    if (s_tail + rec_len > s_region_size) {
+        uint32_t pad_len = s_region_size - s_tail;
+        if (pad_len >= 16) {
+            uint8_t *pad = tal_malloc(pad_len);
+            if (NULL == pad) {
+                return OPRT_MALLOC_FAILED;
+            }
+            memset(pad, 0xFF, pad_len);               /* 未用尾部保持擦除态 0xFF */
+            __rec_encode(pad, TAL_DATA_ST_PAD, ++s_max_seq, "pad", NULL, 0);
+            if (OPRT_OK != ops->write(s_tail, pad, pad_len)) {
+                tal_free(pad);
+                s_max_seq--;
+                return OPRT_COM_ERROR;
+            }
+            tal_free(pad);
+        }
+        s_tail = 0;
+        free_space = (s_head - s_tail + s_region_size) % s_region_size;
+        if (0 == free_space) {
+            free_space = s_region_size;
+        }
     }
     if (rec_len + 1 > free_space) {
-        return OPRT_COM_ERROR;                       /* 空间不足（Task 3 引入压缩） */
-    }
-    if (s_tail + rec_len > s_region_size) {
-        return OPRT_COM_ERROR;                       /* 跨区尾（Task 3 引入 PAD 回卷） */
+        return OPRT_COM_ERROR;
     }
     if (OPRT_OK != ops->write(s_tail, rec, rec_len)) {
         return OPRT_COM_ERROR;
     }
     s_tail += rec_len;
+    return OPRT_OK;
+}
+
+/* GC 压缩：把各 name 的最新记录复制到空闲尾部（分配新 seq），再推进 head */
+static OPERATE_RET __compact(void)
+{
+    uint32_t live_len = 0, free_space, old_tail;
+    TAL_DATA_ITEM_T old_index[TAL_DATA_INDEX_MAX];
+    uint32_t old_cnt = s_index_cnt;
+    OPERATE_RET ret = OPRT_OK;
+
+    for (uint32_t i = 0; i < s_index_cnt; i++) {
+        live_len += s_index[i].rec_len;
+    }
+    free_space = (s_head - s_tail + s_region_size) % s_region_size;
+    if (0 == free_space) {
+        free_space = s_region_size;
+    }
+    if (live_len + 16 > free_space) {
+        return OPRT_COM_ERROR;                       /* 压缩也无法腾出空间 */
+    }
+
+    memcpy(old_index, s_index, sizeof(old_index));
+    old_tail = s_tail;
+
+    for (uint32_t i = 0; i < old_cnt; i++) {
+        uint8_t *rec = NULL;
+        TAL_DATA_ITEM_T item = old_index[i];
+
+        rec = tal_malloc(item.rec_len);
+        if (NULL == rec) {
+            return OPRT_MALLOC_FAILED;
+        }
+        if (OPRT_OK != tal_data_get_ops()->read(item.rec_off, rec, item.rec_len)) {
+            tal_free(rec);
+            return OPRT_COM_ERROR;
+        }
+        /* 复制为一条新记录（新 seq） */
+        {
+            uint8_t *ct = tal_malloc(item.data_len);
+            uint32_t new_len = __rec_len((uint32_t)strlen(item.name), item.data_len);
+            uint8_t *new_rec = NULL;
+            if (NULL == ct) {
+                tal_free(rec);
+                return OPRT_MALLOC_FAILED;
+            }
+            if (OPRT_OK != tal_data_get_ops()->read(item.data_off, ct, item.data_len)) {
+                tal_free(ct);
+                tal_free(rec);
+                return OPRT_COM_ERROR;
+            }
+            new_rec = tal_malloc(new_len);
+            if (NULL == new_rec) {
+                tal_free(ct);
+                tal_free(rec);
+                return OPRT_MALLOC_FAILED;
+            }
+            __rec_encode(new_rec, TAL_DATA_ST_VALID, ++s_max_seq, item.name, ct, item.data_len);
+            ret = __append_rec(new_rec, new_len);
+            if (OPRT_OK == ret) {
+                /* s_tail 可能回卷到 0，做回卷安全的偏移计算 */
+                s_index[i].rec_off = (s_tail >= new_len) ? (s_tail - new_len) : (s_region_size + s_tail - new_len);
+                s_index[i].rec_len = new_len;
+                s_index[i].data_off = s_index[i].rec_off + 12 + (uint32_t)strlen(item.name);
+                s_index[i].seq = s_max_seq;
+            }
+            tal_free(new_rec);
+            tal_free(ct);
+        }
+        tal_free(rec);
+        if (OPRT_OK != ret) {
+            return ret;
+        }
+    }
+
+    s_head = old_tail;                                /* 旧记录区变为空闲 */
+    /* flash 语义：回收区必须先擦除才能再写（文件实现下 erase=写 0xFF，等价无害）。
+     * 擦除范围按擦除粒度对齐，且**上界不超过新副本起点**，避免擦掉刚复制的数据。 */
+    {
+        uint32_t era_beg = (s_head / s_erase_gran) * s_erase_gran;
+        uint32_t era_end = (old_tail / s_erase_gran) * s_erase_gran;   /* 不含新副本所在扇区 */
+        if (era_end > era_beg) {
+            if (OPRT_OK != tal_data_get_ops()->erase(era_beg, era_end - era_beg)) {
+                PR_WARN("tal_data: reclaim erase fail (%u,%u)", era_beg, era_end - era_beg);
+            }
+        }
+    }
     return OPRT_OK;
 }
 
