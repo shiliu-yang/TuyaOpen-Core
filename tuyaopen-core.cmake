@@ -68,6 +68,7 @@ add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/p2p-core ${CMAKE_CURRENT_BINARY_DIR}/
 set(_tuyaopen_core_libs)
 foreach(_tuyaopen_mod IN ITEMS
     libcjson
+    tuya_utilities
     tuya_transport
     corehttp
     coremqtt

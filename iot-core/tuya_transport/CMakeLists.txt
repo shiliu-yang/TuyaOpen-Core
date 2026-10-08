@@ -16,8 +16,7 @@ target_include_directories(tuya_transport PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/tls>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/http>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/mqtt>
-    # 通用工具（crc/random/mix_method/dev_evt，原 tal_system/utilities 并入）
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/utilities>
+    # 通用工具已迁至 iot-core/utilities（tuya_utilities 目标，见下方依赖）
     # 用户提供型配置头：MBEDTLS_CONFIG_FILE / core_http/mqtt_config.h 展开点
     # 不止官方库（本目标与消费者亦有），须随 INTERFACE 传播
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/config>
@@ -50,4 +49,6 @@ target_link_libraries(tuya_transport PRIVATE
     tuyaopen-headers
     tal_system
 )
+# 通用工具（crc/random/mix_method/dev_evt 等）随本目标 PUBLIC 传播给消费者
+target_link_libraries(tuya_transport PUBLIC tuya_utilities)
 unset(_tuya_transport_srcs)

@@ -1,8 +1,9 @@
 # tuya_cloud_service 源码已拍平：原模块子目录（cloud/ netmgr/ netcfg/ ble/ ...）
 # 直接位于 iot-core/ 下，因此目标在此定义，而不是在模块子目录里。
 
-# 本分组自带的基础库：tal_system（系统抽象）与 tuya_transport（连接服务层，
-# 已吸收 tal_network / tal_security / libtls / http&mqtt wrap）。
+# 本分组自带的基础库：tuya_utilities（通用工具，零自研依赖）、tal_system（系统抽象）
+# 与 tuya_transport（连接服务层，已吸收 tal_network / tal_security / libtls / http&mqtt wrap）。
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/utilities)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tal_system)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tuya_transport)
 file(GLOB_RECURSE _cloud_srcs CONFIGURE_DEPENDS

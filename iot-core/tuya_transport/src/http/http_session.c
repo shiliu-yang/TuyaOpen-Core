@@ -672,8 +672,10 @@ int http_read_content(http_session_t session, void *buf, unsigned int max_len)
     if (ctx->response.bodyLen > 0 && ctx->response.pBody != NULL) {
         size_t copy_len = (ctx->response.bodyLen < (size_t)max_len) ? ctx->response.bodyLen : (size_t)max_len;
         memcpy(buf, ctx->response.pBody, copy_len);
-        /* pBody 声明为 const（只读契约），此处是消费已预收 body 的原地前移，显式去 const */
-        memmove((void *)ctx->response.pBody, ctx->response.pBody + copy_len, ctx->response.bodyLen - copy_len);
+        /* pBody 是 pBuffer 内的偏移（coreHTTP 契约），经 pBuffer 前移剩余 body——
+         * 避免对 const 指针强转去 const，把"该缓冲可写"的约束显式落在代码里 */
+        uint8_t *body = ctx->response.pBuffer + (ctx->response.pBody - ctx->response.pBuffer);
+        memmove(body, body + copy_len, ctx->response.bodyLen - copy_len);
         ctx->response.bodyLen -= copy_len;
         ctx->bytes_read += copy_len;
         return (int32_t)copy_len;
