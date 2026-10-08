@@ -74,8 +74,11 @@ static int tuya_region_regist_key_read(char *region, char *regist_key)
         PR_ERR("tal_kv_get region fail:0x%02x", ret);
         return OPRT_KVS_RD_FAIL;
     }
-    memcpy(region, value, MAX_LENGTH_REGION);
-    region[MAX_LENGTH_REGION] = 0;
+    /* 按实际长度拷贝：旧实现 buf = 密文长+1 掩盖了长度不足；新引擎返回"明文长+1"，
+     * 固定长 memcpy 在云端下发更短值时越界读 */
+    size_t copy = (len < MAX_LENGTH_REGION) ? len : MAX_LENGTH_REGION;
+    memcpy(region, value, copy);
+    region[copy] = 0;
     tal_kv_free(value);
 
     ret = tal_kv_get("regist_key", &value, &len);
@@ -83,8 +86,10 @@ static int tuya_region_regist_key_read(char *region, char *regist_key)
         PR_ERR("tal_kv_get regist_key fail:0x%02x", ret);
         return OPRT_KVS_RD_FAIL;
     }
-    memcpy(regist_key, value, MAX_LENGTH_REGIST);
-    regist_key[MAX_LENGTH_REGIST] = 0;
+    /* 同上：regist_key 来自云端 env 字段，长度不受本地控制 */
+    copy = (len < MAX_LENGTH_REGIST) ? len : MAX_LENGTH_REGIST;
+    memcpy(regist_key, value, copy);
+    regist_key[copy] = 0;
     tal_kv_free(value);
 
     return OPRT_OK;
