@@ -158,15 +158,20 @@ static int tuya_endpoint_kv_str_read(const char *key, char *buf, size_t buf_size
     }
 
     /* 旧实现语义：存进去放不下就报错，不静默截断（截断后的 host/path 会被当成
-     * 有效值使用）；buf_size == 0 单独判，防 buf_size - 1 下溢 */
-    if (0 == buf_size || len > buf_size - 1) {
+     * 有效值使用）。上限为 buf_size：值自带结尾 '\0'，正好填满缓冲是合法的
+     * （写侧恒为 strlen+1，与字段容量上限逐字对应）；buf_size == 0 单独判防下溢 */
+    if (0 == buf_size || len > buf_size) {
         PR_ERR("tal_kv_get %s value too long: %u > %u", key, (unsigned int)len, (unsigned int)buf_size);
         tal_free(value);
         return OPRT_COM_ERROR;
     }
 
-    memcpy(buf, value, len);
-    buf[len] = 0;
+    if (0 == len) {
+        buf[0] = 0; /* 兜底终止（port 返回空值时） */
+    } else {
+        memcpy(buf, value, len);
+        buf[len - 1] = 0; /* 兜底终止；写侧末字节本就是 '\0'，此处幂等 */
+    }
     tal_free(value);
 
     return OPRT_OK;
