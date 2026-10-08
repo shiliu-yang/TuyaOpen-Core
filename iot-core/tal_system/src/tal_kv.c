@@ -89,7 +89,10 @@ static uint32_t __crc32(const uint8_t *data, uint32_t len)
     return ~crc;
 }
 
-/* ---- name 合法性 ---- */
+/* ---- name 合法性：只限 NULL / 空 / 长度 > 63 ----
+ * 不校验字符集：白名单是"每 name 一个文件"方案的遗留，现在 name 只存在记录的
+ * namelen+name 字段里，不需要文件名安全；且云端下发的 name（如 schemaId）字符集
+ * 不受我们控制，白名单会引入旧实现没有的失败路径（与旧实现行为对齐）。 */
 static OPERATE_RET __name_check(const char *name)
 {
     size_t len;
@@ -99,14 +102,6 @@ static OPERATE_RET __name_check(const char *name)
     len = strlen(name);
     if (0 == len || len > TAL_KV_NAME_MAX) {
         return OPRT_INVALID_PARM;
-    }
-    for (size_t i = 0; i < len; i++) {
-        char c = name[i];
-        int ok = ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '.' ||
-                  c == '_' || c == '-');
-        if (!ok) {
-            return OPRT_INVALID_PARM;
-        }
     }
     return OPRT_OK;
 }
@@ -388,13 +383,18 @@ static OPERATE_RET __append_rec(const uint8_t *rec, uint32_t rec_len)
 {
     TAL_KV_OPS_T *ops = tal_kv_get_ops();
 
-    if (s_tail + rec_len > s_region_size) {
-        return OPRT_COM_ERROR;                       /* 区域满：绝不覆盖已有记录 */
+    if (rec_len > s_region_size - s_tail) {
+        return OPRT_COM_ERROR;                       /* 区域满：绝不覆盖已有记录（回绕安全写法） */
     }
     if (OPRT_OK != ops->write(s_tail, rec, rec_len)) {
         return OPRT_COM_ERROR;
     }
     s_tail += rec_len;
+    /* 水位告警：本引擎不回收空间，写满即永久失败（连 del 也失败——墓碑同样要追加
+     * 空间），剩余 < 10% 时提前告警，避免现场静默到死。 */
+    if (s_region_size - s_tail < s_region_size / 10) {
+        PR_WARN("tal_kv: region nearly full, free=%u", s_region_size - s_tail);
+    }
     return OPRT_OK;
 }
 
