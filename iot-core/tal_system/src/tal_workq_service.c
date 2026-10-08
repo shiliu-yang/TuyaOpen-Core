@@ -181,19 +181,7 @@ uint16_t tal_workq_get_num(WORKQ_SERVICE_E service)
 }
 
 // used for debug
-static BOOL_T _dump_cb(WORK_ITEM_T *item, void *ctx)
-{
-    PR_NOTICE("cb:%p", item->cb);
-    return TRUE;
-}
 
-void tal_workq_dump(WORKQ_SERVICE_E service)
-{
-    PR_NOTICE("---------workq-%d dump begin---------", service);
-    tal_workqueue_traverse(tal_workq_get_handle(service), _dump_cb, NULL);
-    tal_thread_diagnose(tal_workqueue_get_thread(tal_workq_get_handle(service)));
-    PR_NOTICE("---------workq-%d dump end---------", service);
-}
 
 /**
  * @brief init delayed work task in workqueue

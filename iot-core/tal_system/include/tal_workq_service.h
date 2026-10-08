@@ -102,13 +102,6 @@ OPERATE_RET tal_workq_cancel(WORKQ_SERVICE_E service, WORKQUEUE_CB cb, void *dat
 uint16_t tal_workq_get_num(WORKQ_SERVICE_E service);
 
 /**
- * @brief dump all work in work queue.
- *
- * @param[in] service the workqueue service
- */
-void tal_workq_dump(WORKQ_SERVICE_E service);
-
-/**
  * @brief delayed work entry definition
  */
 typedef struct {

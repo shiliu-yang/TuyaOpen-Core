@@ -125,13 +125,6 @@ OPERATE_RET tal_thread_delete(const THREAD_HANDLE handle);
 THREAD_STATE_E tal_thread_get_state(const THREAD_HANDLE handle);
 
 /**
- * @brief diagnose the thread(dump task stack, etc.)
- *
- * @param[in] thrdHandle: the input thread context
- * @return OPRT_OK on success. Others on error, please refer to
- * tuya_error_code.h
- */
-OPERATE_RET tal_thread_diagnose(const THREAD_HANDLE handle);
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */

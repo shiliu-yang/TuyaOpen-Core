@@ -228,26 +228,6 @@ OPERATE_RET tal_workqueue_cancel(WORKQUEUE_HANDLE handle, WORKQUEUE_CB cb, void 
 }
 
 /**
- * @brief traverse the queue with specific callback
- *
- * @param[in] handle the workqueue handle
- * @param[in] cb the traverse callback
- * @param[in] ctx the traverse context
- *
- * @return OPRT_OK on success. Others on error, please refer to
- * tuya_error_code.h
- */
-OPERATE_RET tal_workqueue_traverse(WORKQUEUE_HANDLE handle, WORKQUEUE_TRAVERSE_CB cb, void *ctx)
-{
-    if (NULL == handle || NULL == cb) {
-        return OPRT_INVALID_PARM;
-    }
-
-    TAL_WORKQUEUE_T *workqueue = (TAL_WORKQUEUE_T *)handle;
-    return tuya_queue_traverse(workqueue->queue, (TRAVERSE_CB)cb, ctx);
-}
-
-/**
  * @brief get the workqueue item number
  *
  * @param[in] handle the workqueue handle
@@ -306,23 +286,6 @@ OPERATE_RET tal_workqueue_release(WORKQUEUE_HANDLE handle)
     tal_free(workqueue);
 
     return OPRT_OK;
-}
-
-/**
- * @brief get thread handle of the workqueue
- *
- * @param[in] handle the workqueue handle
- *
- * @return thread handle
- */
-THREAD_HANDLE tal_workqueue_get_thread(WORKQUEUE_HANDLE handle)
-{
-    if (NULL == handle) {
-        return NULL;
-    }
-
-    TAL_WORKQUEUE_T *workqueue = (TAL_WORKQUEUE_T *)handle;
-    return workqueue->thread;
 }
 
 typedef struct {

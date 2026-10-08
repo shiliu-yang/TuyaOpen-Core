@@ -89,18 +89,6 @@ OPERATE_RET tal_workqueue_schedule_instant(WORKQUEUE_HANDLE handle, WORKQUEUE_CB
 OPERATE_RET tal_workqueue_cancel(WORKQUEUE_HANDLE handle, WORKQUEUE_CB cb, void *data);
 
 /**
- * @brief traverse the queue with specific callback
- *
- * @param[in] handle the workqueue handle
- * @param[in] cb the traverse callback
- * @param[in] ctx the traverse context
- *
- * @return OPRT_OK on success. Others on error, please refer to
- * tuya_error_code.h
- */
-OPERATE_RET tal_workqueue_traverse(WORKQUEUE_HANDLE handle, WORKQUEUE_TRAVERSE_CB cb, void *ctx);
-
-/**
  * @brief get the workqueue item number
  *
  * @param[in] handle the workqueue handle
@@ -118,15 +106,6 @@ uint16_t tal_workqueue_get_num(WORKQUEUE_HANDLE handle);
  * tuya_error_code.h
  */
 OPERATE_RET tal_workqueue_release(WORKQUEUE_HANDLE handle);
-
-/**
- * @brief get thread handle of the workqueue
- *
- * @param[in] handle the workqueue handle
- *
- * @return thread handle
- */
-THREAD_HANDLE tal_workqueue_get_thread(WORKQUEUE_HANDLE handle);
 
 typedef void *DELAYED_WORK_HANDLE;
 

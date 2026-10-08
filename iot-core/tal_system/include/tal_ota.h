@@ -48,18 +48,6 @@ extern "C" {
  **********************************************************************/
 
 /**
- * @brief This API is used for get chip ota ability diff package upgrade use
- * TUYA_OTA_DIFF
- *
- * @param[in] *image_size: max image size
- * @param[in] *type: full package and compress package upgrade use TUYA_OTA_FULL
- *
- * @return OPRT_OK on success. Others on error, please refer to
- * tuya_error_code.h
- */
-OPERATE_RET tal_ota_get_ability(uint32_t *image_size, TUYA_OTA_TYPE_E *type);
-
-/**
  * @brief This API is used for ota start notify
  *
  * @param[in] image_size: image size

@@ -1,6 +1,6 @@
 /**
  * @file tal_ota_ops.h
- * @brief tal_ota 的平台 ops 契约：OTA 四接口（get_ability / start_notify /
+ * @brief tal_ota 的平台 ops 契约：OTA 三接口（start_notify /
  *        data_process / end_notify）
  *
  * 定义 TAL_OTA_OPS_T：OTA 为平台可选能力，port 在需要 OTA 时以独立文件
@@ -28,7 +28,6 @@ extern "C" {
  * @brief tal_ota 平台 ops：成员与 port 的 tkl_ota 实现一一对应
  */
 typedef struct {
-    OPERATE_RET (*get_ability)(uint32_t *image_size, TUYA_OTA_TYPE_E *type);
     OPERATE_RET (*start_notify)(uint32_t image_size, TUYA_OTA_TYPE_E type, TUYA_OTA_PATH_E path);
     OPERATE_RET (*data_process)(TUYA_OTA_DATA_T *pack, uint32_t *remain_len);
     OPERATE_RET (*end_notify)(BOOL_T reset);

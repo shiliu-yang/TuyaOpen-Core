@@ -138,10 +138,6 @@ OPERATE_RET tal_mutex_release(const MUTEX_HANDLE handle)
 }
 
 //! ota
-OPERATE_RET tal_ota_get_ability(uint32_t *image_size, TUYA_OTA_TYPE_E *type)
-{
-    TAL_OTA_EXEC_OP(get_ability, OPRT_COM_ERROR, image_size, type);
-}
 
 OPERATE_RET tal_ota_start_notify(uint32_t image_size, TUYA_OTA_TYPE_E type, TUYA_OTA_PATH_E path)
 {

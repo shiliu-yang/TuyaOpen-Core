@@ -325,30 +325,3 @@ OPERATE_RET tal_thread_delete(const THREAD_HANDLE handle)
     return OPRT_OK;
 }
 
-/**
- * @brief Diagnose a thread.
- *
- * This function diagnoses a thread identified by the given handle.
- *
- * @param handle The handle of the thread to diagnose.
- * @return The result of the diagnosis operation.
- *         - OPRT_OK if the diagnosis was successful.
- *         - OPRT_INVALID_PARM if the handle is NULL.
- */
-OPERATE_RET tal_thread_diagnose(const THREAD_HANDLE handle)
-{
-    OPERATE_RET ret = OPRT_OK;
-
-    if (NULL == handle) {
-        return OPRT_INVALID_PARM;
-    }
-
-    P_THRD_MANAGE pThrdManage = (P_THRD_MANAGE)handle;
-    TAL_API_OPS_T *ops = tal_api_get_ops();
-    if (NULL == ops || NULL == ops->thread_diagnose) {
-        return OPRT_COM_ERROR;
-    }
-    ret = ops->thread_diagnose(pThrdManage->thrdID);
-
-    return ret;
-}
