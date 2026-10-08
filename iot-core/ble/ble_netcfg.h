@@ -14,7 +14,16 @@
 #define _BLE_NETCFG_H_
 
 #include "tuya_cloud_types.h"
-#include "tkl_wifi.h" // WIFI_SSID_LEN / WIFI_PASSWD_LEN 定长常量
+
+/* 配网下发缓冲区定长：原先取自 tkl_wifi.h，但 WIFI TKL 层已随 netmgr 移除
+ * （linux port 不再提供该头），此处自持。取值与 port HEAD 的 tkl_wifi.h 一致；
+ * #ifndef 守卫兼容将来 WIFI TKL 回归时的同名定义。 */
+#ifndef WIFI_SSID_LEN
+#define WIFI_SSID_LEN 32
+#endif
+#ifndef WIFI_PASSWD_LEN
+#define WIFI_PASSWD_LEN 64
+#endif
 
 #ifdef __cplusplus
 extern "C" {
