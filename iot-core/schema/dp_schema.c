@@ -14,6 +14,7 @@
 
 #include <inttypes.h>
 #include <stdarg.h>
+#include <stdio.h>
 #include "tuya_cloud_types.h"
 #include "dp_schema.h"
 #include "cJSON.h"

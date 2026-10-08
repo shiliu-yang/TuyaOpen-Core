@@ -4,8 +4,9 @@
  * @version 0.1
  * @copyright Copyright (c) 2025 Tuya Inc. All Rights Reserved.
  */
-#include <string.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "tal_api.h"
 #include "tuya_transporter.h"
@@ -671,7 +672,8 @@ int http_read_content(http_session_t session, void *buf, unsigned int max_len)
     if (ctx->response.bodyLen > 0 && ctx->response.pBody != NULL) {
         size_t copy_len = (ctx->response.bodyLen < (size_t)max_len) ? ctx->response.bodyLen : (size_t)max_len;
         memcpy(buf, ctx->response.pBody, copy_len);
-        memmove(ctx->response.pBody, ctx->response.pBody + copy_len, ctx->response.bodyLen - copy_len);
+        /* pBody 声明为 const（只读契约），此处是消费已预收 body 的原地前移，显式去 const */
+        memmove((void *)ctx->response.pBody, ctx->response.pBody + copy_len, ctx->response.bodyLen - copy_len);
         ctx->response.bodyLen -= copy_len;
         ctx->bytes_read += copy_len;
         return (int32_t)copy_len;
