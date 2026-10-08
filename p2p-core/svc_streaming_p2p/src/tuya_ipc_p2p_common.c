@@ -180,7 +180,7 @@ OPERATE_RET tuya_ipc_p2p_get_pw(char p2p_pw[])
                 if (ret == OPRT_OK) {
                     // PR_DEBUG("get p2p passwd = %s",old_pwd);
                     snprintf(p2p_pw, P2P_PASSWD_LEN + 1, "%s", (char *)old_pwd);
-                    tal_kv_free(old_pwd);
+                    tal_free(old_pwd);
                     break;
                 } else {
                     tal_system_sleep(500);
@@ -190,7 +190,7 @@ OPERATE_RET tuya_ipc_p2p_get_pw(char p2p_pw[])
     } else {
 
         snprintf(p2p_pw, P2P_PASSWD_LEN + 1, "%s", (char *)old_pwd);
-        tal_kv_free(old_pwd);
+        tal_free(old_pwd);
         if (sg_p2p_pwd_cloud_synced == FALSE && sg_p2p_passwd_update_flag == FALSE) {
             OPERATE_RET sync_ret;
             sg_p2p_passwd_update_flag = TRUE;
@@ -260,7 +260,7 @@ OPERATE_RET tuya_ipc_p2p_get_id(char p2p_id[])
     cJSON *p_authjson = cJSON_Parse((char *)p_auth_str);
     if (NULL == p_authjson) {
         PR_ERR("parse json fails");
-        tal_kv_free(p_auth_str);
+        tal_free(p_auth_str);
         return OPRT_CJSON_PARSE_ERR;
     }
     cJSON *p_child = NULL;
@@ -271,7 +271,7 @@ OPERATE_RET tuya_ipc_p2p_get_id(char p2p_id[])
     }
 
     cJSON_Delete(p_authjson);
-    tal_kv_free(p_auth_str);
+    tal_free(p_auth_str);
 
     return OPRT_OK;
 }
@@ -367,8 +367,8 @@ OPERATE_RET tuya_ipc_check_p2p_auth_update(void)
             }
         }
     }
-    tal_kv_free(p_type);
-    tal_kv_free(p_auth_str);
+    tal_free(p_type);
+    tal_free(p_auth_str);
 
     if (TRUE == isNeedReLoad) {
         char new_str_p2p_type[P2P_TYPE_LEN] = {0};
@@ -462,7 +462,7 @@ BOOL_T iot_permit_mqtt_connect_cb(void)
         }
     } else {
         // PR_DEBUG("get p2p passwd = %s",old_pwd);
-        tal_kv_free(old_pwd);
+        tal_free(old_pwd);
         sg_p2p_passwd_flag = TRUE;
         ret = 0;
     }

@@ -23,6 +23,7 @@
 #include "tal_api.h"
 
 #include "tal_kv.h"
+#include "tal_memory.h"
 
 extern int iotdns_cloud_endpoint_get(const char *region, const char *env, tuya_endpoint_t *endpoint);
 
@@ -79,7 +80,7 @@ static int tuya_region_regist_key_read(char *region, char *regist_key)
     size_t copy = (len < MAX_LENGTH_REGION) ? len : MAX_LENGTH_REGION;
     memcpy(region, value, copy);
     region[copy] = 0;
-    tal_kv_free(value);
+    tal_free(value);
 
     ret = tal_kv_get("regist_key", &value, &len);
     if (ret != OPRT_OK) {
@@ -90,7 +91,7 @@ static int tuya_region_regist_key_read(char *region, char *regist_key)
     copy = (len < MAX_LENGTH_REGIST) ? len : MAX_LENGTH_REGIST;
     memcpy(regist_key, value, copy);
     regist_key[copy] = 0;
-    tal_kv_free(value);
+    tal_free(value);
 
     return OPRT_OK;
 }
@@ -145,11 +146,52 @@ int tuya_endpoint_cert_set(tuya_endpoint_t *endpoint)
     return ret;
 }
 
+/* 逐 key 读字符串字段：值含结尾 '\0' 一起存，读回后按缓冲容量截断拷贝 */
+static int tuya_endpoint_kv_str_read(const char *key, char *buf, size_t buf_size)
+{
+    uint8_t *value = NULL;
+    size_t len = 0;
+    int ret = tal_kv_get(key, &value, &len);
+    if (ret != OPRT_OK) {
+        PR_ERR("tal_kv_get %s error:%d", key, ret);
+        return ret;
+    }
+
+    size_t copy = (len < buf_size) ? len : buf_size - 1;
+    memcpy(buf, value, copy);
+    buf[copy] = 0;
+    tal_free(value);
+
+    return OPRT_OK;
+}
+
+/* 逐 key 读 uint16 字段：值按 2 字节二进制存取 */
+static int tuya_endpoint_kv_u16_read(const char *key, uint16_t *out)
+{
+    uint8_t *value = NULL;
+    size_t len = 0;
+    int ret = tal_kv_get(key, &value, &len);
+    if (ret != OPRT_OK) {
+        PR_ERR("tal_kv_get %s error:%d", key, ret);
+        return ret;
+    }
+    if (len != sizeof(*out)) {
+        PR_ERR("tal_kv_get %s length error:%u", key, (unsigned int)len);
+        tal_free(value);
+        return OPRT_COM_ERROR;
+    }
+
+    memcpy(out, value, sizeof(*out));
+    tal_free(value);
+
+    return OPRT_OK;
+}
+
 /**
  * @brief Retrieves the domain information for the endpoint.
  *
  * This function retrieves the domain information for the endpoint by reading
- * the key-value pairs from the key-value database.
+ * the key-value pairs from the key-value store, one key per field.
  *
  * @param[in] endpoint Pointer to the tuya_endpoint_t structure to store the
  * retrieved domain information.
@@ -161,19 +203,28 @@ int tuya_endpoint_domain_get(tuya_endpoint_t *endpoint)
         PR_ERR("Invalid param");
         return OPRT_INVALID_PARM;
     }
-    int ret = 0;
 
-    kv_db_t kvdb[] = {
-        {"atop.host", KV_STRING, endpoint->atop.host, sizeof(endpoint->atop.host)},
-        {"atop.port", KV_USHORT, &endpoint->atop.port, sizeof(endpoint->atop.port)},
-        {"atop.path", KV_STRING, endpoint->atop.path, sizeof(endpoint->atop.path)},
-        {"mqtt.host", KV_STRING, endpoint->mqtt.host, sizeof(endpoint->mqtt.host)},
-        {"mqtt.port", KV_USHORT, &endpoint->mqtt.port, sizeof(endpoint->mqtt.port)},
-    };
+    /* 逐 key 读取（key 名即字段名）：5 个字段都读，任一失败返回该错误码 */
+    int ret = tuya_endpoint_kv_str_read("atop.host", endpoint->atop.host, sizeof(endpoint->atop.host));
+    int rt = tuya_endpoint_kv_u16_read("atop.port", &endpoint->atop.port);
+    if (OPRT_OK == ret) {
+        ret = rt;
+    }
+    rt = tuya_endpoint_kv_str_read("atop.path", endpoint->atop.path, sizeof(endpoint->atop.path));
+    if (OPRT_OK == ret) {
+        ret = rt;
+    }
+    rt = tuya_endpoint_kv_str_read("mqtt.host", endpoint->mqtt.host, sizeof(endpoint->mqtt.host));
+    if (OPRT_OK == ret) {
+        ret = rt;
+    }
+    rt = tuya_endpoint_kv_u16_read("mqtt.port", &endpoint->mqtt.port);
+    if (OPRT_OK == ret) {
+        ret = rt;
+    }
 
-    ret = tal_kv_serialize_get("endpoint.domain", kvdb, sizeof(kvdb) / sizeof(kvdb[0]));
     if (ret != OPRT_OK) {
-        PR_ERR("tal_kv_serialize_set error:%d", ret);
+        PR_ERR("tal_kv_get endpoint domain error:%d", ret);
     }
 
     return ret;
@@ -182,8 +233,8 @@ int tuya_endpoint_domain_get(tuya_endpoint_t *endpoint)
 /**
  * @brief Sets the domain for the Tuya endpoint.
  *
- * This function sets the domain for the Tuya endpoint by updating the key-value
- * database (kvdb) with the provided endpoint information.
+ * This function sets the domain for the Tuya endpoint by writing the endpoint
+ * information into the key-value store, one key per field.
  *
  * @param endpoint Pointer to the tuya_endpoint_t structure containing the
  * endpoint information.
@@ -197,22 +248,39 @@ int tuya_endpoint_domain_set(tuya_endpoint_t *endpoint)
         return OPRT_INVALID_PARM;
     }
 
-    int ret = 0;
-
-    kv_db_t kvdb[] = {
-        {"atop.host", KV_STRING, endpoint->atop.host, sizeof(endpoint->atop.host)},
-        {"atop.port", KV_USHORT, &endpoint->atop.port, sizeof(endpoint->atop.port)},
-        {"atop.path", KV_STRING, endpoint->atop.path, sizeof(endpoint->atop.path)},
-        {"mqtt.host", KV_STRING, endpoint->mqtt.host, sizeof(endpoint->mqtt.host)},
-        {"mqtt.port", KV_USHORT, &endpoint->mqtt.port, sizeof(endpoint->mqtt.port)},
-    };
-
-    ret = tal_kv_serialize_set("endpoint.domain", kvdb, sizeof(kvdb) / sizeof(kvdb[0]));
+    /* 逐 key 写入（key 名即字段名）：字符串含结尾 '\0' 一起存，端口按 2 字节二进制存；
+     * 任一失败返回该错误码 */
+    int ret = tal_kv_set("atop.host", (const uint8_t *)endpoint->atop.host, strlen(endpoint->atop.host) + 1);
     if (ret != OPRT_OK) {
-        PR_ERR("tal_kv_serialize_set error:%d", ret);
+        PR_ERR("tal_kv_set atop.host error:%d", ret);
+        return ret;
     }
 
-    return ret;
+    ret = tal_kv_set("atop.port", (const uint8_t *)&endpoint->atop.port, sizeof(endpoint->atop.port));
+    if (ret != OPRT_OK) {
+        PR_ERR("tal_kv_set atop.port error:%d", ret);
+        return ret;
+    }
+
+    ret = tal_kv_set("atop.path", (const uint8_t *)endpoint->atop.path, strlen(endpoint->atop.path) + 1);
+    if (ret != OPRT_OK) {
+        PR_ERR("tal_kv_set atop.path error:%d", ret);
+        return ret;
+    }
+
+    ret = tal_kv_set("mqtt.host", (const uint8_t *)endpoint->mqtt.host, strlen(endpoint->mqtt.host) + 1);
+    if (ret != OPRT_OK) {
+        PR_ERR("tal_kv_set mqtt.host error:%d", ret);
+        return ret;
+    }
+
+    ret = tal_kv_set("mqtt.port", (const uint8_t *)&endpoint->mqtt.port, sizeof(endpoint->mqtt.port));
+    if (ret != OPRT_OK) {
+        PR_ERR("tal_kv_set mqtt.port error:%d", ret);
+        return ret;
+    }
+
+    return OPRT_OK;
 }
 
 /**
@@ -255,7 +323,12 @@ int tuya_endpoint_remove(void)
     tal_kv_del("region");
     tal_kv_del("regist_key");
     tal_kv_del("endpoint.cert");
-    tal_kv_del("endpoint.domain");
+    /* domain 已拆为 5 个字段 key（见 tuya_endpoint_domain_set），逐个清理 */
+    tal_kv_del("atop.host");
+    tal_kv_del("atop.port");
+    tal_kv_del("atop.path");
+    tal_kv_del("mqtt.host");
+    tal_kv_del("mqtt.port");
 
     return OPRT_OK;
 }

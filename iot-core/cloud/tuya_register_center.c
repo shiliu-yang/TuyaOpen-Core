@@ -19,6 +19,7 @@
 #include "tal_api.h"
 #include "tal_security.h"
 #include "tal_kv.h"
+#include "tal_memory.h"
 #include "tuya_register_center.h"
 
 static const unsigned char default_iotdns_cacert[] = {
@@ -349,7 +350,7 @@ OPERATE_RET tuya_register_center_init(void)
     }
 
     rt = __rcs_deserialize(data, len, &s_tuya_rcs);
-    tal_kv_free(data);
+    tal_free(data);
 
 EXIT:
 

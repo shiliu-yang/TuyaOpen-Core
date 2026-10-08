@@ -20,6 +20,7 @@
 
 #include "tuya_endpoint.h"
 #include "tal_kv.h"
+#include "tal_memory.h"
 #include "atop_base.h"
 #include "atop_service.h"
 #include "mqtt_bind.h"
@@ -136,7 +137,7 @@ static dp_schema_t *schema_instance_create(char *devid, char *schema_id)
 
 __exit:
     if (schema_data) {
-        tal_kv_free(schema_data);
+        tal_free(schema_data);
     }
 
     return schema;
@@ -157,7 +158,7 @@ static int activated_data_read(const char *storage_key, tuya_activated_data_t *o
 
     /* Parse activate json string */
     rt = activate_json_string_parse((const char *)readbuf, out);
-    tal_kv_free((uint8_t *)readbuf);
+    tal_free((uint8_t *)readbuf);
     if (OPRT_OK != rt) {
         PR_ERR("activate_json_string_parse fail:%d", rt);
         return rt;
@@ -225,7 +226,7 @@ static int client_activate_process(tuya_iot_client_t *client, const char *token)
     snprintf(devid_key, sizeof devid_key, "%s.devid", client->config.storage_namespace);
     if (tal_kv_get(devid_key, (uint8_t **)&devid_vaule, &devid_len) == OPRT_OK) {
         memcpy(devid_cache, devid_vaule, devid_len);
-        tal_kv_free((uint8_t *)devid_vaule);
+        tal_free((uint8_t *)devid_vaule);
         exist_devid = true;
     }
 
@@ -1393,14 +1394,14 @@ int tuya_iot_version_update_sync(tuya_iot_client_t *client)
      * "密文长+1" 缓冲冗余掩盖了长度不足，新引擎返回"明文长+1"，直接 memcmp 会越界读 */
     if (readbuf && readlen == version_len && memcmp(version_buffer, readbuf, version_len) == 0) {
         PR_DEBUG("The verison unchanged, dont need sync.");
-        tal_kv_free((uint8_t *)readbuf);
+        tal_free((uint8_t *)readbuf);
         tal_free(version_buffer);
         return OPRT_OK;
     }
 
     /* Post version info to ATOP service */
     rt = atop_service_version_update_v41(client->activate.devid, client->activate.seckey, (const char *)version_buffer);
-    tal_kv_free((uint8_t *)readbuf);
+    tal_free((uint8_t *)readbuf);
     if (rt != OPRT_OK) {
         tal_free(version_buffer);
         return rt;

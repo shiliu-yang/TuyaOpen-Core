@@ -1,24 +1,14 @@
 /**
  * @file tal_kv.h
- * @brief Provides key-value storage functionality for Tuya applications.
+ * @brief TAL 键值存储接口：init / set / get / del 四接口
  *
- * 对外 API 与旧 tal_kv（third_party/tal_kv）逐字一致：init / set / get / free /
- * del / serialize_set / serialize_get、kv_db_t / kv_tp_t / tal_kv_cfg_t /
- * TAL_LV_KEY_LEN 全部保持旧签名与旧语义，上层调用点零改动。
+ * 只定义存储语义，不涉及实现：key 为 C 字符串，value 为任意二进制数据。
+ * 存储介质、记录格式、加密、序列化全部由平台 port 的 tkl_kv 决定
+ * （Linux = littlefs + AES；NVS 类平台直接映射芯片 KV），iot-core 不持有
+ * 任何 KV 逻辑，仅经 tal_kv_ops.h 的 ops 卡透传。
  *
- * 实现已替换为内部新引擎：日志式记录（追加 + 墓碑 + seq + CRC）+ AES，存储细节
- * 不再外露，port 只提供一块可读写擦的数据区（见 tal_kv_ops.h）。相对旧头删除两项：
- * tal_kv_cmd（CLI，零调用方）与 tal_lfs_get（littlefs 句柄，littlefs 已随旧链路删除）。
- *
- * This header file defines the interface for Tuya's key-value (KV) storage
- * system, which is designed to serialize and deserialize data to and from JSON
- * format for efficient storage and retrieval. It supports various data types
- * including integers, booleans, strings, and raw binary data. The API
- * facilitates the initialization of the KV storage system, setting and getting
- * key-value pairs, deleting keys, and performing serialization and
- * deserialization of complex data structures. This is essential for
- * applications requiring persistent storage of configuration parameters or
- * other data across reboots or power cycles.
+ * 内存约定：tal_kv_get 成功时返回堆内存（*value），调用者用 tal_free 释放；
+ * 失败时 *value 置 NULL、*length 置 0。
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *
@@ -32,137 +22,58 @@ extern "C" {
 
 #include "tuya_cloud_types.h"
 
-/**
- * @brief tuya key-value database type define, used for serialize/deserialize
- * data to json format
- *
- */
-typedef uint8_t kv_tp_t;
-#define KV_CHAR   0 // char, same as int, need 11+6 byte
-#define KV_BYTE   1 // byte, same as int, need 11+6 byte
-#define KV_SHORT  2 // short, same as int, need 11+6 byte
-#define KV_USHORT 3 // unsigned short, same as int, need 11+6 byte
-#define KV_INT    4 // int, need 11+6 byte when serialize to json format
-#define KV_BOOL   5 // bool, need 6+6 byte when serialize to json format
-#define KV_STRING 6 // string, need len+6 byte when serialize to json format
-#define KV_RAW                                                                                                         \
-    7 // raw, need len/3*4+len%3?4:0+6 (base64 encode) when serialize to json
-      // format
-
-/**
- * @brief tuya key-value database, used for serialize/deserialize data to json
- * format
- *
- */
-typedef struct {
-    char *key;    // property name
-    kv_tp_t tp;   // property type
-    void *val;    // property value
-    uint16_t len; // property length
-} kv_db_t;
-
 #define TAL_LV_KEY_LEN 16
 
+/**
+ * @brief KV 初始化配置：seed/key 各 16 字符，port 实现决定用途
+ *        （Linux port 经 SHA256 派生 AES-128 的 IV 与密钥；NVS 类平台可忽略）
+ */
 typedef struct {
     char seed[TAL_LV_KEY_LEN + 1];
     char key[TAL_LV_KEY_LEN + 1];
 } tal_kv_cfg_t;
 
 /**
- * @brief Initializes the TAL Key-Value (KV) module.
+ * @brief 初始化 KV 存储（挂载介质 / 打开芯片 KV）
  *
- * This function initializes the TAL KV module with the provided configuration.
- *
- * @param kv_cfg A pointer to the TAL KV configuration structure.
- * @return An integer value indicating the status of the initialization process.
- *         Returns 0 on success, and a negative value on failure.
+ * @param kv_cfg 配置（不可为 NULL）
+ * @return OPRT_OK 成功，负值为错误码
  */
 int tal_kv_init(tal_kv_cfg_t *kv_cfg);
 
 /**
- * @brief Sets the value of a key in the TAL Key-Value store.
+ * @brief 写入一个键值对（key 已存在则覆盖）
  *
- * This function sets the value of a specified key in the TAL Key-Value store.
- *
- * @param key The key to set the value for.
- * @param value A pointer to the value to be set.
- * @param length The length of the value in bytes.
- * @return 0 if the value was successfully set, or a negative error code if an
- * error occurred.
+ * @param key 键（C 字符串，非 NULL）
+ * @param value 值（任意二进制，非 NULL）
+ * @param length 值长度（字节，> 0）
+ * @return OPRT_OK 成功，负值为错误码
  */
 int tal_kv_set(const char *key, const uint8_t *value, size_t length);
 
 /**
- * @brief Retrieves the value associated with the specified key from the
- * key-value store.
+ * @brief 读取一个键值对
  *
- * This function retrieves the value associated with the specified key from the
- * key-value store. The retrieved value is stored in the `value` parameter, and
- * its length is stored in the `length` parameter.
+ * 成功时 *value 为堆内存（含结尾 '\0'，调用者用 tal_free 释放），*length 为
+ * 数据长度（不含 '\0'）；失败时 *value 置 NULL、*length 置 0。
  *
- * @param key The key to retrieve the value for.
- * @param value A pointer to a pointer that will store the retrieved value.
- * @param length A pointer to a variable that will store the length of the
- * retrieved value.
- *
- * @return 0 if the value was successfully retrieved, or a negative error code
- * if an error occurred.
+ * @param key 键（C 字符串，非 NULL）
+ * @param value 输出：值的堆指针
+ * @param length 输出：值长度
+ * @return OPRT_OK 成功，OPRT_NOT_FOUND 键不存在，负值为其它错误码
  */
 int tal_kv_get(const char *key, uint8_t **value, size_t *length);
 
 /**
- * @brief Frees the memory allocated for a value in the TAL Key-Value store.
+ * @brief 删除一个键（键不存在视为成功）
  *
- * This function frees the memory allocated for a value in the TAL Key-Value
- * store.
- *
- * @param value Pointer to the value to be freed.
- * @return 0 if the value was successfully freed, or a negative error code if an
- * error occurred.
- */
-int tal_kv_free(uint8_t *value);
-
-/**
- * @brief Deletes the specified key from the TAL Key-Value store.
- *
- * This function deletes the specified key from the TAL Key-Value store.
- *
- * @param key The key to be deleted.
- * @return 0 if the key was successfully deleted, or a negative error code if an
- * error occurred.
+ * @param key 键（C 字符串，非 NULL）
+ * @return OPRT_OK 成功，负值为错误码
  */
 int tal_kv_del(const char *key);
-
-/**
- * @brief Serializes and sets the value of a key in the key-value database.
- *
- * This function serializes the provided key-value pair and sets it in the
- * specified key-value database.
- *
- * @param key The key to set in the database.
- * @param db A pointer to the key-value database.
- * @param dbcnt The size of the key-value database.
- * @return Returns 0 on success, or a negative error code on failure.
- */
-int tal_kv_serialize_set(const char *key, kv_db_t *db, size_t dbcnt);
-
-/**
- * @brief Serializes a key-value pair retrieval operation.
- *
- * This function serializes a key-value pair retrieval operation by taking the
- * specified key and database, and returns the number of key-value pairs found
- * in the database.
- *
- * @param key The key to retrieve.
- * @param db The database to search for the key.
- * @param dbcnt The number of key-value pairs found in the database.
- *
- * @return The number of key-value pairs found in the database.
- */
-int tal_kv_serialize_get(const char *key, kv_db_t *db, size_t dbcnt);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif //__TIMER_INTERFACE_H_
+#endif /* __TAL_KV_H__ */

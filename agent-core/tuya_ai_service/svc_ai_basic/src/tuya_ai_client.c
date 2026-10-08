@@ -595,7 +595,7 @@ STATIC BOOL_T __ai_client_restore_ca(VOID *p_ctx, CHAR_T *url)
             if (rt == OPRT_OK) {
                 rt = tuya_tls_register_x509_crt_der(p_ctx, buffer, len);
                 PR_DEBUG("load url %s ca to tls %d", url, rt);
-                tal_kv_free(buffer);
+                tal_free(buffer);
                 return TRUE;
             }
         }

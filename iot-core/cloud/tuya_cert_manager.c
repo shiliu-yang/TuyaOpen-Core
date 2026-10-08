@@ -456,7 +456,7 @@ void tuya_cert_kv_to_ram(void)
     }
     int ca_cnt = atoi((char *)p_ca_cnt_str);
     PR_DEBUG("tls_ca_cnt:%s and parse:%d", (char *)p_ca_cnt_str, ca_cnt);
-    tal_kv_free(p_ca_cnt_str);
+    tal_free(p_ca_cnt_str);
     if (ca_cnt == 0) {
         return;
     }
@@ -480,11 +480,11 @@ void tuya_cert_kv_to_ram(void)
         s_tuya_cert_mng.p_der_arr[index].p_der = tal_malloc(ca_len);
         if (NULL == s_tuya_cert_mng.p_der_arr[index].p_der) {
             PR_ERR("malloc der fail. %d", (int)ca_len);
-            tal_kv_free(p_ca_str);
+            tal_free(p_ca_str);
             return;
         }
         s_tuya_cert_mng.p_der_arr[index].der_len = tuya_base64_decode((char *)p_ca_str, s_tuya_cert_mng.p_der_arr[index].p_der);
-        tal_kv_free(p_ca_str);
+        tal_free(p_ca_str);
         PR_DEBUG("Parse DER %s:%d success", tls_ca_name, s_tuya_cert_mng.p_der_arr[index].der_len);
     }
     s_tuya_cert_mng.der_arr_size = ca_cnt;
@@ -751,10 +751,10 @@ void tuya_cert_manager_deinit(void)
         tal_sw_timer_delete(s_tuya_cert_mng.cert_query);
     }
     if (s_tuya_cert_mng.client_cert_info.cert) {
-        tal_kv_free(s_tuya_cert_mng.client_cert_info.cert);
+        tal_free(s_tuya_cert_mng.client_cert_info.cert);
     }
     if (s_tuya_cert_mng.client_cert_info.private_key) {
-        tal_kv_free(s_tuya_cert_mng.client_cert_info.private_key);
+        tal_free(s_tuya_cert_mng.client_cert_info.private_key);
     }
 
     int index = 0;

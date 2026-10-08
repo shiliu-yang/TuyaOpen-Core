@@ -6,7 +6,6 @@ option(CONFIG_ENABLE_WIRED "Build tal_wired and wired netmgr sources" OFF)
 option(CONFIG_ENABLE_BLUETOOTH "Build tal_bluetooth and BLE cloud sources" OFF)
 option(CONFIG_ENABLE_NIMBLE "Include NimBLE sources in tal_bluetooth" OFF)
 option(CONFIG_ENABLE_CELLULAR "Build tal_cellular and cellular netmgr sources" OFF)
-option(CONFIG_ENABLE_FILE_SYSTEM "Use platform tkl_fs instead of littlefs in tal_kv" OFF)
 option(CONFIG_ENABLE_PLATFORM_MBEDTLS "Use platform mbedTLS instead of the bundled copy" OFF)
 option(CONFIG_ENABLE_DEVICE_TIMER "Include tuya_device_timer.c in tuya_cloud_service" OFF)
 option(CONFIG_ENABLE_TUYA_P2P "Build tuya_p2p subtree" OFF)
@@ -34,7 +33,6 @@ foreach(_tuyaopen_opt
     CONFIG_ENABLE_BLUETOOTH
     CONFIG_ENABLE_NIMBLE
     CONFIG_ENABLE_CELLULAR
-    CONFIG_ENABLE_FILE_SYSTEM
     CONFIG_ENABLE_PLATFORM_MBEDTLS
     CONFIG_ENABLE_DEVICE_TIMER
     CONFIG_ENABLE_TUYA_P2P
