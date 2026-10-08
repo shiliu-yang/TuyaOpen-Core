@@ -2,7 +2,7 @@
 # Values y/Y/yes/1/on and n/N/no/0/off are normalized after option().
 
 option(CONFIG_ENABLE_WIFI "Build tal_wifi and WiFi cloud sources" OFF)
-option(CONFIG_ENABLE_WIRED "Build tal_wired and wired netmgr sources" OFF)
+option(CONFIG_ENABLE_WIRED "Build wired netmgr sources (tal_netif: local IP / link callback)" OFF)
 option(CONFIG_ENABLE_BLUETOOTH "Build tal_bluetooth and BLE cloud sources" OFF)
 option(CONFIG_ENABLE_NIMBLE "Include NimBLE sources in tal_bluetooth" OFF)
 option(CONFIG_ENABLE_CELLULAR "Build tal_cellular and cellular netmgr sources" OFF)
