@@ -5,6 +5,12 @@
  * port 只需提供一块可读写擦的线性区域（flash 分区 / 区域文件 / EEPROM），
  * K-V 布局与加解密由 TAL 统一实现。移植新平台 = 实现 4 个区域原语。
  *
+ * 区域状态契约：**port 必须保证首次使用前区域为擦除态（全 0xFF）**；引擎在
+ * 扫描为空（无任何可解析记录）时会主动 erase(0, region_size) 一次作为兜底——
+ * 防的是把引擎指向未擦除/曾被占用的区域（如老 littlefs 分区原地升级）：真 NOR
+ * flash 只能 1→0，往非 0xFF 区域追加会静默写失败而内存索引无感，表现为每次
+ * 重启都丢数据；此时无数据可失，归零是安全的。
+ *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  */
 #ifndef __TAL_KV_OPS_H__

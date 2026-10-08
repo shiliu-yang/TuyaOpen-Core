@@ -10,7 +10,8 @@
  *
  * 对内：区域 = 纯线性日志，write/erase 只在尾部追加，从不回卷、不压缩、不擦除；
  * 区域满时返回 OPRT_COM_ERROR（绝不覆盖已有记录）——flash 不做回收，由平台开足够
- * 大的存储区域。掉电安全：重扫按 seq 取大，撕裂记录 CRC 失败被忽略。
+ * 大的存储区域。掉电安全：重扫按 seq 取大，撕裂记录 CRC 失败被忽略。扫描为空时
+ * 对区域做一次归零兜底（防指向未擦除/曾被占用的区域，见 tal_kv_ops.h 契约）。
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  */
@@ -225,8 +226,10 @@ static OPERATE_RET __ops_init(void)
 }
 
 /* 顺序扫描：区域为线性日志（记录从 0 连续追加，从不回卷/回收），
- * 遇第一条不可解析记录即日志尾；建索引并求 max_seq / tail。 */
-static OPERATE_RET __scan(void)
+ * 遇第一条不可解析记录即日志尾；建索引并求 max_seq / tail。
+ * *empty 回填"一条可解析记录都没有"（含首条记录即撕裂/整区垃圾）——调用方据此
+ * 对区域做一次归零兜底（见 __engine_init）。 */
+static OPERATE_RET __scan(int *empty)
 {
     TAL_KV_OPS_T *ops = tal_kv_get_ops();
     uint8_t *buf = NULL;
@@ -321,6 +324,9 @@ static OPERATE_RET __scan(void)
 
     tal_free(buf);
 
+    if (NULL != empty) {
+        *empty = (0 == have);
+    }
     if (0 == have) {
         s_max_seq = 0;
         s_tail = 0;
@@ -335,6 +341,7 @@ static OPERATE_RET __scan(void)
 static OPERATE_RET __engine_init(const char *seed, const char *key)
 {
     uint8_t digest[32] = {0};
+    int empty = 0;
 
     if (NULL == seed || NULL == key) {
         return OPRT_INVALID_PARM;
@@ -345,18 +352,32 @@ static OPERATE_RET __engine_init(const char *seed, const char *key)
     if (OPRT_OK != __ops_init()) {
         return OPRT_COM_ERROR;
     }
-    /* key/IV 派生：沿用现有 tal_kv 方案（seed/key 各做一次 SHA256 取前 16 字节） */
-    if (OPRT_OK != tal_sha256_ret((const uint8_t *)seed, strlen(seed), digest, 0)) {
+    /* key/IV 派生：沿用现有 tal_kv 方案（seed/key 各做一次 SHA256 取前 16 字节）。
+     * seed/key 为 char[TAL_LV_KEY_LEN+1]，外部 app 可能传未 NUL 结尾的 16 字节
+     * buffer → 用有界长度，避免越界读。 */
+    if (OPRT_OK != tal_sha256_ret((const uint8_t *)seed, strnlen(seed, TAL_LV_KEY_LEN), digest, 0)) {
         return OPRT_COM_ERROR;
     }
     memcpy(s_iv, digest, 16);
-    if (OPRT_OK != tal_sha256_ret((const uint8_t *)key, strlen(key), digest, 0)) {
+    if (OPRT_OK != tal_sha256_ret((const uint8_t *)key, strnlen(key, TAL_LV_KEY_LEN), digest, 0)) {
         return OPRT_COM_ERROR;
     }
     memcpy(s_key, digest, 16);
 
-    if (OPRT_OK != __scan()) {
+    if (OPRT_OK != __scan(&empty)) {
         return OPRT_COM_ERROR;
+    }
+    if (empty) {
+        /* 空区域先归零一次（兜底，见 tal_kv_ops.h 的区域状态契约）：port 可能把引擎
+         * 指向未擦除/曾被占用的区域（如老 littlefs 分区原地升级）——真 NOR flash 只能
+         * 1→0，往非 0xFF 区域追加会静默写失败而内存索引无感，表现为每次重启都丢数据。
+         * 此时一条可解析记录都没有（无数据可失），归零是安全的。 */
+        TAL_KV_OPS_T *ops = tal_kv_get_ops();
+
+        if (NULL == ops || NULL == ops->erase || OPRT_OK != ops->erase(0, s_region_size)) {
+            PR_ERR("tal_kv: region erase (empty-region fallback) failed");
+            return OPRT_COM_ERROR;
+        }
     }
     s_inited = 1;
     return OPRT_OK;
@@ -488,14 +509,23 @@ static OPERATE_RET __engine_read(const char *name, uint8_t *buf, size_t buf_size
     }
     tal_free(ct);
 
-    /* decode 回填的是密文长度，明文仍带 PKCS7 填充 → 求真实长度 */
+    /* PKCS7 全校验（对齐旧 kv_decrypt 语义）：pad ∈ 1..16、pad < 明文长度，且末尾
+     * pad 个字节必须全部等于该值；任一不满足即视为读失败——密钥与写入时不一致
+     * （seed/key 变了）或密文损坏时，绝不能把随机垃圾当有效值返回。 */
     {
-        int32_t actual = tal_aes_get_actual_length(pt, pt_len);
-        if (actual < 0) {
+        uint8_t pad = (pt_len > 0) ? pt[pt_len - 1] : 0;
+
+        if (0 == pt_len || 0 != pt_len % 16U || pad < 1 || pad > 16 || pad >= pt_len) {
             tal_aes_free_data(pt);
             return OPRT_COM_ERROR;
         }
-        pt_len = (uint32_t)actual;
+        for (uint32_t i = 0; i < pad; i++) {
+            if (pt[pt_len - 1U - i] != pad) {
+                tal_aes_free_data(pt);
+                return OPRT_COM_ERROR;
+            }
+        }
+        pt_len -= pad;
     }
 
     *out_len = pt_len;
@@ -862,6 +892,8 @@ static OPERATE_RET __kv_get_alloc(const char *key, uint8_t **value, size_t *leng
 
 int tal_kv_init(tal_kv_cfg_t *kv_cfg)
 {
+    OPERATE_RET result;
+
     if (NULL == kv_cfg) {
         return OPRT_INVALID_PARM;
     }
@@ -869,7 +901,12 @@ int tal_kv_init(tal_kv_cfg_t *kv_cfg)
     if (NULL == s_kv_mutex && OPRT_OK != tal_mutex_create_init(&s_kv_mutex)) {
         return OPRT_COM_ERROR;
     }
-    return __engine_init(kv_cfg->seed, kv_cfg->key);
+    /* 持锁 init：防两线程同时初始化（双跑扫描/双开区域文件）。port 的 mutex 为
+     * PTHREAD_MUTEX_RECURSIVE，与内部加锁无死锁风险。 */
+    __kv_lock();
+    result = __engine_init(kv_cfg->seed, kv_cfg->key);
+    __kv_unlock();
+    return result;
 }
 
 int tal_kv_set(const char *key, const uint8_t *value, size_t length)
