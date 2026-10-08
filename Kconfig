@@ -24,7 +24,7 @@ menu "tuyaopen-core"
         default n
         help
             Build the wired (Ethernet) support: the application-level
-            tal_wired and the wired TKL implementation in port. Maps to
+            tal_netif and the wired TKL implementation in port. Maps to
             CONFIG_ENABLE_WIRED.
 
     config ENABLE_WIFI
