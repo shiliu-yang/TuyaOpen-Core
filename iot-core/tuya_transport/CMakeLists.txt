@@ -38,6 +38,11 @@ foreach(_tp_official corehttp coremqtt mbedtls)
     if(TARGET ${_tp_official})
         target_include_directories(${_tp_official} PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/include
+        )
+        # 配置头（MBEDTLS_CONFIG_FILE / core_http|mqtt_config.h 的展开点）随
+        # INTERFACE 传播：任何 link 官方库的模块都需要它（如 tuya_utilities
+        # 用 mbedtls/base64.h），并非本目标的私有依赖
+        target_include_directories(${_tp_official} INTERFACE
             ${CMAKE_CURRENT_SOURCE_DIR}/config
         )
         target_link_libraries(${_tp_official} PRIVATE tuyaopen-headers tal_system)

@@ -15,8 +15,9 @@
 
 #define __MIX_METHOD_GLOBALS
 #include "mix_method.h"
-#include "tal_memory.h"
 #include "mbedtls/base64.h"
+
+#include <string.h>
 
 /***********************************************************
 *************************micro define***********************
@@ -244,32 +245,6 @@ void byte_sort(unsigned char is_ascend, unsigned char *buf, int buf_cnt)
             }
         }
     }
-}
-
-/**
- * @brief Duplicates a string.
- *
- * This function duplicates the input string and returns a pointer to the
- * duplicated string.
- *
- * @param str The input string to be duplicated.
- * @return A pointer to the duplicated string, or NULL if the input string is
- * NULL or memory allocation fails.
- */
-char *mm_strdup(const char *str)
-{
-    if ((void *)0 == str) {
-        return (void *)0;
-    }
-
-    char *tmp = tal_malloc(strlen(str) + 1);
-    if ((void *)0 == tmp) {
-        return (void *)0;
-    }
-    memcpy(tmp, str, strlen(str));
-    tmp[strlen(str)] = '\0';
-
-    return tmp;
 }
 
 /**
