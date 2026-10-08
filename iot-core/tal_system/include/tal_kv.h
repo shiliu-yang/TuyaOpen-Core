@@ -57,8 +57,10 @@ int tal_kv_init(tal_kv_cfg_t *kv_cfg);
  *
  * @param key 键（C 字符串，非 NULL）
  * @param value 值（任意二进制，非 NULL）
- * @param length 值长度（字节，> 0）
- * @return OPRT_OK 成功，负值为错误码
+ * @param length 值长度（字节），**必须 > 0**：为 0 视为非法参数返回
+ *               OPRT_INVALID_PARM（空值无意义——tal_kv_get 读回的值恒含
+ *               结尾 '\0'，长度至少 1）
+ * @return OPRT_OK 成功；参数非法返回 OPRT_INVALID_PARM；其它负值为错误码
  */
 int tal_kv_set(const char *key, const uint8_t *value, size_t length);
 
