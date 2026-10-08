@@ -32,7 +32,10 @@ typedef struct {
     OPERATE_RET (*init)(TAL_KV_REGION_T *region);
     OPERATE_RET (*read)(uint32_t offset, uint8_t *buf, uint32_t len);
     OPERATE_RET (*write)(uint32_t offset, const uint8_t *buf, uint32_t len);
-    /* 擦除 [offset, offset+len)，对齐到 erase_granularity */
+    /* 擦除 [offset, offset+len)，对齐到 erase_granularity。
+     * 契约（强制）：①region.size 必须是 erase_granularity 的整数倍（否则引擎的整区擦除
+     * 会越界到相邻分区）②flash 实现必须调块擦除命令——**写 0xFF 对真 NOR flash 是 no-op**，
+     * 照抄文件实现会得到"擦除成功但区域纹丝不动" */
     OPERATE_RET (*erase)(uint32_t offset, uint32_t len);
 } TAL_KV_OPS_T;
 

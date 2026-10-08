@@ -216,6 +216,12 @@ static OPERATE_RET __ops_init(void)
         PR_ERR("tal_kv: region too small");
         return OPRT_COM_ERROR;
     }
+    if (0 != region.size % region.erase_granularity) {
+        /* 否则空区归零的 erase(0, size) 会被 port 向上取整，擦到相邻分区（67 评审 P2） */
+        PR_ERR("tal_kv: region size (%u) not multiple of erase granularity (%u)", region.size,
+               region.erase_granularity);
+        return OPRT_COM_ERROR;
+    }
     s_region_size = region.size;
     return OPRT_OK;
 }
