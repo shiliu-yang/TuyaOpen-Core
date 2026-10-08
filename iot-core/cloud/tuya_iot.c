@@ -1389,8 +1389,9 @@ int tuya_iot_version_update_sync(tuya_iot_client_t *client)
         PR_WARN("version save info not found:%d", rt);
     }
 
-    /* Compare the version info changed? */
-    if (readbuf && memcmp(version_buffer, readbuf, version_len) == 0) {
+    /* Compare the version info changed? 先比长度再 memcmp：旧实现靠 tal_kv_get 返回的
+     * "密文长+1" 缓冲冗余掩盖了长度不足，新引擎返回"明文长+1"，直接 memcmp 会越界读 */
+    if (readbuf && readlen == version_len && memcmp(version_buffer, readbuf, version_len) == 0) {
         PR_DEBUG("The verison unchanged, dont need sync.");
         tal_kv_free((uint8_t *)readbuf);
         tal_free(version_buffer);
