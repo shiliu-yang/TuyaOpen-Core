@@ -1,7 +1,6 @@
 # Boolean feature flags. Host may set these before add_subdirectory().
 # Values y/Y/yes/1/on and n/N/no/0/off are normalized after option().
 
-option(CONFIG_ENABLE_WIFI "Build tal_wifi and WiFi cloud sources" OFF)
 option(CONFIG_ENABLE_WIRED "Build wired netmgr sources (tal_netif: local IP / link callback)" OFF)
 option(CONFIG_ENABLE_BLUETOOTH "Build tal_bluetooth and BLE cloud sources" OFF)
 option(CONFIG_ENABLE_NIMBLE "Include NimBLE sources in tal_bluetooth" OFF)
@@ -23,7 +22,6 @@ option(CONFIG_ENABLE_AI_COMPONENTS "Build the agent-core component layer on top 
 option(CONFIG_ENABLE_COMP_AI_AUDIO "Build the ai_audio component (needs CONFIG_ENABLE_AI_COMPONENTS)" OFF)
 option(CONFIG_ENABLE_COMP_AI_MCP "Build the ai_mcp component (needs CONFIG_ENABLE_AI_COMPONENTS)" OFF)
 option(CONFIG_ENABLE_COMP_AI_VIDEO "Build the ai_video component (needs CONFIG_ENABLE_AI_COMPONENTS)" OFF)
-option(CONFIG_ENABLE_WIFI_ULTRA_LOWPOWER "Build tal_wifi_ulp (needs CONFIG_ENABLE_WIFI)" OFF)
 option(CONFIG_ENABLE_QRCODE "Build the qrcode module (QR output for app binding)" OFF)
 option(CONFIG_LITTLE_END "PJ little-endian (ON) vs big-endian (OFF)" ON)
 
@@ -32,7 +30,6 @@ if(NOT DEFINED TUYAOPEN_PORT_DIR)
 endif()
 
 foreach(_tuyaopen_opt
-    CONFIG_ENABLE_WIFI
     CONFIG_ENABLE_WIRED
     CONFIG_ENABLE_BLUETOOTH
     CONFIG_ENABLE_NIMBLE
@@ -51,7 +48,6 @@ foreach(_tuyaopen_opt
     CONFIG_ENABLE_COMP_AI_AUDIO
     CONFIG_ENABLE_COMP_AI_MCP
     CONFIG_ENABLE_COMP_AI_VIDEO
-    CONFIG_ENABLE_WIFI_ULTRA_LOWPOWER
     CONFIG_ENABLE_QRCODE
     CONFIG_LITTLE_END
 )

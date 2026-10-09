@@ -46,7 +46,7 @@ menu "configure tuya cloud service"
 
         ---help---
                 Cellular connection managed through netmgr, on its own or beside
-                wifi/wired. Boards carrying a modem select this; it has no effect on
+                wired. Boards carrying a modem select this; it has no effect on
                 a platform without a cellular TKL implementation.
 
         if (ENABLE_CELLULAR)

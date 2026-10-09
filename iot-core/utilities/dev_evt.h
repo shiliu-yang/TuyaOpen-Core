@@ -12,7 +12,7 @@
  * lifecycle.
  *
  * Placed in the leaf "common" component so every layer (from tal_network up to
- * the cloud service and the tal_wifi_ulp subscriber) can both notify and
+ * the cloud service and other subscribers) can both notify and
  * subscribe without introducing a circular dependency.
  *
  * @copyright Copyright (c) 2021-2025 Tuya Inc. All Rights Reserved.

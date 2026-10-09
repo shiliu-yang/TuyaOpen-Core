@@ -1,6 +1,6 @@
 /**
  * @file tal_local_ip.h
- * @brief Local IPv4 helper for pj on TuyaOpen (TAL WiFi / wired)
+ * @brief Local IPv4 helper for pj on TuyaOpen (wired)
  * @note Used when PJ_TUYAOS=1 (LINUX and MCU).
  */
 #ifndef __TAL_LOCAL_IP_H__
@@ -11,7 +11,7 @@ extern "C" {
 #endif
 
 /**
- * @brief Get local IPv4 in network byte order (WiFi STA or wired)
+ * @brief Get local IPv4 in network byte order (wired)
  * @param[out] addr_nbo IPv4 network byte order
  * @return 0 on success, -1 on failure
  */

@@ -24,11 +24,10 @@ set(TUYAOPEN_THIRD_PARTY_DIR ${CMAKE_CURRENT_LIST_DIR}/third_party)
 add_library(tuyaopen-headers INTERFACE)
 
 # 开关 → 编译宏：只对开启的注入（源码守卫是 defined() 风格，OFF = 不定义）。
-# 手工编译（不用本 CMake）的用户对应做法：编译命令 -DENABLE_WIFI=1 ...，
+# 手工编译（不用本 CMake）的用户对应做法：编译命令 -DENABLE_WIRED=1 ...，
 # 或在 port 的静态 tuya_kconfig.h 里取消注释对应 #define。
 set(_tuyaopen_switch_defs)
 foreach(_tuyaopen_opt IN ITEMS
-    ENABLE_WIFI
     ENABLE_WIRED
     ENABLE_BLUETOOTH
     ENABLE_NIMBLE
@@ -47,7 +46,6 @@ foreach(_tuyaopen_opt IN ITEMS
     ENABLE_COMP_AI_AUDIO
     ENABLE_COMP_AI_MCP
     ENABLE_COMP_AI_VIDEO
-    ENABLE_WIFI_ULTRA_LOWPOWER
     ENABLE_QRCODE
     LITTLE_END
 )
