@@ -56,7 +56,7 @@ static uint32_t __ty_sock_get_reader_num(void)
     return (LAN_UDP_READER_CNT + tuya_lan_get_client_num());
 #else
     /* 局域网协议未编入：reader 表只剩常驻槽位，供 AI monitor 注册
-     * （1 个服务端 + 最多 3 个客户端，见 AI_MONITOR_MAX_CLIENTS_MAX） */
+     * （1 个服务端 + 最多 3 个客户端，见 AI_MONITOR_MAX_CLIENTS_DEFAULT） */
     return LAN_UDP_READER_CNT;
 #endif
 }
