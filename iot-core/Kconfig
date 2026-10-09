@@ -27,6 +27,19 @@ menu "configure tuya cloud service"
                 persist them into kv, and execute the dps action when a timer fires.
                 Disable it to trim the code size if the device does not need cloud timers.
 
+    config ENABLE_LOCAL_LINK
+        bool "ENABLE_LOCAL_LINK: enable the LAN (local link) service (lan/tuya_lan.c)"
+        default y
+
+        ---help---
+                Local-link protocol: App LAN control, LAN DP report and P2P LAN
+                signaling. Turning it off drops lan/tuya_lan.c from
+                tuya_cloud_service and lets a port skip the LAN-only TKL net ops
+                (accept/listen/send_to/recvfrom/recv_nd_size). lan_sock.c (the
+                socket event loop the AI monitor reuses) is kept regardless.
+                Note P2P and AI components use accept/listen too, so keep them
+                off as well to actually shrink the port adaptation surface.
+
     menuconfig  ENABLE_CELLULAR
         bool "ENABLE_CELLULAR: enable cellular (4G/Cat.1) network support"
         default n

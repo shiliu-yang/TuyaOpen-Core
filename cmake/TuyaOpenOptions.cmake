@@ -9,6 +9,10 @@ option(CONFIG_ENABLE_CELLULAR "Build tal_cellular and cellular netmgr sources" O
 option(CONFIG_ENABLE_PLATFORM_MBEDTLS "Use platform mbedTLS instead of the bundled copy" OFF)
 option(CONFIG_ENABLE_DEVICE_TIMER "Include tuya_device_timer.c in tuya_cloud_service" OFF)
 option(CONFIG_ENABLE_TUYA_P2P "Build tuya_p2p subtree" OFF)
+# 默认 ON：lan/tuya_lan.c 原先无条件编入，默认保持行为不变；关闭后局域网协议
+# 不编译，port 也无需适配局域网相关 net ops（accept/listen/send_to/recvfrom/recv_nd_size）。
+# lan/lan_sock.c（socket 事件循环）不随之关闭：AI monitor 复用它。
+option(CONFIG_ENABLE_LOCAL_LINK "Build the LAN (local link) service: lan/tuya_lan.c" ON)
 option(CONFIG_ENABLE_LOCAL_STORE "Build tuya_p2p/local_store" OFF)
 option(CONFIG_ENABLE_IPC_RING_BUFFER "Build tuya_p2p/svc_ring_buffer" OFF)
 option(CONFIG_ENABLE_TUYA_CODEC "Build tuya_ai_service encoders" OFF)
@@ -36,6 +40,7 @@ foreach(_tuyaopen_opt
     CONFIG_ENABLE_PLATFORM_MBEDTLS
     CONFIG_ENABLE_DEVICE_TIMER
     CONFIG_ENABLE_TUYA_P2P
+    CONFIG_ENABLE_LOCAL_LINK
     CONFIG_ENABLE_LOCAL_STORE
     CONFIG_ENABLE_IPC_RING_BUFFER
     CONFIG_ENABLE_TUYA_CODEC

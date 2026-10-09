@@ -770,7 +770,9 @@ int tuya_iot_destroy(tuya_iot_client_t *client)
         return OPRT_INVALID_PARM;
     }
 
+#if defined(ENABLE_LOCAL_LINK) && (ENABLE_LOCAL_LINK == 1)
     tuya_lan_disable();
+#endif
 
 #if defined(ENABLE_BLUETOOTH) && (ENABLE_BLUETOOTH == 1)
     ble_netcfg_stop();
@@ -1113,7 +1115,9 @@ int tuya_iot_activated_data_remove(tuya_iot_client_t *client)
     }
 
     client->is_activated = false;
+#if defined(ENABLE_LOCAL_LINK) && (ENABLE_LOCAL_LINK == 1)
     tuya_lan_disable();
+#endif
 #if defined(ENABLE_BLUETOOTH) && (ENABLE_BLUETOOTH == 1)
     ble_netcfg_stop();
 #endif

@@ -17,6 +17,13 @@ if(NOT CONFIG_ENABLE_DEVICE_TIMER)
     list(REMOVE_ITEM _cloud_srcs "${CMAKE_CURRENT_SOURCE_DIR}/cloud/tuya_device_timer.c")
 endif()
 
+# 局域网协议（tuya_lan.c）由 CONFIG_ENABLE_LOCAL_LINK 门控（默认 ON，行为不变）：
+# 关闭后不编译，port 的局域网 net ops（accept/listen/send_to/recvfrom/recv_nd_size）
+# 也无需适配。lan_sock.c（socket 事件循环）不门控——AI monitor 复用它。
+if(NOT CONFIG_ENABLE_LOCAL_LINK)
+    list(REMOVE_ITEM _cloud_srcs "${CMAKE_CURRENT_SOURCE_DIR}/lan/tuya_lan.c")
+endif()
+
 set(_cloud_incs
     ${CMAKE_CURRENT_SOURCE_DIR}/cloud
     ${CMAKE_CURRENT_SOURCE_DIR}/file_storage
