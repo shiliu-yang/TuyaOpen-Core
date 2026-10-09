@@ -31,8 +31,11 @@ menu "tuyaopen-core"
         bool "ENABLE_WIFI: WiFi support"
         default n
         help
-            Build the wpa_supplicant based TKL WiFi implementation in port.
-            Maps to CONFIG_ENABLE_WIFI. Runtime needs wpa_supplicant.
+            Reserved switch for platforms bringing their own WiFi support.
+            The core no longer ships tal_wifi (removed with the dead-API
+            cleanup) and the Linux port has no WiFi TKL, so enabling it today
+            has no consumer and no effect. A platform reintroducing WiFi must
+            provide tal_wifi and restore its consumers (see git history).
 
     config ENABLE_BLUETOOTH
         bool "ENABLE_BLUETOOTH: BLE support"

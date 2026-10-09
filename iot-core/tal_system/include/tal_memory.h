@@ -77,7 +77,8 @@ void tal_free(void *ptr);
  * @param[in]       nitems      the numbers of memory block
  * @param[in]       size        the size of the memory block
  *
- * @return the memory address calloced
+ * @return the zeroed memory address, or NULL if the allocation fails,
+ *         nitems/size is 0, or nitems * size overflows
  */
 void *tal_calloc(size_t nitems, size_t size);
 

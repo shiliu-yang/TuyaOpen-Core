@@ -235,14 +235,6 @@ struct tuya_iot_client_handle {
 };
 
 /**
- * @brief Read cloud activation license from chip
- *
- * @param[out] license -  cloud activation license
- * @return int - OPRT_OK successful or error code.
- */
-int tuya_iot_license_read(tuya_iot_license_t *license);
-
-/**
  * @brief Initialize the Tuya client implementation
  *
  * @param client - The context to initialize.
