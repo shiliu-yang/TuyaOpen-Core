@@ -11,7 +11,7 @@
 
 #include "tuya_iot.h"
 #include "mqtt_service.h"
-#include "netmgr.h"
+#include "tal_netif.h"
 
 /***********************************************************
 ************************macro define************************
@@ -108,7 +108,7 @@ OPERATE_RET mqc_send_custom_mqtt_msg(IN CONST uint32_t protocol, IN CONST uint8_
     return OPRT_OK;
 }
 
-// netmgr
+// netmgr（netmgr 组件已从 iot-core 移除，此处保留原 linkage 接口形态，IP 取本机网口）
 
 OPERATE_RET __linkage_open(LINKAGE_CAP_E cap)
 {
@@ -139,7 +139,7 @@ OPERATE_RET __linkage_get(IN LINKAGE_CFG_E cfg, OUT VOID *data)
     OPERATE_RET rt = OPRT_OK;
 
     if (LINKAGE_CFG_IP == cfg) {
-        rt = netmgr_conn_get(NETCONN_AUTO, NETCONN_CMD_IP, (NW_IP_S *)data);
+        rt = tal_netif_get_ip((NW_IP_S *)data);
     } else {
         PR_ERR("linkage get not supported for cfg:%d", cfg);
         return OPRT_NOT_SUPPORTED;

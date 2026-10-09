@@ -12,7 +12,6 @@
 #include <strings.h>
 
 #include "http_client_interface.h"
-#include "http_parser.h"
 #include "iotdns.h"
 #include "tal_api.h"
 #include "tal_log.h"
@@ -268,43 +267,69 @@ static const char *http_method_to_string(http_method_t method)
     }
 }
 
+/*
+ * 解析 URL：拆出 host / path(含 query) / port / 是否 TLS。
+ * 替代原 nodejs http-parser 依赖（本仓已移除该第三方库），
+ * 仅覆盖 http_manager 使用到的 URL 形态：scheme://host[:port][/path][?query]。
+ */
 static OPERATE_RET http_parse_url(const char *url, char **host, char **path, uint16_t *port, BOOL_T *use_tls)
 {
     if (!url || !host || !path || !port || !use_tls) {
         return OPRT_INVALID_PARM;
     }
 
-    struct http_parser_url parsed;
-    http_parser_url_init(&parsed);
-    if (http_parser_parse_url(url, strlen(url), 0, &parsed) != 0) {
-        PR_ERR("parse url failed: %s", url);
-        return OPRT_INVALID_PARM;
-    }
+    const char *cursor = url;
 
-    size_t schema_len = parsed.field_data[UF_SCHEMA].len;
+    /* 1) scheme（无 scheme 时按裸 host 处理） */
     *use_tls = false;
-    if (schema_len) {
-        const char *schema = url + parsed.field_data[UF_SCHEMA].off;
-        if ((schema_len == strlen("https")) && (strncasecmp(schema, "https", schema_len) == 0)) {
+    const char *schema_sep = strstr(cursor, "://");
+    if (schema_sep) {
+        size_t schema_len = (size_t)(schema_sep - cursor);
+        if ((schema_len == strlen("https")) && (strncasecmp(cursor, "https", schema_len) == 0)) {
             *use_tls = true;
         }
+        cursor = schema_sep + 3;
     }
 
-    size_t host_len = parsed.field_data[UF_HOST].len;
+    /* 2) host 段：到 ':'（端口）/ '/' / '?' / '#' 结束 */
+    const char *host_start = cursor;
+    while (*cursor && (*cursor != ':') && (*cursor != '/') && (*cursor != '?') && (*cursor != '#')) {
+        cursor++;
+    }
+    size_t host_len = (size_t)(cursor - host_start);
     if (!host_len) {
         PR_ERR("url host missing");
         return OPRT_INVALID_PARM;
+    }
+
+    /* 3) 可选端口 */
+    uint16_t url_port = 0;
+    if (*cursor == ':') {
+        cursor++;
+        while ((*cursor >= '0') && (*cursor <= '9')) {
+            url_port = (uint16_t)(url_port * 10 + (uint16_t)(*cursor - '0'));
+            cursor++;
+        }
+        /* 跳过端口后的非 path 字符，定位到 path/query 起点 */
+        while (*cursor && (*cursor != '/') && (*cursor != '?') && (*cursor != '#')) {
+            cursor++;
+        }
     }
 
     *host = http_mem_calloc(1, host_len + 1);
     if (!*host) {
         return OPRT_MALLOC_FAILED;
     }
-    memcpy(*host, url + parsed.field_data[UF_HOST].off, host_len);
+    memcpy(*host, host_start, host_len);
 
-    size_t path_len = parsed.field_data[UF_PATH].len;
-    size_t query_len = parsed.field_data[UF_QUERY].len;
-    size_t total_len = (path_len ? path_len : 1) + (query_len ? (query_len + 1) : 0);
+    /* 4) path + query（无 path 时补 "/"；'#' 之后为 fragment，不发送） */
+    BOOL_T need_slash = (*cursor == '?');
+    size_t tail_len = 0;
+    while (cursor[tail_len] && (cursor[tail_len] != '#')) {
+        tail_len++;
+    }
+
+    size_t total_len = (need_slash ? 1 : 0) + (tail_len ? tail_len : 1);
     *path = http_mem_calloc(1, total_len + 1);
     if (!*path) {
         http_safe_free(*host);
@@ -313,20 +338,16 @@ static OPERATE_RET http_parse_url(const char *url, char **host, char **path, uin
     }
 
     size_t offset = 0;
-    if (path_len) {
-        memcpy(*path, url + parsed.field_data[UF_PATH].off, path_len);
-        offset = path_len;
+    if (need_slash) {
+        (*path)[offset++] = '/';
+    }
+    if (tail_len) {
+        memcpy(*path + offset, cursor, tail_len);
     } else {
-        (*path)[0] = '/';
-        offset = 1;
+        (*path)[offset] = '/';
     }
 
-    if (query_len) {
-        (*path)[offset++] = '?';
-        memcpy(*path + offset, url + parsed.field_data[UF_QUERY].off, query_len);
-    }
-
-    *port = parsed.port ? parsed.port : (*use_tls ? 443 : 80);
+    *port = url_port ? url_port : (*use_tls ? 443 : 80);
 
     return OPRT_OK;
 }
@@ -477,13 +498,17 @@ static OPERATE_RET http_session_send(const SESSION_ID session, const http_req_t 
     ctx->http_response.pBuffer = ctx->header_buffer;
     ctx->http_response.bufferLen = 512;
 
-    /* Send request with HTTP_SEND_DISABLE_RECV_BODY_FLAG to only receive headers */
-    httpStatus = HTTPClient_Request(&ctx->transport, &ctx->request_headers, (const uint8_t *)req->content,
-                                    (req->content && req->content_len > 0) ? (size_t)req->content_len : 0,
-                                    &ctx->http_response, HTTP_SEND_DISABLE_RECV_BODY_FLAG);
+    /* 只解析响应头，body 由后续 streaming 按需读取。
+     * 注：原实现用旧版 coreHTTP 的 HTTPClient_Request + HTTP_SEND_DISABLE_RECV_BODY_FLAG；
+     * 本仓为官方 v3.1.3（零修改），等价机制是 respOptionFlags + HTTPClient_Send
+     * （与 iot-core/tuya_transport/src/http/http_session.c 用法一致）。 */
+    ctx->http_response.respOptionFlags = HTTP_RESPONSE_DO_NOT_PARSE_BODY_FLAG;
+    httpStatus = HTTPClient_Send(&ctx->transport, &ctx->request_headers, (const uint8_t *)req->content,
+                                 (req->content && req->content_len > 0) ? (size_t)req->content_len : 0,
+                                 &ctx->http_response, 0);
 
     if (httpStatus != HTTPSuccess) {
-        PR_ERR("HTTPClient_Request failed: %d", httpStatus);
+        PR_ERR("HTTPClient_Send failed: %d", httpStatus);
         http_safe_free(ctx->header_buffer);
         ctx->header_buffer = NULL;
         tuya_transporter_close(ctx->network);

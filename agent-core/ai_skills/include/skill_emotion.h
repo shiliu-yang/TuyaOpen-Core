@@ -14,6 +14,7 @@
 
 #include "tuya_cloud_types.h"
 #include "cJSON.h"
+#include "ai_user_event.h" /* AI_AGENT_EMO_T */
 
 #ifdef __cplusplus
 extern "C" {
@@ -54,10 +55,8 @@ extern "C" {
 /***********************************************************
 ***********************typedef define***********************
 ***********************************************************/
-typedef struct {
-    const char  *emoji;
-    const char  *name;
-} AI_AGENT_EMO_T;
+/* AI_AGENT_EMO_T 定义已上移至 utility/ai_user_event.h（事件负载类型，避免
+ * utility 反向依赖 ai_skills）。本头文件经 ai_user_event.h 传递该类型。 */
 
 
 /***********************************************************

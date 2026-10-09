@@ -15,7 +15,6 @@
 #define __AI_USER_EVENT_H__
 
 #include "tuya_cloud_types.h"
-#include "skill_emotion.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -84,6 +83,14 @@ typedef struct {
     uint16_t datalen;
     uint32_t timeindex;
 } AI_NOTIFY_TEXT_T;
+
+/* 情绪负载类型。原定义在 ai_skills/skill_emotion.h；本类型随事件负载经
+ * ai_user_event 暴露，而 utility 不依赖 ai_skills，故定义上移至此处，
+ * skill_emotion.h 反向包含本头文件。 */
+typedef struct {
+    const char  *emoji;
+    const char  *name;
+} AI_AGENT_EMO_T;
 
 typedef AI_AGENT_EMO_T AI_NOTIFY_EMO_T;
 

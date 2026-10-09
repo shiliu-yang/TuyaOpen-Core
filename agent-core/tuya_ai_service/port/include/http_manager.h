@@ -15,7 +15,6 @@
 #include "tuya_ai_types.h"
 #include "http_inf.h"
 #include "httpc.h"
-#include "http_parser.h"
 #include <time.h>
 
 #ifdef __cplusplus
@@ -42,7 +41,19 @@ typedef enum {
 
 typedef void (*HTTP_HEAD_ADD_CB)(http_session_t session, void *data);
 
-typedef enum http_method http_method_t;
+/* HTTP 方法。原依赖 nodejs http-parser 的 enum http_method（本仓已移除该库），
+ * 按使用面（http_manager.c 的 http_method_to_string）保留同名枚举，
+ * 顺序与 http-parser 一致。 */
+typedef enum {
+    HTTP_DELETE = 0,
+    HTTP_GET,
+    HTTP_HEAD,
+    HTTP_POST,
+    HTTP_PUT,
+    HTTP_CONNECT,
+    HTTP_OPTIONS,
+    HTTP_TRACE,
+} http_method_t;
 
 typedef struct {
     void *pri_data;

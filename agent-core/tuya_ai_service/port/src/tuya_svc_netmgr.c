@@ -7,7 +7,7 @@
 
 #include "tuya_svc_netmgr.h"
 
-#include "netmgr.h"
+#include "tuya_iot.h"
 
 /***********************************************************
 ************************macro define************************
@@ -34,9 +34,10 @@
 ***********************************************************/
 NETWORK_STATUS_E tuya_svc_netmgr_get_status(VOID)
 {
-    netmgr_status_e net_status = NETMGR_LINK_DOWN;
+    /* netmgr 组件已从 iot-core 移除：以 MQTT 连接状态等价替代原链路状态语义 */
+    if (tuya_iot_client_get() == NULL) {
+        return NETWORK_STATUS_OFFLINE;
+    }
 
-    netmgr_conn_get(NETCONN_AUTO, NETCONN_CMD_STATUS, &net_status);
-
-    return ((net_status == NETMGR_LINK_UP) ? (NETWORK_STATUS_MQTT) : (NETWORK_STATUS_OFFLINE));
+    return (tuya_iot_is_connected() ? NETWORK_STATUS_MQTT : NETWORK_STATUS_OFFLINE);
 }

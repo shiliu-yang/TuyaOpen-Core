@@ -7,5 +7,5 @@ target_sources(ai_skills PRIVATE ${_ai_skills_srcs})
 target_include_directories(ai_skills PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 )
-target_link_libraries(ai_skills PRIVATE tuyaopen-headers libcjson tal_system tuya_ai_service)
+target_link_libraries(ai_skills PRIVATE tuyaopen-headers libcjson tal_system tuya_ai_service utility tuya_cloud_service)
 unset(_ai_skills_srcs)

@@ -34,7 +34,6 @@
 #include "tuya_ai_protocol.h"
 #include "tuya_ai_private.h"
 #include "httpc.h"
-#include "http_parser.h"
 
 #define AI_SEND_SOCKET_TIMEOUT (10 * 1000)
 #define AI_ADD_PKT_LEN 128
