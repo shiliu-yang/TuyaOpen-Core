@@ -45,7 +45,6 @@ typedef struct {
     //! memory
     void *(*malloc)(size_t size);
     void (*free)(void *ptr);
-    void *(*calloc)(size_t nitems, size_t size);
     //! system
     void (*sleep)(uint32_t num_ms);
     void (*reset)(void);

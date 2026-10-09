@@ -607,16 +607,6 @@ void* tuya_mem_heap_malloc(HEAP_HANDLE handle, unsigned int size)
     }
 }
 
-void* tuya_mem_heap_calloc(HEAP_HANDLE handle, unsigned int size)
-{
-    void *ptr = tuya_mem_heap_malloc(handle, size);
-    if(ptr) {
-        memset(ptr, 0, size);
-    }
-
-    return ptr;
-}
-
 void* tuya_mem_heap_realloc(HEAP_HANDLE handle, void *ptr, unsigned int size)
 {
 	if(NULL == ptr) {

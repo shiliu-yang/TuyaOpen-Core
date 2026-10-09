@@ -88,16 +88,25 @@ void tal_free(void *ptr)
  *
  * @param nitems The number of elements to allocate memory for.
  * @param size The size of each element in bytes.
- * @return A pointer to the allocated memory, or NULL if the allocation fails.
+ * @return A pointer to the allocated memory, or NULL if the allocation fails
+ *         (including a zero nitems/size or a multiplication overflow).
  */
 void *tal_calloc(size_t nitems, size_t size)
 {
-    TAL_API_OPS_T *ops = tal_api_get_ops();
-    if (NULL != ops && ops->calloc) {
-        return ops->calloc(nitems, size);
+    /* Overflow guard, matching libc/mbedtls calloc semantics (NULL on
+     * overflow). A zero nitems/size makes total 0, and tal_malloc(0) already
+     * returns NULL, so the zero-size case needs no separate branch. */
+    if (size != 0 && nitems > SIZE_MAX / size) {
+        return NULL;
     }
 
-    return NULL;
+    size_t total = nitems * size;
+    void *ptr = tal_malloc(total);
+    if (NULL != ptr) {
+        memset(ptr, 0, total);
+    }
+
+    return ptr;
 }
 
 /**

@@ -38,7 +38,6 @@ int tuya_mem_heap_init(heap_context_t *ctx);
 int tuya_mem_heap_create(void *start_addr, unsigned int size, HEAP_HANDLE *handle);
 int tuya_mem_heap_delete(HEAP_HANDLE handle);
 void* tuya_mem_heap_malloc(HEAP_HANDLE handle, unsigned int size);
-void* tuya_mem_heap_calloc(HEAP_HANDLE handle, unsigned int size);
 void* tuya_mem_heap_realloc(HEAP_HANDLE handle, void *ptr, unsigned int size);
 void tuya_mem_heap_free(HEAP_HANDLE handle, void *ptr);
 void tuya_mem_heap_state(HEAP_HANDLE handle, heap_state_t *state);
