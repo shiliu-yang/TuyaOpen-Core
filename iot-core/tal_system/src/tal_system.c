@@ -53,7 +53,7 @@ void *tal_malloc(size_t size)
         ptr = ops->malloc(size);
     }
     if (NULL == ptr) {
-        PR_ERR("0x%x malloc failed:0x%x free:0x%x", __builtin_return_address(0), size, tal_system_get_free_heap_size());
+        PR_ERR("0x%x malloc failed:0x%x", __builtin_return_address(0), size);
     }
 
     return ptr;
@@ -130,23 +130,6 @@ void tal_system_reset(void)
     if (NULL != ops && ops->reset) {
         ops->reset();
     }
-}
-
-/**
- * @brief Get the free heap size.
- *
- * This function returns the amount of free heap memory available in the system.
- *
- * @return The free heap size in bytes.
- */
-int tal_system_get_free_heap_size(void)
-{
-    TAL_API_OPS_T *ops = tal_api_get_ops();
-    if (NULL != ops && ops->get_free_heap_size) {
-        return ops->get_free_heap_size();
-    }
-
-    return 0;
 }
 
 SYS_TIME_T g_sys_time_offset = 0; // used for debug

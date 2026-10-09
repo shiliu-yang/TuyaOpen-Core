@@ -82,16 +82,6 @@ void tal_free(void *ptr);
 void *tal_calloc(size_t nitems, size_t size);
 
 
-/**
- * @brief Get system free heap size
- *
- * @param[in] param: none
- *
- * @return OPRT_OK on success. Others on error, please refer to
- * tuya_error_code.h
- */
-int tal_system_get_free_heap_size(void);
-
 #ifdef __cplusplus
 }
 #endif

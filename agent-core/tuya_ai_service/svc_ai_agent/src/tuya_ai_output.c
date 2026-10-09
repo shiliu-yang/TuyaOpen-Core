@@ -213,7 +213,6 @@ OPERATE_RET tuya_ai_output_init(AI_OUTPUT_CBS_T *cbs)
 #if defined(AI_STACK_IN_PSRAM) && (AI_STACK_IN_PSRAM == 1)
     thrd_param.psram_mode = 1;
 #endif
-    PR_DEBUG("ai output: free internal heap before thread create: %d", tal_system_get_free_heap_size());
     rt = tal_thread_create_and_start(&ai_output_ctx.thread, NULL, NULL, __ai_output_thread, NULL, &thrd_param);
     if (OPRT_OK != rt) {
         PR_ERR("ai output thread create err, rt:%d", rt);
