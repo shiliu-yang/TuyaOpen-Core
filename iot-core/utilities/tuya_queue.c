@@ -10,23 +10,18 @@
 
 #include "tkl_system.h"
 #include "tkl_memory.h"
+#include "tkl_mutex.h"
 
 #include "tuya_list.h"
 #include "tuya_queue.h"
 
-#if defined(OPERATING_SYSTEM) && (SYSTEM_NON_OS == OPERATING_SYSTEM)
-#define QUEUE_CREATE_LOCK(queue)    OPRT_OK
-#define QUEUE_RELEASE_LOCK(queue)   OPRT_OK
-#define QUEUE_LOCK(queue)   TKL_ENTER_CRITICAL()
-#define QUEUE_UNLOCK(queue) TKL_EXIT_CRITICAL()
-#else
-#include "tkl_mutex.h"
-
+/* 锁统一走 tkl_mutex：每个 port 都必须提供 mutex 卡成员，跨平台文件不应依赖
+ * 单平台私有符号。原 SYSTEM_NON_OS 分支依赖 TKL_ENTER/EXIT_CRITICAL 宏，已随
+ * linux port 清理删除（裸机 port 需自行把 mutex 实现为临界区或等价物）。 */
 #define QUEUE_CREATE_LOCK(queue)  tkl_mutex_create_init(&queue->mutex)
 #define QUEUE_RELEASE_LOCK(queue) tkl_mutex_release(queue->mutex)
 #define QUEUE_LOCK(queue)   tkl_mutex_lock(queue->mutex)
 #define QUEUE_UNLOCK(queue) tkl_mutex_unlock(queue->mutex)
-#endif
 
 typedef enum {
     POLICY_SEND_TO_BACK,
@@ -40,9 +35,7 @@ typedef struct {
 }QUEUE_ITEM_T;
 
 typedef struct {
-#if defined(OPERATING_SYSTEM) && (SYSTEM_NON_OS != OPERATING_SYSTEM)
     TKL_MUTEX_HANDLE mutex;
-#endif
 
     uint32_t item_size;
     uint32_t queue_len;
