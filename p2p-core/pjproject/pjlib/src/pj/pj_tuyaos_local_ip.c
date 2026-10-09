@@ -12,9 +12,10 @@
 #include <stdio.h>
 #include <string.h>
 
-#if defined(ENABLE_WIFI) && (ENABLE_WIFI == 1)
-#include "tal_wifi.h"
-#endif
+/* 原 ENABLE_WIFI 分支（include "tal_wifi.h" + tal_wifi_get_ip(WF_STATION) 取 WiFi
+ * IP）已删：tal_wifi 是 core 主动移除的死接口（b606a2a），本 core 无该实现，
+ * 该分支在 P2P=ON && WIFI=ON 时必然编译失败（tal_wifi.h 不存在）。
+ * 将来接入 WiFi 的平台请连同此分支一并恢复（实现见 git 历史）。 */
 #if defined(ENABLE_WIRED) && (ENABLE_WIRED == 1)
 #include "tal_netif.h"
 #endif
@@ -82,14 +83,7 @@ int tal_compat_get_sta_ipv4_nbo(unsigned int *addr_nbo)
 
     memset(&ip, 0, sizeof(ip));
 
-#if defined(ENABLE_WIFI) && (ENABLE_WIFI == 1)
-    if (tal_wifi_get_ip(WF_STATION, &ip) == OPRT_OK && ip.ip[0] != '\0') {
-        if (__parse_ipv4_nbo(ip.ip, &a) == 0 && __reject_bad_host(a) == 0) {
-            *addr_nbo = (unsigned int)a;
-            return 0;
-        }
-    }
-#endif
+    /* 原 WiFi 优先分支已删（原因见文件头注释） */
 
 #if defined(ENABLE_WIRED) && (ENABLE_WIRED == 1)
     memset(&ip, 0, sizeof(ip));
