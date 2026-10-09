@@ -52,7 +52,13 @@ static P_LAN_SLOOP_S g_sloop = NULL;
 
 static uint32_t __ty_sock_get_reader_num(void)
 {
+#if defined(ENABLE_LOCAL_LINK) && (ENABLE_LOCAL_LINK == 1)
     return (LAN_UDP_READER_CNT + tuya_lan_get_client_num());
+#else
+    /* 局域网协议未编入：reader 表只剩常驻槽位，供 AI monitor 注册
+     * （1 个服务端 + 最多 3 个客户端，见 AI_MONITOR_MAX_CLIENTS_MAX） */
+    return LAN_UDP_READER_CNT;
+#endif
 }
 
 static void __sock_table_set_fds(TUYA_FD_SET_T *rfds, TUYA_FD_SET_T *efds)
@@ -274,7 +280,9 @@ Err:
         tal_free(efds);
     }
 
+#if defined(ENABLE_LOCAL_LINK) && (ENABLE_LOCAL_LINK == 1)
     tuya_lan_exit();
+#endif
     __ty_sock_loop_deinit();
 
     return;
