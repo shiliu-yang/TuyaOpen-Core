@@ -302,17 +302,33 @@ static OPERATE_RET http_parse_url(const char *url, char **host, char **path, uin
         return OPRT_INVALID_PARM;
     }
 
-    /* 3) 可选端口 */
-    uint16_t url_port = 0;
+    /* 3) 可选端口。三态必须分离（1c 评审）：
+     *   a) 未写端口 → 用默认（80/443）；
+     *   b) 显式 :0 → 非法（端口 0 保留），报错；
+     *   c) >65535 → 非法，报错（uint16 回绕会静默连错端口：:73616→8080 实测可连到
+     *      本地其他服务；:65536→0 曾被"0 判假"吞掉、静默落默认 80/443）。
+     * 原三元 `url_port ? url_port : default` 把三种语义混为一谈。 */
+    uint32_t url_port = 0;
+    BOOL_T   has_port = false;
     if (*cursor == ':') {
+        has_port = true;
         cursor++;
         while ((*cursor >= '0') && (*cursor <= '9')) {
-            url_port = (uint16_t)(url_port * 10 + (uint16_t)(*cursor - '0'));
+            uint32_t next = url_port * 10 + (uint32_t)(*cursor - '0');
+            if (next > 65535) {
+                PR_ERR("url port out of range");
+                return OPRT_INVALID_PARM;
+            }
+            url_port = next;
             cursor++;
         }
         /* 跳过端口后的非 path 字符，定位到 path/query 起点 */
         while (*cursor && (*cursor != '/') && (*cursor != '?') && (*cursor != '#')) {
             cursor++;
+        }
+        if (0 == url_port) {
+            PR_ERR("url port zero is invalid");
+            return OPRT_INVALID_PARM;
         }
     }
 
@@ -347,7 +363,7 @@ static OPERATE_RET http_parse_url(const char *url, char **host, char **path, uin
         (*path)[offset] = '/';
     }
 
-    *port = url_port ? url_port : (*use_tls ? 443 : 80);
+    *port = has_port ? (uint16_t)url_port : (*use_tls ? 443 : 80);
 
     return OPRT_OK;
 }
