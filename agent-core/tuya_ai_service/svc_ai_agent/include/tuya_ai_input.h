@@ -26,7 +26,11 @@
 #include "tuya_iot_config.h"
 #include "tuya_ai_protocol.h"
 #include "tuya_ai_biz.h"
-#include "tuya_ai_agent.h"
+
+/* 解与 tuya_ai_agent.h 的循环包含（两者互相 include，展开顺序不同会导致
+ * AI_ATTR_BASE_T/AI_INPUT_SEND_T 未定义）：宏内只需该函数声明，
+ * 定义见 tuya_ai_agent.h。 */
+CHAR_T *tuya_ai_agent_get_scode(CHAR_T *scode);
 
 typedef enum {
     /** idle state */
