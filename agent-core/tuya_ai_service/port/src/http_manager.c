@@ -411,8 +411,9 @@ static OPERATE_RET http_session_send(const SESSION_ID session, const http_req_t 
     ctx->network = tuya_transporter_create(transport_type, NULL);
     if (!ctx->network) {
         PR_ERR("Failed to create transporter");
-        http_safe_free(host);
-        http_safe_free(path);
+        /* host/path 已存入 ctx（上方），交由 destory_http_session →
+         * reset_response 统一释放；此处不得再 free（悬空指针会让 destroy 二次
+         * 释放 → mem_heap double free，1c 评审 finding）。下同。 */
         return OPRT_MALLOC_FAILED;
     }
 
@@ -424,8 +425,7 @@ static OPERATE_RET http_session_send(const SESSION_ID session, const http_req_t 
         if (OPRT_OK != rt) {
             tuya_transporter_destroy(ctx->network);
             ctx->network = NULL;
-            http_safe_free(host);
-            http_safe_free(path);
+            /* host/path 交 destroy 统一释放，不在此 free（见上注） */
             return rt;
         }
 
@@ -446,8 +446,7 @@ static OPERATE_RET http_session_send(const SESSION_ID session, const http_req_t 
             PR_ERR("Failed to set TLS config: %d", rt);
             tuya_transporter_destroy(ctx->network);
             ctx->network = NULL;
-            http_safe_free(host);
-            http_safe_free(path);
+            /* host/path 交 destroy 统一释放，不在此 free（见上注） */
             return rt;
         }
     }
@@ -459,8 +458,9 @@ static OPERATE_RET http_session_send(const SESSION_ID session, const http_req_t 
         tuya_transporter_close(ctx->network);
         tuya_transporter_destroy(ctx->network);
         ctx->network = NULL;
-        http_safe_free(host);
-        http_safe_free(path);
+        /* host/path 交 destroy 统一释放，不在此 free（见上注）——
+         * 原实现在此 free 后未置 NULL，destroy 时 reset_response 会二次释放
+         * （mem_heap double free 调试狗告警，1c 评审 finding）。 */
         return rt;
     }
 
@@ -476,8 +476,7 @@ static OPERATE_RET http_session_send(const SESSION_ID session, const http_req_t 
         tuya_transporter_close(ctx->network);
         tuya_transporter_destroy(ctx->network);
         ctx->network = NULL;
-        http_safe_free(host);
-        http_safe_free(path);
+        /* host/path 交 destroy 统一释放，不在此 free（见上注） */
         return OPRT_MALLOC_FAILED;
     }
 
@@ -504,8 +503,7 @@ static OPERATE_RET http_session_send(const SESSION_ID session, const http_req_t 
         tuya_transporter_close(ctx->network);
         tuya_transporter_destroy(ctx->network);
         ctx->network = NULL;
-        http_safe_free(host);
-        http_safe_free(path);
+        /* host/path 交 destroy 统一释放，不在此 free（见上注） */
         return OPRT_COM_ERROR;
     }
 
@@ -530,8 +528,7 @@ static OPERATE_RET http_session_send(const SESSION_ID session, const http_req_t 
         tuya_transporter_close(ctx->network);
         tuya_transporter_destroy(ctx->network);
         ctx->network = NULL;
-        http_safe_free(host);
-        http_safe_free(path);
+        /* host/path 交 destroy 统一释放，不在此 free（见上注） */
         return OPRT_LINK_CORE_HTTP_CLIENT_SEND_ERROR;
     }
 
