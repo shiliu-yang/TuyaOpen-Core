@@ -12,6 +12,8 @@
 
 #include "tuya_cloud_types.h"
 
+#include <stdio.h>
+
 #include "tal_api.h"
 #include "cJSON.h"
 #include "atop_service.h"
@@ -248,8 +250,11 @@ OPERATE_RET ai_agent_init(void)
     TUYA_CALL_ERR_LOG(tal_event_subscribe(EVENT_AI_CLIENT_RUN, "agent_session_init", session_init_cb, SUBSCRIBE_TYPE_NORMAL));
 
 #if defined(ENABLE_AI_MONITOR) && (ENABLE_AI_MONITOR == 1)
+    /* monitor 是调试监视服务（TCP 5055）：失败（如端口被占）只降级告警、不阻断
+     * AI 链路——否则 monitor 故障会让 ai_agent_init 在"AI 已初始化"的半成功
+     * 状态返回错误，调用方按失败重试还会重复初始化。 */
     ai_monitor_config_t monitor_cfg = AI_MONITOR_CFG_DEFAULT;
-    TUYA_CALL_ERR_RETURN(tuya_ai_monitor_init(&monitor_cfg));
+    TUYA_CALL_ERR_LOG(tuya_ai_monitor_init(&monitor_cfg));
 #endif
 
     return rt;
