@@ -226,6 +226,15 @@ OPERATE_RET ai_agent_init(void)
     ai_agent_cfg.attr.audio.bit_depth = audio_info.sample_bits;
 
     ai_agent_cfg.codec_enable         = TRUE;
+#else
+    /* 无 AI 音频模块（Linux agent_demo）：上行由应用直接喂 PCM（port 的 tkl_ai_demo
+     * 文件回放），属性按素材口径固定 16kHz/16bit/单声道，不启用编码器（PCM 直传）。
+     * 注：不设置时 attr.audio 全 0，云端拿不到格式、不会返回 ASR/NLG。 */
+    ai_agent_cfg.attr.audio.codec_type  = AUDIO_CODEC_PCM;
+    ai_agent_cfg.attr.audio.sample_rate = 16000;
+    ai_agent_cfg.attr.audio.channels    = AUDIO_CHANNELS_MONO;
+    ai_agent_cfg.attr.audio.bit_depth   = 16;
+    ai_agent_cfg.codec_enable           = FALSE;
 #endif
 
     ai_agent_cfg.output.alert_cb      = __ai_agent_alert_cb;
