@@ -13,6 +13,18 @@ endif()
 
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/TuyaOpenOptions.cmake)
 
+# esp-idf 宿主桥接：平台提供 mbedtls 时（CONFIG_ENABLE_PLATFORM_MBEDTLS=ON）
+# third_party 不注册 mbedtls 目标，而模块里写的是裸名
+# target_link_libraries(... mbedtls ...)——esp-idf 的 mbedtls 组件以
+# idf::mbedtls 暴露（无同名裸目标，裸名会退化为 -lmbedtls 链接失败），
+# 这里桥接一个同名 INTERFACE 目标。普通 CMake 宿主（linux 等）上
+# idf::mbedtls 不存在，本段无操作；组件入口 CMakeLists 的 REQUIRES mbedtls
+# 保证 esp-idf 的 mbedtls 组件先处理。
+if(NOT TARGET mbedtls AND TARGET idf::mbedtls)
+    add_library(mbedtls INTERFACE)
+    target_link_libraries(mbedtls INTERFACE idf::mbedtls)
+endif()
+
 # 官方库根路径（third_party 各 submodule），全作用域可用
 set(TUYAOPEN_THIRD_PARTY_DIR ${CMAKE_CURRENT_LIST_DIR}/third_party)
 
