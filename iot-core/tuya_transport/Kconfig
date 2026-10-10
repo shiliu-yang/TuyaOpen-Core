@@ -19,7 +19,7 @@ menu "configure mbedtls"
             at runtime in order to enable mbedTLS debug output via the ESP
             log mechanism.
 
-        config MBEDTLS_DEBUG_LEVEL
+        config ENABLE_MBEDTLS_DEBUG_LEVEL
             int "debug level set"
             range 0 5
             depends on ENABLE_MBEDTLS_DEBUG
@@ -396,7 +396,7 @@ menu "configure mbedtls"
                 help
                     Enable the RIPEMD-160 hash algorithm.
 
-            choice MBEDTLS_TLS_MODE
+            choice ENABLE_MBEDTLS_TLS_MODE
                 bool "TLS Protocol Role"
                 default ENABLE_MBEDTLS_TLS_CLIENT_ONLY
                 help
@@ -426,7 +426,7 @@ menu "configure mbedtls"
             config ENABLE_MBEDTLS_SSL_CLI_C
                 bool
                 select MBEDTLS_TLS_ENABLED
-            config MBEDTLS_TLS_ENABLED
+            config ENABLE_MBEDTLS_TLS_ENABLED
                 bool        
 
             config ENABLE_MBEDTLS_SSL_PROTO_TLS1
