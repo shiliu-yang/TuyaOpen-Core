@@ -149,66 +149,16 @@ STATIC VOID __ai_http_dld_work(VOID *data)
         goto EXIT;
     }
 
-    INT_T  read_len = 0, have_read_len = 0, sum_read_len = 0;
-    UINT_T total_len = resp->content_length;
-    UINT_T unit_len  = AI_DL_IMAGE_UNIT_SIZE;
-    buf              = (CHAR_T *)OS_MALLOC(unit_len);
-    TUYA_CHECK_NULL_GOTO(buf, EXIT);
-    memset(buf, 0, unit_len);
-
-    while (1) {
-        read_len = http_read_content(http_sesion->s, &buf[have_read_len], unit_len - have_read_len);
-        if (read_len <= 0) {
-            rt = OPRT_COM_ERROR;
-            break;
-        }
-
-        have_read_len += read_len;
-        AI_PROTO_D("sum_read_len:%d,have_read_len:%d,read_len:%d,total_len:%d", sum_read_len, have_read_len, read_len, total_len);
-        if (sum_read_len + have_read_len >= total_len) {
-            if (first_pkt) {
-                first_pkt        = TRUE;
-                head.stream_flag = AI_STREAM_ONE;
-                head.total_len   = total_len;
-                head.len         = have_read_len;
-                rt               = __ai_http_output_media(&attr, &head, buf, dld->cb);
-            } else {
-                first_pkt        = TRUE;
-                head.stream_flag = AI_STREAM_END;
-                head.total_len   = total_len;
-                head.len         = have_read_len;
-                rt               = __ai_http_output_media(&attr, &head, buf, dld->cb);
-            }
-            if (OPRT_OK != rt) {
-                PR_ERR("send to app err,rt:%d", rt);
-            }
-            break;
-        } else {
-            if (have_read_len < unit_len) {
-                continue;
-            }
-        }
-        if (first_pkt) {
-            first_pkt        = FALSE;
-            head.stream_flag = AI_STREAM_START;
-            head.total_len   = total_len;
-            head.len         = unit_len;
-            rt               = __ai_http_output_media(&attr, &head, buf, dld->cb);
-        } else {
-            head.stream_flag = AI_STREAM_ING;
-            head.total_len   = total_len;
-            head.len         = unit_len;
-            rt               = __ai_http_output_media(&attr, &head, buf, dld->cb);
-        }
-        if ((OPRT_OK != rt) || sg_ai_dld_stop) {
-            PR_ERR("dld work end:%d, dld stop:%d", rt, sg_ai_dld_stop);
-            sg_ai_dld_stop = FALSE;
-            break;
-        }
-        memset(buf, 0, unit_len);
-        sum_read_len += have_read_len;
-        have_read_len = 0;
-    }
+    /* 媒体 URL 下载：agent-core 侧未实现（见 README 已知限制）。
+     * 原实现直接调用 http_read_content(http_sesion->s, ...)，而该符号唯一实现属
+     * iot-core（iot-core/tuya_transport/src/http/http_session.c），会按 iot-core 的
+     * http_session_ctx_t 布局解释 agent-core 的 session context——两者字段序列不同
+     * （iot-core 多 cacert/cacert_len，response/response_ready/transport 偏移均不同），
+     * 实测（把 agent-core ctx 喂给该函数）段错误。
+     * 此处安全失败：下载请求被拒并告警，不再崩溃；完整流式下载（经本 manager 的
+     * transport 直读 body）待按需实现。 */
+    PR_ERR("http media download not implemented (agent-core), abort");
+    rt = OPRT_COM_ERROR;
 
 EXIT:
     if (dld) {
