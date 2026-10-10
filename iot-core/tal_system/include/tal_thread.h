@@ -124,7 +124,6 @@ OPERATE_RET tal_thread_delete(const THREAD_HANDLE handle);
  */
 THREAD_STATE_E tal_thread_get_state(const THREAD_HANDLE handle);
 
-/**
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
