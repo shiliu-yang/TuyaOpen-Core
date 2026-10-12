@@ -19,9 +19,7 @@ option(CONFIG_ENABLE_TUYA_CODEC_OPUS "Build OPUS encoder" OFF)
 option(CONFIG_ENABLE_TUYA_CODEC_OPUS_IPC "Build OPUS IPC encoder" OFF)
 option(CONFIG_ENABLE_TUYA_CODEC_SPEEX "Build SPEEX encoder" OFF)
 option(CONFIG_ENABLE_AI_COMPONENTS "Build the agent-core component layer on top of tuya_ai_service" OFF)
-option(CONFIG_ENABLE_COMP_AI_AUDIO "Build the ai_audio component (needs CONFIG_ENABLE_AI_COMPONENTS)" OFF)
 option(CONFIG_ENABLE_COMP_AI_MCP "Build the ai_mcp component (needs CONFIG_ENABLE_AI_COMPONENTS)" OFF)
-option(CONFIG_ENABLE_COMP_AI_VIDEO "Build the ai_video component (needs CONFIG_ENABLE_AI_COMPONENTS)" OFF)
 option(CONFIG_ENABLE_QRCODE "Build the qrcode module (QR output for app binding)" OFF)
 option(CONFIG_LITTLE_END "PJ little-endian (ON) vs big-endian (OFF)" ON)
 
@@ -45,9 +43,7 @@ foreach(_tuyaopen_opt
     CONFIG_ENABLE_TUYA_CODEC_OPUS_IPC
     CONFIG_ENABLE_TUYA_CODEC_SPEEX
     CONFIG_ENABLE_AI_COMPONENTS
-    CONFIG_ENABLE_COMP_AI_AUDIO
     CONFIG_ENABLE_COMP_AI_MCP
-    CONFIG_ENABLE_COMP_AI_VIDEO
     CONFIG_ENABLE_QRCODE
     CONFIG_LITTLE_END
 )
