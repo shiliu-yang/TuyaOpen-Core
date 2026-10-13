@@ -9,8 +9,25 @@ config ENABLE_AI_COMPONENTS
         Leave off for projects that do not need it so it is not compiled in.
         Maps to the CMake switch CONFIG_ENABLE_AI_COMPONENTS.
 
-# 服务层（tuya_ai_service 及 svc_* 参数、ENABLE_TUYA_CODEC 系列）始终参与配置
-rsource "tuya_ai_service/Kconfig"
+# 服务层（svc_* 参数、ENABLE_TUYA_CODEC 系列）始终参与配置
+# （2026-10-13 扁平化：原 tuya_ai_service/Kconfig 合并至此，rsource 路径
+#   随目录提升同步为 svc_*/Kconfig）
+menu "configure tuya AI"
+
+    config ENABLE_AI_MONITOR
+        bool "enable ai monitor (tcp debug service)"
+        default y
+        help
+            AI 协议调试监视服务：TCP 监听（默认端口 5055）输出 AI 协议流，
+            供排查链路问题。注意：本符号此前只出现在 .config、缺 Kconfig 定义
+            与 CMake 宏注入，属"孤儿配置"（开了不生效）；本次接通。
+
+    rsource "svc_ai_agent/Kconfig"
+    rsource "svc_ai_basic/Kconfig"
+    rsource "svc_ai_codec/Kconfig"
+    # MCP server 核心（工具集在应用层，同用此开关门控）
+    rsource "svc_ai_mcp/Kconfig"
+endmenu
 
 if (ENABLE_AI_COMPONENTS)
 menu "configure ai components"
