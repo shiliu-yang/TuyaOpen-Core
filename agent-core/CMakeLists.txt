@@ -44,9 +44,6 @@ endif()
 add_library(tuya_ai_service STATIC)
 target_sources(tuya_ai_service PRIVATE ${_ai_srcs})
 target_include_directories(tuya_ai_service PUBLIC ${_ai_incs})
-target_include_directories(tuya_ai_service PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/svc_ai_codec/include
-)
 target_link_libraries(tuya_ai_service PRIVATE
     tuyaopen-headers
     libcjson
