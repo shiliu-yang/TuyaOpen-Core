@@ -113,7 +113,7 @@ int tal_fflush(TUYA_FILE file);
 * @param[in] fd: file fd
 *
 * @note This API is used to write buffer to flash
-* @note 参数是 fd（用 tal_fileno 从文件句柄取），与 port_fsync 对齐
+* @note 参数是 fd（用 tal_fileno 从文件句柄取），与 fs_card_fsync 对齐
 *
 * @return 0 on success. others on failed
 */
