@@ -30,7 +30,7 @@
 #include "tal_log.h"
 
 /* ---------------------------------------------------------------------------
- * 平台 ops 卡分发：与 tal_vad.c / tal_kv.c / tal_fs.c 同构——卡不可用时
+ * 平台 ops 卡分发：与 tal_kv.c / tal_fs.c 同构——卡不可用时
  * PR_ERR 并返回 OPRT_NOT_SUPPORTED，由调用方（或本文件的降级分支）处理。
  * --------------------------------------------------------------------------- */
 extern TAL_BLUETOOTH_OPS_T tal_bluetooth_ops_platform;
