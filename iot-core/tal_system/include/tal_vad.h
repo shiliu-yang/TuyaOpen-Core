@@ -2,8 +2,8 @@
  * @file tal_vad.h
  * @brief 平台 VAD（语音活动检测）的 TAL 接口
  *
- * AI 音频输入（agent-core/ai_audio 的 ai_audio_input.c）经本接口把一次 VAD
- * 操作（建/启/停/查）交给平台执行——上游为 tkl_vad_* 直调，2026-10 解耦为
+ * AI 音频输入（上游 ai_audio 的 ai_audio_input.c，本仓未移植）经本接口把一次
+ * VAD 操作（建/启/停/查）交给平台执行——上游为 tkl_vad_* 直调，2026-10 解耦为
  * 经卡分发（契约见 tal_vad_ops.h）。
  *
  * @note 类型为 core 自持：TAL_VAD_CONFIG_T 逐字段镜像上游 TKL_VAD_CONFIG_T，

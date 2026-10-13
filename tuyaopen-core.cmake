@@ -70,6 +70,8 @@ add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/agent-core ${CMAKE_CURRENT_BINARY_DIR
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/p2p-core ${CMAKE_CURRENT_BINARY_DIR}/tuyaopen-core/p2p-core)
 
 set(_tuyaopen_core_libs)
+# 仅 core 模块。应用侧组件（ai_agent/ai_skills/ai_mcp/audio_player/ai_audio/
+# utility）已下沉应用层（examples/agent_demo/components），由应用自行聚合链接。
 foreach(_tuyaopen_mod IN ITEMS
     libcjson
     tuya_utilities
@@ -81,13 +83,6 @@ foreach(_tuyaopen_mod IN ITEMS
     tal_system
     tuya_cloud_service
     tuya_ai_service
-    utility
-    ai_agent
-    ai_main
-    ai_skills
-    ai_mcp
-    audio_player
-    ai_audio
     base_ice
     lib_rtp
     pjproject

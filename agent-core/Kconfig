@@ -2,9 +2,12 @@ config ENABLE_AI_COMPONENTS
     bool "enable ai components"
     default n
     help
-        Master switch for the tuya.ai component collection (ai_main, ai_agent,
-        ai_mcp, utility). Leave off for projects that do not need it so it is
-        not compiled in. Maps to the CMake switch CONFIG_ENABLE_AI_COMPONENTS.
+        Master switch for the tuya.ai service layer (tuya_ai_service: AI
+        protocol/transport, codec registry and the MCP server core).
+        Application-side components (agent / audio player / skills / MCP
+        tools) live with the application (see examples/agent_demo/components).
+        Leave off for projects that do not need it so it is not compiled in.
+        Maps to the CMake switch CONFIG_ENABLE_AI_COMPONENTS.
 
 # 服务层（tuya_ai_service 及 svc_* 参数、ENABLE_TUYA_CODEC 系列）始终参与配置
 rsource "tuya_ai_service/Kconfig"
@@ -21,12 +24,5 @@ menu "configure ai components"
         config ENABLE_AI_LANGUAGE_ENGLISH
             bool "English"
     endchoice
-
-    rsource "ai_mcp/Kconfig"
-    # 音频播放器（ENABLE_AI_PLAYER 及其解码器/资源参数子开关）；
-    # 随本组件层门控：ENABLE_AI_PLAYER 仅在 ENABLE_AI_COMPONENTS 打开时可见
-    rsource "audio_player/Kconfig"
-    # 音频播放编排（ENABLE_COMP_AI_AUDIO + 提示音来源选择；select ENABLE_AI_PLAYER）
-    rsource "ai_audio/Kconfig"
 endmenu
 endif

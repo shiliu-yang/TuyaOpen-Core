@@ -38,6 +38,17 @@ list(APPEND _ai_srcs ${_ai_monitor_srcs})
 list(APPEND _ai_incs ${CMAKE_CURRENT_SOURCE_DIR}/svc_ai_monitor/include)
 unset(_ai_monitor_srcs)
 
+# MCP server 核心（协议解析 + 与 svc_ai_agent 的 mcp_cb 接线）。工具集
+# （ai_mcp）在应用层，经本 include 路径使用其公开 API；依赖零新增
+# （mix_method/uni_base64/cJSON 均已在既有依赖面内）。开关随模块
+# （svc_ai_mcp/Kconfig 定义 ENABLE_COMP_AI_MCP，上游语义即门控 MCP 模块）。
+if(CONFIG_ENABLE_COMP_AI_MCP)
+    file(GLOB_RECURSE _ai_mcp_server_srcs CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/svc_ai_mcp/src/*.c")
+    list(APPEND _ai_srcs ${_ai_mcp_server_srcs})
+    list(APPEND _ai_incs ${CMAKE_CURRENT_SOURCE_DIR}/svc_ai_mcp/include)
+    unset(_ai_mcp_server_srcs)
+endif()
+
 add_library(tuya_ai_service STATIC)
 target_sources(tuya_ai_service PRIVATE ${_ai_srcs})
 target_include_directories(tuya_ai_service PUBLIC ${_ai_incs})
