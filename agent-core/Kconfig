@@ -22,24 +22,8 @@ menu "configure tuya AI"
             供排查链路问题。注意：本符号此前只出现在 .config、缺 Kconfig 定义
             与 CMake 宏注入，属"孤儿配置"（开了不生效）；本次接通。
 
-    rsource "svc_ai_agent/Kconfig"
     rsource "svc_ai_basic/Kconfig"
     rsource "svc_ai_codec/Kconfig"
     # MCP server 核心（工具集在应用层，同用此开关门控）
     rsource "svc_ai_mcp/Kconfig"
 endmenu
-
-if (ENABLE_AI_COMPONENTS)
-menu "configure ai components"
-    choice AI_LANGUAGE
-        prompt "choose ai language"
-        default ENABLE_AI_LANGUAGE_CHINESE
-
-        config ENABLE_AI_LANGUAGE_CHINESE
-            bool "Chinese"
-
-        config ENABLE_AI_LANGUAGE_ENGLISH
-            bool "English"
-    endchoice
-endmenu
-endif
