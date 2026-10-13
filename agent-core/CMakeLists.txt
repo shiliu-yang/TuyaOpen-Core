@@ -25,23 +25,6 @@ list(APPEND _ai_srcs ${_ai_basic_srcs})
 list(APPEND _ai_incs ${CMAKE_CURRENT_SOURCE_DIR}/svc_ai_basic/include)
 unset(_ai_basic_srcs)
 
-list(APPEND _ai_incs ${CMAKE_CURRENT_SOURCE_DIR}/svc_ai_codec/include)
-if(CONFIG_ENABLE_TUYA_CODEC)
-    list(APPEND _ai_srcs ${CMAKE_CURRENT_SOURCE_DIR}/svc_ai_codec/src/tuya_ai_encoder.c)
-    if(CONFIG_ENABLE_TUYA_CODEC_OPUS)
-        list(APPEND _ai_srcs ${CMAKE_CURRENT_SOURCE_DIR}/svc_ai_codec/src/tuya_ai_encoder_opus.c)
-    endif()
-    if(CONFIG_ENABLE_TUYA_CODEC_OPUS_IPC)
-        list(APPEND _ai_srcs
-            ${CMAKE_CURRENT_SOURCE_DIR}/svc_ai_codec/src/tuya_ai_encoder_opus_ipc.c
-            ${CMAKE_CURRENT_SOURCE_DIR}/svc_ai_codec/src/tuya_ai_encoder_opus_ipc_server.c
-        )
-    endif()
-    if(CONFIG_ENABLE_TUYA_CODEC_SPEEX)
-        list(APPEND _ai_srcs ${CMAKE_CURRENT_SOURCE_DIR}/svc_ai_codec/src/tuya_ai_encoder_speex.c)
-    endif()
-endif()
-
 file(GLOB_RECURSE _ai_monitor_srcs CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/svc_ai_monitor/src/*.c")
 list(APPEND _ai_srcs ${_ai_monitor_srcs})
 list(APPEND _ai_incs ${CMAKE_CURRENT_SOURCE_DIR}/svc_ai_monitor/include)

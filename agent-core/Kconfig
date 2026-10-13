@@ -9,7 +9,7 @@ config ENABLE_AI_COMPONENTS
         Leave off for projects that do not need it so it is not compiled in.
         Maps to the CMake switch CONFIG_ENABLE_AI_COMPONENTS.
 
-# 服务层（svc_* 参数、ENABLE_TUYA_CODEC 系列）始终参与配置
+# 服务层（svc_* 参数）始终参与配置
 # （2026-10-13 扁平化：原 tuya_ai_service/Kconfig 合并至此，rsource 路径
 #   随目录提升同步为 svc_*/Kconfig）
 menu "configure tuya AI"
@@ -23,7 +23,6 @@ menu "configure tuya AI"
             与 CMake 宏注入，属"孤儿配置"（开了不生效）；本次接通。
 
     rsource "svc_ai_basic/Kconfig"
-    rsource "svc_ai_codec/Kconfig"
     # MCP server 核心（工具集在应用层，同用此开关门控）
     rsource "svc_ai_mcp/Kconfig"
 endmenu

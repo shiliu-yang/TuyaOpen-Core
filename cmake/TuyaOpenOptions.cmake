@@ -14,10 +14,6 @@ option(CONFIG_ENABLE_TUYA_P2P "Build tuya_p2p subtree" OFF)
 option(CONFIG_ENABLE_LOCAL_LINK "Build the LAN (local link) service: lan/tuya_lan.c" ON)
 option(CONFIG_ENABLE_LOCAL_STORE "Build tuya_p2p/local_store" OFF)
 option(CONFIG_ENABLE_IPC_RING_BUFFER "Build tuya_p2p/svc_ring_buffer" OFF)
-option(CONFIG_ENABLE_TUYA_CODEC "Build tuya_ai_service encoders" OFF)
-option(CONFIG_ENABLE_TUYA_CODEC_OPUS "Build OPUS encoder" OFF)
-option(CONFIG_ENABLE_TUYA_CODEC_OPUS_IPC "Build OPUS IPC encoder" OFF)
-option(CONFIG_ENABLE_TUYA_CODEC_SPEEX "Build SPEEX encoder" OFF)
 option(CONFIG_ENABLE_AI_COMPONENTS "Build the agent-core component layer on top of tuya_ai_service" OFF)
 option(CONFIG_ENABLE_COMP_AI_MCP "Build the ai_mcp component (application-side, see examples/agent_demo/components; needs CONFIG_ENABLE_AI_COMPONENTS)" OFF)
 # AI 音频播放编排（应用侧组件，见 examples/agent_demo/components/ai_audio）：依赖
@@ -50,10 +46,6 @@ foreach(_tuyaopen_opt
     CONFIG_ENABLE_LOCAL_LINK
     CONFIG_ENABLE_LOCAL_STORE
     CONFIG_ENABLE_IPC_RING_BUFFER
-    CONFIG_ENABLE_TUYA_CODEC
-    CONFIG_ENABLE_TUYA_CODEC_OPUS
-    CONFIG_ENABLE_TUYA_CODEC_OPUS_IPC
-    CONFIG_ENABLE_TUYA_CODEC_SPEEX
     CONFIG_ENABLE_AI_COMPONENTS
     CONFIG_ENABLE_COMP_AI_MCP
     CONFIG_ENABLE_COMP_AI_AUDIO

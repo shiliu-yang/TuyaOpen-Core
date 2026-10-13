@@ -72,7 +72,6 @@ typedef struct {
     AI_ATTR_BASE_T attr;
     AI_INPUT_SEND_T biz_get[AI_BIZ_MAX_NUM];
     AI_OUTPUT_CBS_T output;
-    BOOL_T codec_enable; // whether to enable codec to encode audio before upload
     AI_AGENT_TTS_CFG_T tts_cfg;
     AI_SECURITY_CFG_T security_cfg;
     BOOL_T enable_crt_session_ext; // enable crt session external

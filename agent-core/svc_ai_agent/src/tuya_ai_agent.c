@@ -35,27 +35,11 @@
 #include "tuya_ai_mqtt.h"
 #include "tal_symmetry.h"
 #include "smart_frame.h"
-#include "tuya_ai_encoder.h"
 #include "uni_base64.h"
-#if defined(ENABLE_TUYA_CODEC_OPUS_IPC) && (ENABLE_TUYA_CODEC_OPUS_IPC == 1)
-#include "tuya_ai_encoder_opus_ipc.h"
-#elif defined(ENABLE_TUYA_CODEC_OPUS) && (ENABLE_TUYA_CODEC_OPUS == 1)
-#include "tuya_ai_encoder_opus.h"
-#endif
-#if defined(ENABLE_TUYA_CODEC_SPEEX) && (ENABLE_TUYA_CODEC_SPEEX == 1)
-#include "tuya_ai_encoder_speex.h"
-#endif
 #include "tuya_ai_protocol.h"
 
 #define INTTERUPT_TIME_MAX 16
 
-typedef struct {
-    CHAR_T      *scode;
-    AI_BIZ_HD_T *biz;
-    UCHAR_T     *buf;
-    UINT_T       buf_size;
-    UINT_T       buf_len;
-} AUDIO_ENCODE_CTX_T;
 typedef struct {
     CHAR_T                 scode[AI_SOLUTION_CODE_LEN]; // global scode
     AI_ATTR_BASE_T         up_attr;
@@ -65,9 +49,6 @@ typedef struct {
     CHAR_T                 cfg_eid[AI_UUID_V4_LEN + 1]; // will auto clear after session create
     CHAR_T                *event_param;                 // will auto clear after event start
     CHAR_T                *session_param;               // will auto clear after session create
-    BOOL_T                 codec_enable;
-    TUYA_AI_ENCODER_T     *encoder;      // encoder handle
-    TUYA_AI_ENCODER_INFO_T encoder_info; // encoder info
     AI_AGENT_TTS_CFG_T     tts_cfg;
     CHAR_T                 last_intr_time[INTTERUPT_TIME_MAX]; // last chat break time
     BOOL_T                 enable_crt_session_ext;             // enable crt session external
@@ -1110,66 +1091,6 @@ STATIC OPERATE_RET __ai_devos_state_evt(VOID *data)
     return OPRT_OK;
 }
 
-STATIC VOID __ai_agent_destroy_encoder(VOID)
-{
-    if (ai_agent_ctx.encoder && ai_agent_ctx.encoder->handle) {
-        ai_agent_ctx.encoder->destroy(ai_agent_ctx.encoder->handle);
-        ai_agent_ctx.encoder->handle = NULL;
-    }
-    return;
-}
-
-STATIC VOID __ai_agent_set_audio_encoder(AI_AUDIO_ATTR_BASE_T *attr)
-{
-    OPERATE_RET rt = OPRT_OK;
-    if (ai_agent_ctx.codec_enable) {
-        ai_agent_ctx.encoder                      = tuya_ai_get_encoder(attr->codec_type);
-        ai_agent_ctx.encoder_info.encode_type     = attr->codec_type;
-        ai_agent_ctx.encoder_info.sample_rate     = attr->sample_rate;
-        ai_agent_ctx.encoder_info.channels        = attr->channels;
-        ai_agent_ctx.encoder_info.bits_per_sample = attr->bit_depth;
-        ai_agent_ctx.encoder_info.bitrate         = attr->bitrate;
-        ai_agent_ctx.encoder_info.bandwidth       = attr->bandwidth;
-        ai_agent_ctx.encoder_info.vbr             = attr->vbr;
-        ai_agent_ctx.encoder_info.dtx             = attr->dtx;
-        ai_agent_ctx.encoder_info.complexity      = attr->complexity;
-        if (ai_agent_ctx.encoder) {
-            __ai_agent_destroy_encoder();
-            rt = ai_agent_ctx.encoder->create(&ai_agent_ctx.encoder->handle, &ai_agent_ctx.encoder_info);
-            if (rt != OPRT_OK) {
-                PR_ERR("create audio encoder failed");
-                ai_agent_ctx.encoder = NULL;
-            } else {
-                PR_DEBUG("create audio encoder success %p", ai_agent_ctx.encoder->handle);
-            }
-        }
-    }
-}
-
-STATIC VOID __ai_agent_reg_encoder(VOID)
-{
-#if defined(ENABLE_TUYA_CODEC_OPUS_IPC) && (ENABLE_TUYA_CODEC_OPUS_IPC == 1)
-    tuya_ai_register_encoder(&g_tuya_ai_encoder_opus_ipc);
-#elif defined(ENABLE_TUYA_CODEC_OPUS) && (ENABLE_TUYA_CODEC_OPUS == 1)
-    tuya_ai_register_encoder(&g_tuya_ai_encoder_opus);
-#endif
-#if defined(ENABLE_TUYA_CODEC_SPEEX) && (ENABLE_TUYA_CODEC_SPEEX == 1)
-    tuya_ai_register_encoder(&g_tuya_ai_encoder_speex);
-#endif
-}
-
-STATIC VOID __ai_agent_unreg_encoder(VOID)
-{
-#if defined(ENABLE_TUYA_CODEC_OPUS_IPC) && (ENABLE_TUYA_CODEC_OPUS_IPC == 1)
-    tuya_ai_unregister_encoder(&g_tuya_ai_encoder_opus_ipc);
-#elif defined(ENABLE_TUYA_CODEC_OPUS) && (ENABLE_TUYA_CODEC_OPUS == 1)
-    tuya_ai_unregister_encoder(&g_tuya_ai_encoder_opus);
-#endif
-#if defined(ENABLE_TUYA_CODEC_SPEEX) && (ENABLE_TUYA_CODEC_SPEEX == 1)
-    tuya_ai_unregister_encoder(&g_tuya_ai_encoder_speex);
-#endif
-}
-
 OPERATE_RET tuya_ai_agent_init(AI_AGENT_CFG_T *cfg)
 {
     OPERATE_RET rt = OPRT_OK;
@@ -1199,9 +1120,6 @@ OPERATE_RET tuya_ai_agent_init(AI_AGENT_CFG_T *cfg)
 #if defined(ENABLE_JOYINSIDE) && (ENABLE_JOYINSIDE == 1)
     }
 #endif
-    ai_agent_ctx.codec_enable = cfg->codec_enable;
-    __ai_agent_reg_encoder();
-    __ai_agent_set_audio_encoder(&(cfg->attr.audio));
     ty_subscribe_event(EVENT_AI_CLIENT_RUN, "ai.agent", __ai_client_run_evt, SUBSCRIBE_TYPE_NORMAL);
     ty_subscribe_event(EVENT_DEVOS_STATE_CHANGE, "ai.agent", __ai_devos_state_evt, SUBSCRIBE_TYPE_NORMAL);
     TUYA_CALL_ERR_GOTO(tuya_ai_input_init(), EXIT);
@@ -1228,8 +1146,6 @@ VOID tuya_ai_agent_deinit(VOID)
     tuya_ai_output_deinit();
     ty_unsubscribe_event(EVENT_AI_CLIENT_RUN, "ai.agent", __ai_client_run_evt);
     ty_unsubscribe_event(EVENT_DEVOS_STATE_CHANGE, "ai.agent", __ai_devos_state_evt);
-    __ai_agent_destroy_encoder();
-    __ai_agent_unreg_encoder();
     __ai_agent_free_recv_cb();
     if (ai_agent_ctx.event_param) {
         Free(ai_agent_ctx.event_param);
@@ -1400,74 +1316,13 @@ STATIC OPERATE_RET __ai_upload_stream(CHAR_T *scode, AI_PACKET_PT ptype, AI_BIZ_
     return OPRT_OK;
 }
 
-// Buffer size (in bytes) for batching encoded audio before upload.
-// 800 bytes accommodates up to ~64kbps at 40ms frame duration.
-// At 32kbps/40ms: ~160 bytes/frame, fits 5 frames.
-// At 16kbps/40ms: ~80 bytes/frame, fits 10 frames.
-#ifndef AUDIO_ENCODE_BUF_SIZE
-#define AUDIO_ENCODE_BUF_SIZE 800
-#endif
-
-STATIC OPERATE_RET __upload_data_cb(AI_AUDIO_CODEC_TYPE codec_type, UCHAR_T *data, UINT_T len, void *usr_data)
-{
-    AUDIO_ENCODE_CTX_T *encode_ctx = (AUDIO_ENCODE_CTX_T *)usr_data;
-
-    if ((encode_ctx->buf_len + len) > encode_ctx->buf_size) {
-        OPERATE_RET rt = __ai_upload_stream(encode_ctx->scode, AI_PT_AUDIO, encode_ctx->biz,
-                                            (CHAR_T *)encode_ctx->buf, encode_ctx->buf_len, encode_ctx->buf_len);
-        if (rt != OPRT_OK) {
-            PR_ERR("upload encoded data failed, rt:%d", rt);
-            return rt;
-        }
-        encode_ctx->buf_len = 0;
-    }
-
-    if ((encode_ctx->buf_len + len) > encode_ctx->buf_size) {
-        PR_ERR("encoded frame too large: %d > %d", len, encode_ctx->buf_size);
-        return OPRT_INVALID_PARM;
-    }
-
-    memcpy(encode_ctx->buf + encode_ctx->buf_len, data, len);
-    encode_ctx->buf_len += len;
-    return OPRT_OK;
-}
-
 OPERATE_RET tuya_ai_agent_upload_stream(CHAR_T *scode, AI_PACKET_PT ptype, AI_BIZ_HD_T *biz, CHAR_T *data, UINT_T len, UINT_T total_len)
 {
-    if (ptype == AI_PT_AUDIO && ai_agent_ctx.encoder) {
-        if (ai_agent_ctx.encoder->handle == NULL) {
-            PR_ERR("encoder is null");
-            return OPRT_COM_ERROR;
-        } else if (len != total_len) {
-            PR_ERR("audio stream len not match, len:%d, total_len:%d", len, total_len);
-            return OPRT_INVALID_PARM;
-        }
-        if (data && len > 0) {
-            // encode data
-            UCHAR_T            encode_buf[AUDIO_ENCODE_BUF_SIZE] = {0};
-            AUDIO_ENCODE_CTX_T encode_ctx                        = {
-                .scode    = scode,
-                .biz      = biz,
-                .buf      = encode_buf,
-                .buf_size = AUDIO_ENCODE_BUF_SIZE,
-                .buf_len  = 0,
-            };
-            OPERATE_RET rt = ai_agent_ctx.encoder->encode(ai_agent_ctx.encoder->handle, (UCHAR_T *)data, len, __upload_data_cb, (VOID *)&encode_ctx);
-            if (rt != OPRT_OK) {
-                PR_ERR("encoder failed, rt:%d", rt);
-                return rt;
-            }
-            if (encode_ctx.buf_len > 0) {
-                rt = __ai_upload_stream(encode_ctx.scode, AI_PT_AUDIO, encode_ctx.biz,
-                                        (CHAR_T *)encode_ctx.buf, encode_ctx.buf_len, encode_ctx.buf_len);
-            }
-            return rt;
-        } else {
-            return __ai_upload_stream(scode, ptype, biz, data, len, total_len);
-        }
-    } else {
-        return __ai_upload_stream(scode, ptype, biz, data, len, total_len);
-    }
+    /* 编码链已裁剪（2026-10-13）：上行音频一律直发（PCM 原始数据），不再经
+     * 编码器。原 OPUS/SPEEX/IPC 编码器从未启用（开关默认关 + IPC 变体因悬空
+     * 的 tkl_audio_enc_request 物理不可编），见 svc_ai_codec 移除提交；
+     * 将来需要上行编码时从 esp32 快照/上游取回。 */
+    return __ai_upload_stream(scode, ptype, biz, data, len, total_len);
 }
 
 STATIC OPERATE_RET __ai_event_start(AI_SESSION_ID sid, AI_SESSION_ID eid)
