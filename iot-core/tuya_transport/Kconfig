@@ -26,9 +26,9 @@ menu "configure mbedtls"
             default 1
   
     config ENABLE_MBEDTLS_SSL_MAX_CONTENT_LEN
-            int "TLS maximum message content length"            
-            default 1024
-            range 512 16384        
+            int "TLS maximum message content length"
+            default 4096
+            range 512 16384
             help
                 Maximum TLS message length (in bytes) supported by mbedTLS.
 
@@ -40,6 +40,10 @@ menu "configure mbedtls"
                 Fragment Length Negotiation Extension (max_fragment_length,
                 see RFC6066) or you know for certain that it will never send a
                 message longer than a certain number of bytes.
+
+                US-region certificate chains (e.g. *.iot-wus.com, 3 certs
+                ~2.6KB) exceed 1024, so keep >= 4096 unless the peer is
+                known to honor max_fragment_length.
 
                 If the value is set too low, symptoms are a failed TLS
                 handshake or a return value of MBEDTLS_ERR_SSL_INVALID_RECORD
