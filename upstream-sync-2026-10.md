@@ -72,6 +72,17 @@ parse 返回 OK 后执行）。上游若后续补修，合入时按同意图解�
 完整映射实现（13 类型 → 4 tone + `ai_audio_play_data(AI_AUDIO_CODEC_MP3, ...)`）。
 本仓无 assets 层与语言包，未引入 `ENABLE_AI_ALERT_TONE` 开关（tone 即唯一 LOCAL 来源）。
 
+### 5. p2p SDP sscanf 边界（上游 `b1d3aecc`，安全）—— 全量移植
+
+**上游问题**：`tuya_sdp.c` 5 处无界 `%s` 写入固定栈缓冲（`wms_name/msid/m1-3/str_pt+str_attr/ssrc`）。
+
+**处置**：本仓该文件与上游修复前**逐字节相同**；已按上游修复（`%64s`/`%31s %255s`），
+**与上游修复后逐行 diff IDENTICAL**。对端 SDP 未认证可达（`remote_sdp` →
+`tuya_p2p_rtc_sdp_decode`）。
+
+**验证**：p2p_demo 构建 0 告警；**ASAN 探针**（完整 SDP + 300 字节超长 WMS token）——修复前
+`stack-buffer-overflow WRITE size=301 @ sscanf(L948)`、修复后 `survived`（探针在 /tmp/sdp_probe.c）。
+
 ## 二、未合并（及原因）
 
 | 上游提交 / 部分 | 原因 |
@@ -81,7 +92,7 @@ parse 返回 OK 后执行）。上游若后续补修，合入时按同意图解�
 | `5e9b27b4` (b)：guided WeChat UI 的 license 缓存 | 本仓无 `ai_ui` / `guided_wechat` 组件 |
 | `5e9b27b4` (c)：SoftAP 热点名提示（`ap_netcfg_get_hotspot_info`） | 本仓无配网二维码 UI 与 ap_netcfg |
 | `61e6c645`（esp32c2 TLS memory）/ `24104ca9`（TLS entropy hardware poll）等 | 平台专有（esp32c2 / 硬件熵源）——不在本仓（linux port）适用范围；其中 `61e6c645` 的 `tls_transporter` recv 映射 hunk 与平台无关，另见 §四 候选 |
-| 其余上游提交（板级支持 / 显示驱动 / p2p / 4G 等） | 不在本次盘点范围（`tuya_ai_service` / `tuya_cloud_service` 之外） |
+| 其余上游提交（板级支持 / 显示驱动 / 4G 等） | 不在首轮盘点范围（`tuya_ai_service` / `tuya_cloud_service` 之外）；p2p 部分已在 §四 扩展核对（§一.5 与"已含"项） |
 
 ## 三、附注
 
@@ -99,18 +110,15 @@ pull（2026-10-14，HEAD=`ec8aa7cb`）——**两次 pull 之间的 9 条**为�
 
 **新增合并**：
 
-- **`b1d3aecc`（p2p：tuya_sdp.c sscanf 边界，安全）**——本仓该文件与上游修复前**逐字节相同**
-  （5 处无界 `%s` 写入固定栈缓冲：`wms_name/msid/m1-3/str_pt+str_attr/ssrc`），对端 SDP 未认证
-  可达（`remote_sdp` → `tuya_p2p_rtc_sdp_decode`）。已按上游修复（`%64s`/`%31s %255s`），
-  **与上游修复后逐行 diff IDENTICAL**。
-  验证：p2p_demo 构建 0 告警；**ASAN 探针**（完整 SDP + 300 字节超长 WMS token）——修复前
-  `stack-buffer-overflow WRITE size=301 @ sscanf(L948)`、修复后 `survived`（探针在 /tmp/sdp_probe.c）。
+- **`b1d3aecc`（p2p：tuya_sdp.c sscanf 边界）**——见 §一.5（本轮核对中新增，随本记录合并）。
 
 **核对为"本仓已含"（无需动作）**：
 
 - `fce79c22`（p2p 拥塞栈 CUBIC/pacing/rtc 新 API）：本仓 `ikcp_cong.*` / `ikcp_pacing.*` 与上游
   逐字节相同；`tuya_media_service_rtc` 的 `drop_unsent`/`get_link_rate` 已实现；demo 已用新 API。
-- `ed8025be` 的云侧通用修复（device timer 门控、meta 上报重试、atop 注释脱敏）：逐处比对本仓已含。
+- `ed8025be` 的云侧通用修复（device timer 门控、meta 上报重试、atop 注释脱敏）：逐处比对本仓已含；
+  其 link-type 事件指针修复（`__tuya_iot_link_type_change_cb` 解引用 + NULL 拒绝）本仓无此 logic
+  （netmgr 已移除，`iot-core` 无 link_type 相关代码）。
 
 **候选（低优先，暂不合并）**：
 
