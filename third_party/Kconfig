@@ -1,5 +1,5 @@
 # 通用层开关：KV 存储
-# （qrcode 已移至应用层 examples/switch_demo/qrcode，tal_system 与
+# （qrcode 已移至应用层 examples/qrcode（公共组件），tal_system 与
 #  mbedtls 配置菜单随连接服务层 tuya_transport 归入 iot-core）
 
 menu "third party"
