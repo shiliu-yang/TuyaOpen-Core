@@ -82,3 +82,33 @@ ASAN 探针 + 5 组变异交叉验证（变异全红且定位到对应修复行�
 - **与上游一致的有意保留项**（未擅改）：`ble_channel.c` 首 subpacket 长度校验失败时已分配
   的 static `pBuffer` 未即时释放（下次首包先 free，不会增长）；上游声明的 latent finding 一处。
 - 本记录对应的提交见仓库 log（"上游同步"系列）。
+
+## 四、补充核对：上游 9-1 以来的 16 条提交（2026-10-14 晚）
+
+**范围定位**：通过上游仓库 reflog 确认本机上次 pull（2026-09-22，HEAD=`91e070c6`）与本次
+pull（2026-10-14，HEAD=`ec8aa7cb`）——**两次 pull 之间的 9 条**为核对重点，另向前扩到
+9-1 共 16 条逐条核对。
+
+**新增合并**：
+
+- **`b1d3aecc`（p2p：tuya_sdp.c sscanf 边界，安全）**——本仓该文件与上游修复前**逐字节相同**
+  （5 处无界 `%s` 写入固定栈缓冲：`wms_name/msid/m1-3/str_pt+str_attr/ssrc`），对端 SDP 未认证
+  可达（`remote_sdp` → `tuya_p2p_rtc_sdp_decode`）。已按上游修复（`%64s`/`%31s %255s`），
+  **与上游修复后逐行 diff IDENTICAL**。
+  验证：p2p_demo 构建 0 告警；**ASAN 探针**（完整 SDP + 300 字节超长 WMS token）——修复前
+  `stack-buffer-overflow WRITE size=301 @ sscanf(L948)`、修复后 `survived`（探针在 /tmp/sdp_probe.c）。
+
+**核对为"本仓已含"（无需动作）**：
+
+- `fce79c22`（p2p 拥塞栈 CUBIC/pacing/rtc 新 API）：本仓 `ikcp_cong.*` / `ikcp_pacing.*` 与上游
+  逐字节相同；`tuya_media_service_rtc` 的 `drop_unsent`/`get_link_rate` 已实现；demo 已用新 API。
+- `ed8025be` 的云侧通用修复（device timer 门控、meta 上报重试、atop 注释脱敏）：逐处比对本仓已含。
+
+**候选（低优先，暂不合并）**：
+
+- `61e6c645` 的 `tls_transporter` recv 映射 hunk（-23 空闲读 → 0）：本仓 coreMQTT wrapper 已兜底
+  （-23→0）；该 hunk 的增量收益需实测 mbedtls 内部语义后再定。
+
+**不适用（本仓无对应平台/驱动/UI 层）**：`ce4f6062`（XIAO 板）/ `df9b71cc`（L511G 板 + 平台 FS）/
+`4e3147b3`（GD32 CI）/ `bdadea46`（WeChat UI）/ `0edcc962`（SIWX917 bump）/ `7a949071` +
+`585d431a`（SSD2677 显示）/ `ed8025be` 的 4G 部分 / `61e6c645` 的板级部分。
