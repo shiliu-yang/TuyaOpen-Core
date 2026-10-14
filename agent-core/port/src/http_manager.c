@@ -401,9 +401,13 @@ static OPERATE_RET http_session_send(const SESSION_ID session, const http_req_t 
         return OPRT_MALLOC_FAILED;
     }
 
-    /* Configure TLS if needed */
+    /* Configure TLS if needed.
+     * cacert 生命周期（上游 b021da62 UAF 修复）：TLS 层只保留指针——
+     * tuya_tls_config_set() 只 memcpy config 结构体、不拷贝证书数据，
+     * mbedtls 解析在 tuya_transporter_connect() 内才执行。故 cacert 必须
+     * 存活到 connect 返回，在其后释放（见下）。 */
+    uint8_t *cacert = NULL;
     if (use_tls) {
-        uint8_t *cacert = NULL;
         uint16_t cacert_len = 0;
         rt = tuya_iotdns_query_domain_certs(req->resource ? (char *)req->resource : ctx->url, &cacert, &cacert_len);
         if (OPRT_OK != rt) {
@@ -424,10 +428,10 @@ static OPERATE_RET http_session_send(const SESSION_ID session, const http_req_t 
         };
 
         rt = tuya_transporter_ctrl(ctx->network, TUYA_TRANSPORTER_SET_TLS_CONFIG, &tls_config);
-        http_safe_free(cacert);
 
         if (OPRT_OK != rt) {
             PR_ERR("Failed to set TLS config: %d", rt);
+            http_safe_free(cacert);
             tuya_transporter_destroy(ctx->network);
             ctx->network = NULL;
             /* host/path 交 destroy 统一释放，不在此 free（见上注） */
@@ -435,8 +439,9 @@ static OPERATE_RET http_session_send(const SESSION_ID session, const http_req_t 
         }
     }
 
-    /* Connect to server */
+    /* Connect to server（cacert 在本调用内被 mbedtls 解析） */
     rt = tuya_transporter_connect(ctx->network, host, port, HTTP_TIMEOUT_MS_DEFAULT);
+    http_safe_free(cacert);
     if (OPRT_OK != rt) {
         PR_ERR("Failed to connect to server: %d", rt);
         tuya_transporter_close(ctx->network);
