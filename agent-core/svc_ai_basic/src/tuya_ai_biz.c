@@ -993,6 +993,9 @@ STATIC OPERATE_RET __ai_parse_biz_head(AI_PACKET_PT type, CHAR_T *payload, AI_BI
 #else
         media_head_len = SIZEOF(AI_IMAGE_HEAD_T_V2);
 #endif
+    } else if (type == AI_PT_EVENT) {
+        // the event head is read raw below and memcpy'd in __ai_biz_recv
+        media_head_len = SIZEOF(AI_EVENT_HEAD_T);
     }
 
     if (media_head_len && payload_len < media_head_len) {

@@ -12,14 +12,15 @@
 **上游问题**：BLE 接收路径的缓冲尺寸与拷贝长度取自 peer 提供的字段且未做校验——未认证
 peer 在广播范围内用单个 GATT write 即可触发内存破坏 / NULL 解引用 / 未认证恢复出厂。
 
-**处置**：7 文件 21 处修复点逐行移植（与上游保序逐行 diff IDENTICAL）：
+**处置**：7 文件 21 hunk 逐行移植（与上游保序逐行 diff IDENTICAL；处数按 diff hunk 计，
+与上游 `ec8aa7cb` 逐文件同构）：
 
-| 文件 | 处数 | 要点 |
+| 文件 | hunk 数 | 要点 |
 |---|---|---|
 | `iot-core/ble/ble_protocol.h` | 1 | 3 个边界宏：TOTAL_LEN_MAX / SUBPACK_HEADER_MAX / SUBPACK_LEN_MIN |
-| `iot-core/ble/ble_channel.c` | 5 | varint 重组边界；入口短帧检查；首/后续 subpacket 长度与偏移校验 |
+| `iot-core/ble/ble_channel.c` | 7 | varint 重组边界；入口短帧检查；首/后续 subpacket 长度与偏移校验 |
 | `iot-core/ble/ble_trsmitr.c` | 4 | 分包下限；varint 循环边界；version/seq 读取前检查；recv 上限 |
-| `iot-core/ble/ble_dp.c` | 6 | 命令最小长度；DT_BOOL/BITMAP/VALUE/ENUM 的 NULL 与越界检查 |
+| `iot-core/ble/ble_dp.c` | 2 | 命令最小长度；DT_BOOL/BITMAP/VALUE/ENUM 的 NULL 与越界检查 |
 | `iot-core/ble/ble_mgr.c` | 5 | 已绑定设备拒绝明文帧；unbind 需已配对；dev_info 长度校验；先分配后释放 |
 | `iot-core/ble/ble_netcfg.c` | 1 | 响应缓冲显式初始化 |
 | `iot-core/schema/dp_schema.c` | 1 | `dp_node_find` NULL schema 检查（激活前 BLE DP 路径可达） |
@@ -36,6 +37,13 @@ ASAN 探针 + 5 组变异交叉验证（变异全红且定位到对应修复行�
 **处置**：`agent-core/svc_ai_basic/src/tuya_ai_biz.c` 的同函数顶部加媒体头长度预计算 +
 `payload_len < media_head_len` 拒绝（+27 行，零适配）。本仓同函数同缺校验；其 FILE/TEXT
 段本仓已有同款检查，本次补齐对称保护。
+
+**追加加固（本仓主动，上游未含）**：PK 复核发现同函数 EVENT 分支（裸读
+`event_head->length`）与 `__ai_biz_recv` 的 EVENT `memcpy(&head, payload,
+SIZEOF(AI_EVENT_HEAD_T))` 同样无 payload_len 校验——与上游逐行相同，属上游同源遗漏；
+截断包（`len-offset < 头长`）时 memcpy 越界读。处置：顶部预计算补
+`SIZEOF(AI_EVENT_HEAD_T)`，复用同一拒绝逻辑——一处覆盖两点（recv 侧 memcpy 仅在
+parse 返回 OK 后执行）。上游若后续补修，合入时按同意图解冲突。
 
 ### 3. HTTP CA use-after-free（上游 `b021da62` 的 (a) 部分，2026-09-28）—— 适配移植
 
@@ -72,7 +80,7 @@ ASAN 探针 + 5 组变异交叉验证（变异全红且定位到对应修复行�
 | `b021da62` (b)(c)：`http_session_read_content` handler + `tuya_ai_http.c` 适配 | 本仓媒体下载路径为**显式安全失败**（`tuya_ai_http.c` "not implemented, abort"，见 agent_demo README 已知限制）——handler 无消费者；待实现流式下载时作为前置件一并引入 |
 | `5e9b27b4` (b)：guided WeChat UI 的 license 缓存 | 本仓无 `ai_ui` / `guided_wechat` 组件 |
 | `5e9b27b4` (c)：SoftAP 热点名提示（`ap_netcfg_get_hotspot_info`） | 本仓无配网二维码 UI 与 ap_netcfg |
-| `61e6c645`（esp32c2 TLS memory）/ `24104ca9`（TLS entropy hardware poll）等 | 平台专有（esp32c2 / 硬件熵源）——不在本仓（linux port）适用范围 |
+| `61e6c645`（esp32c2 TLS memory）/ `24104ca9`（TLS entropy hardware poll）等 | 平台专有（esp32c2 / 硬件熵源）——不在本仓（linux port）适用范围；其中 `61e6c645` 的 `tls_transporter` recv 映射 hunk 与平台无关，另见 §四 候选 |
 | 其余上游提交（板级支持 / 显示驱动 / p2p / 4G 等） | 不在本次盘点范围（`tuya_ai_service` / `tuya_cloud_service` 之外） |
 
 ## 三、附注
