@@ -42,6 +42,18 @@ menu "tuyaopen-core"
             NimBLE host stack bundle switch, kept for parity with the
             CONFIG_ENABLE_NIMBLE option in TuyaOpenOptions.cmake.
 
+    config ENABLE_EXT_RAM
+        bool "ENABLE_EXT_RAM: external RAM (PSRAM) allocation"
+        default n
+        help
+            Mount the ex-RAM ops members (.ex_ram_malloc/.ex_ram_free) on the
+            port card and build core's tal_ex_ram_malloc/tal_ex_ram_free.
+            Maps to CONFIG_ENABLE_EXT_RAM.
+
+            OFF by default. On Linux the port has no separate external RAM,
+            so the members degenerate to the normal heap; on MCU targets they
+            must be backed by real PSRAM (see the esp32 port).
+
     config LITTLE_END
         bool "LITTLE_END: target is little-endian"
         default y

@@ -7,6 +7,7 @@ option(CONFIG_ENABLE_NIMBLE "Include NimBLE sources in tal_bluetooth" OFF)
 option(CONFIG_ENABLE_CELLULAR "Build tal_cellular and cellular netmgr sources" OFF)
 option(CONFIG_ENABLE_PLATFORM_MBEDTLS "Use platform mbedTLS instead of the bundled copy" OFF)
 option(CONFIG_ENABLE_DEVICE_TIMER "Include tuya_device_timer.c in tuya_cloud_service" OFF)
+option(CONFIG_ENABLE_EXT_RAM "Mount the ex-RAM (PSRAM) ops members and build tal_ex_ram_* (default OFF)" OFF)
 option(CONFIG_ENABLE_TUYA_P2P "Build tuya_p2p subtree" OFF)
 # 默认 ON：lan/tuya_lan.c 原先无条件编入，默认保持行为不变；关闭后局域网协议
 # 不编译，port 也无需适配局域网相关 net ops（accept/listen/send_to/recvfrom/recv_nd_size）。
@@ -42,6 +43,7 @@ foreach(_tuyaopen_opt
     CONFIG_ENABLE_CELLULAR
     CONFIG_ENABLE_PLATFORM_MBEDTLS
     CONFIG_ENABLE_DEVICE_TIMER
+    CONFIG_ENABLE_EXT_RAM
     CONFIG_ENABLE_TUYA_P2P
     CONFIG_ENABLE_LOCAL_LINK
     CONFIG_ENABLE_LOCAL_STORE
