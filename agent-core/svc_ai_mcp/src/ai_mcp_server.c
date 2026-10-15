@@ -30,8 +30,13 @@
 /***********************************************************
 ************************macro define************************
 ***********************************************************/
+#ifdef ENABLE_EXT_RAM
+#define AI_MCP_MALLOC    tal_ex_ram_malloc
+#define AI_MCP_FREE      tal_ex_ram_free
+#else
 #define AI_MCP_MALLOC    tal_malloc
 #define AI_MCP_FREE      tal_free
+#endif
 
 /***********************************************************
 ***********************typedef define***********************

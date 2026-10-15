@@ -24,8 +24,13 @@
 #define RBUF_CHANNEL_MAX 1
 #define RBUF_STREAM_MAX ((int)E_IPC_STREAM_MAX)
 
+#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
+#define RBUF_MALLOC(s) tal_ex_ram_malloc(s)
+#define RBUF_FREE(p) tal_ex_ram_free(p)
+#else
 #define RBUF_MALLOC(s) tal_malloc(s)
 #define RBUF_FREE(p) tal_free(p)
+#endif
 
 /* ---------------------------------------------------------------------------
  * Type definitions

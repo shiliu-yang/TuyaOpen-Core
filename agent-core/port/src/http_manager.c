@@ -29,8 +29,13 @@
 ***********************************************************/
 #define HTTP_TIMEOUT_MS_DEFAULT (60 * 1000)
 
+#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
+#define HTTP_MEMORY_MALLOC tal_ex_ram_malloc
+#define HTTP_MEMORY_FREE   tal_ex_ram_free
+#else
 #define HTTP_MEMORY_MALLOC tal_malloc
 #define HTTP_MEMORY_FREE   tal_free
+#endif
 
 /***********************************************************
 ***********************typedef define***********************

@@ -26,9 +26,12 @@
 #include "tal_memory.h"
 #include "tal_thread.h"
 
+#if defined(AI_HEAP_IN_EXT_RAM) && (AI_HEAP_IN_EXT_RAM == 1) && defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
+#define OS_MALLOC(size)       tal_ex_ram_malloc(size)
+#define OS_FREE(ptr)          tal_ex_ram_free(ptr)
+#else
 #define OS_MALLOC(size)       tal_malloc(size)
 #define OS_FREE(ptr)          tal_free(ptr)
-#define OS_CALLOC(num, size)  tal_calloc(num, size)
-#define OS_REALLOC(ptr, size) tal_realloc(ptr, size)
+#endif
 
 #endif

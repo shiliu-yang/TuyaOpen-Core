@@ -148,8 +148,14 @@ typedef struct IKCPSEG IKCPSEG;
 static void *(*ikcp_malloc_hook)(size_t) = NULL;
 static void (*ikcp_free_hook)(void *)    = NULL;
 
+#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
+#include "tal_memory.h"
+#define IKCP_DEFAULT_MALLOC(s) tal_ex_ram_malloc(s)
+#define IKCP_DEFAULT_FREE(p)   tal_ex_ram_free(p)
+#else
 #define IKCP_DEFAULT_MALLOC(s) malloc(s)
 #define IKCP_DEFAULT_FREE(p)   free(p)
+#endif
 
 void *ikcp_malloc(size_t size)
 {

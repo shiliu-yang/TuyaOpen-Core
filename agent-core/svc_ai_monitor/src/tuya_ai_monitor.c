@@ -29,10 +29,13 @@
 #include "tal_thread.h"
 #include <string.h>
 
+#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
+#define OS_MALLOC(size)       tal_ex_ram_malloc(size)
+#define OS_FREE(ptr)          tal_ex_ram_free(ptr)
+#else
 #define OS_MALLOC(size)       tal_malloc(size)
 #define OS_FREE(ptr)          tal_free(ptr)
-#define OS_CALLOC(num, size)  tal_calloc(num, size)
-#define OS_REALLOC(ptr, size) tal_realloc(ptr, size)
+#endif
 
 // Protocol magic number
 #define AI_MONITOR_MAGIC 0x54594149
@@ -1010,4 +1013,55 @@ STATIC OPERATE_RET __default_write(AI_PACKET_WRITER_T *writer, VOID *buf, uint32
     }
 
     return OPRT_OK;
+}
+
+#if 0
+STATIC VOID __log_recv_task(void* args)
+{
+    while (g_ai_monitor_server.log_thread_running) {
+
+    }
+}
+
+// TODO:
+// start async log server to recv log output from log module, then broadcast to all clients
+STATIC OPERATE_RET __start_log_server(VOID)
+{
+    OPERATE_RET rt = OPRT_OK;
+
+    // Register log output term
+    tal_log_add_output_term(AI_MONITOR_TAG, __log_output);
+
+    // create async log recv task
+    THREAD_CFG_T thrd_param = {0};
+    thrd_param.priority = THREAD_PRIO_1;
+    thrd_param.thrdname = "ai_mon_log";
+    thrd_param.stackDepth = 4096;
+#if defined(AI_STACK_IN_EXT_RAM) && (AI_STACK_IN_EXT_RAM == 1)
+    thrd_param.ex_ram_mode = 1;
+#endif
+
+    rt = tal_thread_create_and_start(&g_ai_monitor_server.log_thread,
+                                     NULL, NULL,
+                                     __log_recv_task, NULL,
+                                     &thrd_param);
+
+    return rt;
+}
+
+STATIC OPERATE_RET __stop_log_server(VOID)
+{
+
+}
+#endif
+
+STATIC VOID __log_output(CONST char *str)
+{
+    if (!str || strlen(str) == 0) {
+        return; // Ignore empty log messages
+    }
+
+    // TODO: async log output
+    // Broadcast log message to all connected clients
+    // tuya_ai_monitor_broadcast_log((char *)str, strlen(str));
 }

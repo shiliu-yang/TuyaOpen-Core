@@ -88,6 +88,7 @@ typedef struct {
     uint32_t stackDepth; // stack size
     uint8_t priority;    // thread priority
     char *thrdname;      // thread name
+    uint8_t ex_ram_mode : 1; // 外部 RAM（如 PSRAM）线程栈标记：core 侧只赋值不读取，为对齐上游 API 保留（开启宏见 board Kconfig 的 ENABLE_EXT_RAM）
 } THREAD_CFG_T;
 
 /**
