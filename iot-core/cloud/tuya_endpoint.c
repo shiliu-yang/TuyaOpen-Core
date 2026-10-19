@@ -1,19 +1,28 @@
 /**
  * @file tuya_endpoint.c
- * @brief Implementation of endpoint management for Tuya IoT devices.
+ * @brief Cloud endpoint management: region/registration-key persistence and
+ * endpoint lookup through iot-dns.
  *
- * This source file contains the implementation of functions related to managing
- * the endpoints of Tuya IoT devices. It includes functionalities such as
- * retrieving cloud endpoints based on the device's region and environment,
- * storing and managing region and registration key information, and writing
- * these details into persistent storage for future use.
+ * A single static endpoint_management_t holds the region, the registration
+ * key (environment, "pro" when empty) and the resolved tuya_endpoint_t
+ * (atop host/port/path, mqtt host/port and the CA certificate).
  *
- * The endpoint management is crucial for ensuring that IoT devices can
- * communicate with the correct Tuya cloud services, which may vary based on the
- * device's geographical location and the operational environment (e.g.,
- * development, staging, production). This file leverages Tuya's Abstract Layer
- * API (TAL API) for operations like key-value storage to maintain endpoint
- * information.
+ * Region and registration key are stored in KV under "region" and
+ * "regist_key" as raw string values and copied back by their actual length,
+ * clamped to the destination capacity and explicitly terminated.
+ *
+ * The endpoint fields are persisted one KV key per field: strings under
+ * atop.host, atop.path, mqtt.host (including the trailing '\0') and ports
+ * under atop.port, mqtt.port (2-byte binary), plus the certificate under
+ * endpoint.cert. Reads reject an overlong value instead of truncating it.
+ * tuya_endpoint_remove() deletes the registration keys, the certificate, the
+ * five domain field keys and the endpoint.domain key.
+ *
+ * tuya_endpoint_update() frees the certificate it already holds and resolves
+ * the endpoint from the region and registration key through
+ * iotdns_cloud_endpoint_get(); tuya_endpoint_update_auto_region() does the
+ * same with the region left to the iot-dns service. tuya_endpoint_get()
+ * returns the process-wide endpoint for readers.
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *
@@ -75,8 +84,6 @@ static int tuya_region_regist_key_read(char *region, char *regist_key)
         PR_ERR("tal_kv_get region fail:0x%02x", ret);
         return OPRT_KVS_RD_FAIL;
     }
-    /* 按实际长度拷贝：旧实现 buf = 密文长+1 掩盖了长度不足；新引擎返回"明文长+1"，
-     * 固定长 memcpy 在云端下发更短值时越界读 */
     size_t copy = (len < MAX_LENGTH_REGION) ? len : MAX_LENGTH_REGION;
     memcpy(region, value, copy);
     region[copy] = 0;
@@ -87,7 +94,8 @@ static int tuya_region_regist_key_read(char *region, char *regist_key)
         PR_ERR("tal_kv_get regist_key fail:0x%02x", ret);
         return OPRT_KVS_RD_FAIL;
     }
-    /* 同上：regist_key 来自云端 env 字段，长度不受本地控制 */
+    /* regist_key comes from the cloud env field, its length is not locally
+     * controlled */
     copy = (len < MAX_LENGTH_REGIST) ? len : MAX_LENGTH_REGIST;
     memcpy(regist_key, value, copy);
     regist_key[copy] = 0;
@@ -146,7 +154,8 @@ int tuya_endpoint_cert_set(tuya_endpoint_t *endpoint)
     return ret;
 }
 
-/* 逐 key 读字符串字段：值含结尾 '\0' 一起存；超长不截断，直接报错 */
+/* Read a string field key by key: the stored value includes the trailing
+ * '\0'; an overlong value is an error rather than being truncated */
 static int tuya_endpoint_kv_str_read(const char *key, char *buf, size_t buf_size)
 {
     uint8_t *value = NULL;
@@ -157,9 +166,6 @@ static int tuya_endpoint_kv_str_read(const char *key, char *buf, size_t buf_size
         return ret;
     }
 
-    /* 旧实现语义：存进去放不下就报错，不静默截断（截断后的 host/path 会被当成
-     * 有效值使用）。上限为 buf_size：值自带结尾 '\0'，正好填满缓冲是合法的
-     * （写侧恒为 strlen+1，与字段容量上限逐字对应）；buf_size == 0 单独判防下溢 */
     if (0 == buf_size || len > buf_size) {
         PR_ERR("tal_kv_get %s value too long: %u > %u", key, (unsigned int)len, (unsigned int)buf_size);
         tal_free(value);
@@ -167,17 +173,17 @@ static int tuya_endpoint_kv_str_read(const char *key, char *buf, size_t buf_size
     }
 
     if (0 == len) {
-        buf[0] = 0; /* 兜底终止（port 返回空值时） */
+        buf[0] = 0; /* fallback terminator (when the port returns an empty value) */
     } else {
         memcpy(buf, value, len);
-        buf[len - 1] = 0; /* 兜底终止；写侧末字节本就是 '\0'，此处幂等 */
+        buf[len - 1] = 0; /* fallback terminator; the last byte on the write side is already '\0', so this is idempotent */
     }
     tal_free(value);
 
     return OPRT_OK;
 }
 
-/* 逐 key 读 uint16 字段：值按 2 字节二进制存取 */
+/* Read a uint16 field key by key: the value is stored as 2-byte binary */
 static int tuya_endpoint_kv_u16_read(const char *key, uint16_t *out)
 {
     uint8_t *value = NULL;
@@ -216,7 +222,8 @@ int tuya_endpoint_domain_get(tuya_endpoint_t *endpoint)
         return OPRT_INVALID_PARM;
     }
 
-    /* 逐 key 读取（key 名即字段名）：5 个字段都读，任一失败返回该错误码 */
+    /* Read key by key (key name = field name): read all 5 fields and return
+     * the first error code */
     int ret = tuya_endpoint_kv_str_read("atop.host", endpoint->atop.host, sizeof(endpoint->atop.host));
     int rt = tuya_endpoint_kv_u16_read("atop.port", &endpoint->atop.port);
     if (OPRT_OK == ret) {
@@ -260,8 +267,9 @@ int tuya_endpoint_domain_set(tuya_endpoint_t *endpoint)
         return OPRT_INVALID_PARM;
     }
 
-    /* 逐 key 写入（key 名即字段名）：字符串含结尾 '\0' 一起存，端口按 2 字节二进制存；
-     * 任一失败返回该错误码 */
+    /* Write key by key (key name = field name): strings include the trailing
+     * '\0'; ports store the 2-byte fields as binary. Return the first error
+     * code. */
     int ret = tal_kv_set("atop.host", (const uint8_t *)endpoint->atop.host, strlen(endpoint->atop.host) + 1);
     if (ret != OPRT_OK) {
         PR_ERR("tal_kv_set atop.host error:%d", ret);
@@ -335,13 +343,11 @@ int tuya_endpoint_remove(void)
     tal_kv_del("region");
     tal_kv_del("regist_key");
     tal_kv_del("endpoint.cert");
-    /* domain 已拆为 5 个字段 key（见 tuya_endpoint_domain_set），逐个清理 */
     tal_kv_del("atop.host");
     tal_kv_del("atop.port");
     tal_kv_del("atop.path");
     tal_kv_del("mqtt.host");
     tal_kv_del("mqtt.port");
-    /* 过渡期清理旧 key：旧固件把 domain 整体存成单 key，不删则降级回旧固件会读到陈旧数据 */
     tal_kv_del("endpoint.domain");
 
     return OPRT_OK;

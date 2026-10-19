@@ -1,15 +1,39 @@
 /**
  * @file tuya_lan.c
- * @brief Implementation of Tuya LAN communication protocol handling, including
- * session management, encryption/decryption of messages, and handling of LAN
- * commands.
+ * @brief Tuya LAN protocol service: session lifecycle, LPV3.5 frame
+ * protection, command dispatch and UDP discovery.
  *
- * This file provides the functionality required to manage LAN sessions between
- * the Tuya IoT devices and the local network, ensuring secure and reliable
- * communication. It includes mechanisms for session creation, closure, fault
- * handling, and encryption/decryption of LAN messages using the GCM mode.
- * Additionally, it supports the registration and handling of LAN commands
- * through a flexible callback mechanism.
+ * The service listens for APP TCP connections on port 6668 and answers APP
+ * broadcasts received on UDP port 7000 with a JSON description of the device
+ * (IP, ID, activation state, product key, version and security level). Both
+ * listening sockets and every accepted client socket are registered with the
+ * select loop in lan_sock.c.
+ *
+ * A lan_mgr_t holds up to CLIENT_LMT sessions, the buffers and the registered
+ * extension-command table. A receive or send fault (including an HMAC
+ * mismatch) marks the session and the next session time check closes it.
+ * An incoming frame sequence that does not advance beyond the last received
+ * one is dropped, and the session is closed once the gap reaches
+ * sequence_err_threshold (zero in the default configuration, so such a frame
+ * closes it immediately). A session idle for the 30-second heartbeat timeout
+ * is closed, except that a healthy session idle for 30 days or more is
+ * skipped by that check.
+ *
+ * Frames use the LPV3.5 layout. In the security handshake the APP sends
+ * randA in TYPE3, the device replies with randB and its HMAC in TYPE4, and on
+ * TYPE5 the device verifies the HMAC of randB and derives the 16-byte session
+ * key as randA XOR randB, protected with AES-128-GCM keyed by the local key
+ * and a nonce of randA. Before the session key exists only handshake frames
+ * are accepted; a bounded number (ALLOW_NO_KEY_NUM) of other frames is
+ * tolerated before the session is closed.
+ *
+ * Dispatched frame types cover DP commands (FRM_TP_CMD / FRM_TP_NEW_CMD),
+ * status queries (FRM_QUERY_STAT / FRM_QUERY_STAT_NEW), and the extension
+ * frame type (FRM_LAN_P2P_SIGNAL) routed to a callback registered through
+ * tuya_lan_register_cb(). Heartbeats are answered before frame parsing.
+ * Reports are pushed to every healthy client with a session key, or to every
+ * healthy client for the generic data-report API. tuya_lan_enable() refuses
+ * to start before activation.
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *
@@ -551,8 +575,6 @@ static void lan_make_udp_packets(uint8_t **out, int *p_olen)
 
     memset(&ip, 0, sizeof(NW_IP_S));
 
-    /* 本机 IP：链路管理方（应用/port 层）在链路事件时经
-     * tal_network_set_active_ip 推送，替代原 netmgr_conn_get */
     TUYA_IP_ADDR_T active_ip = tal_network_get_active_ip();
     if (active_ip != 0) {
         char *ipstr = tal_net_addr2str(active_ip);

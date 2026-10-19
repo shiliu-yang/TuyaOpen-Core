@@ -1,10 +1,38 @@
 /**
  * @file tuya_cert_manager.c
- * @brief Tuya Certificate Manager
+ * @brief Certificate and PSK management for the Tuya IoT client: CA storage,
+ * client certificate/key handling and TLS association.
  *
- * This file implements the certificate management functionalities for the Tuya
- * IoT SDK, including managing third-party cloud CA certificates, client
- * certificates, PSK authentication, and periodic certificate validation.
+ * The manager keeps one process-wide ca_cert_manager_t. It holds a
+ * refcounted list of third-party cloud CA nodes keyed by URL, the public
+ * cloud CA DER array read from KV (tls_ca<N> entries plus tls_ca_cnt), the
+ * client certificate (PEM converted to DER on write) and private key stored
+ * under clt_cert_mf / clt_private_key_mf, the PSK identity/key pair, the TLS
+ * event callback, the periodic certificate-query timer and the delayed
+ * endpoint update work item.
+ *
+ * URL classification splits certificate loading into three paths: iot-dns
+ * URLs use the register-center CA, Tuya public URLs replay the stored DER
+ * array, and any other URL is served from the third-party list (loaded on
+ * demand through the iotdns domain-certificate query and cached by URL with
+ * reference counting). The load function is registered with the TLS layer
+ * through tuya_tls_set_cert_load_cb so the connection layer never calls back
+ * into the cloud layer.
+ *
+ * On TUYA_TLS_CERT_EXPIRED the event callback refreshes the matching source:
+ * iot-dns URLs go through http_iot_dns_get_root_ca(), public URLs schedule a
+ * delayed endpoint update that is retried until the cloud link is up, and any
+ * other URL fetches and caches the third-party CA. Under
+ * TUYA_SECURITY_LEVEL >= TUYA_SL_1 a timer runs every six hours, logs the
+ * register-center CA serial number and SHA-256 fingerprint, and refreshes the
+ * root CA through http_iot_dns_get_root_ca().
+ *
+ * PSK handling derives the identity from a version byte, 16 random bytes and
+ * the SHA-256 of the device UUID (zero bytes mapped to '?'), and takes the
+ * key from the TLS PSK configuration, choosing the identity version from the
+ * key length (44-byte key: version 3; otherwise version 2; an empty key means
+ * version 1.0 with no PSK identity). tuya_cert_manager_reg() installs the
+ * save/restore hooks used by the CA cache.
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  */
@@ -788,7 +816,8 @@ OPERATE_RET tuya_cert_manager_init(void)
 #endif
 
     s_tuya_cert_mng.event_cb = __ty_tls_event_cb;
-    /* 云层向连接层注册 CA 证书加载（连接层不反向依赖云层） */
+    /* Cloud layer registers CA certificate loading with the connection layer
+     * (the connection layer does not depend on the cloud layer) */
     tuya_tls_set_cert_load_cb(tuya_cert_manager_load);
     tal_workq_init_delayed(WORKQ_HIGHTPRI, __update_tls_url_cb, NULL, &s_tuya_cert_mng.tm_update_tls_url);
     tuya_cert_kv_to_ram();

@@ -1,9 +1,13 @@
 /**
  * @file tal_netif.c
- * @brief tal_netif 平台分发：两接口透传到 port 的 port_netif（tal_netif_ops_platform）
+ * @brief tal_netif platform dispatch: forwards the two interfaces to the
+ *        port's netif implementation (tal_netif_ops_platform).
  *
- * core 不持有网络接口实现——遍历接口/ioctl 取值/轮询线程都在 port（见
- * tal_netif_ops.h 契约）。本文件只做 ops 卡分发，与 tal_kv.c / tal_ota 同构。
+ * core holds no network interface implementation -- interface walking,
+ * ioctl retrieval and the polling thread all live in the port (see the
+ * tal_netif_ops.h contract). Dispatch goes through TAL_NETIF_EXEC_OP, which
+ * checks the card and member before calling them and returns the given
+ * default otherwise.
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *
@@ -13,7 +17,8 @@
 #include "tal_netif_ops.h"
 #include "tal_log.h"
 
-/* 平台 ops 卡（port 的 port_netif.c 定义），core 侧经 getter 分发 */
+/* Platform ops card (defined in the port's port_netif.c), dispatched by core
+ * through the getter */
 extern TAL_NETIF_OPS_T tal_netif_ops_platform;
 
 TAL_NETIF_OPS_T *tal_netif_get_ops(void)

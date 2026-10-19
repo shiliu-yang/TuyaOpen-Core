@@ -1,20 +1,41 @@
 /**
  * @file tal_bluetooth.c
- * @brief This file contains the Bluetooth Low Energy (BLE) utility functions
- * and event callbacks for handling BLE operations in the Tuya Application
- * Layer. It includes functions for UUID conversion, GAP (Generic Access
- * Profile) event handling, and GATT (Generic Attribute Profile) event handling.
- *        The GAP event callback handles various BLE events such as connection,
- * disconnection, advertisement report, and connection parameter updates. The
- * GATT event callback manages events related to GATT operations like MTU
- * exchange and service discovery. This implementation supports both peripheral
- * and central roles, enabling the device to act as a BLE server or client. It
- * also includes conditional support for specific BLE characteristics related to
- * the Matter over Tuya project.
+ * @brief TAL Bluetooth Low Energy layer: ops-card dispatch, GAP/GATT event
+ * translation, the common Tuya GATT service and the public BLE API.
  *
- * 2026-10 解耦：BLE 平台接口不再直调上游 TKL，统一经 port 组装的 ops 卡
- * （tal_bluetooth_ops_platform，契约见 tal_bluetooth_ops.h）分发；无 BLE
- * 能力的平台（卡或成员为 NULL）在本文件统一优雅降级。
+ * The platform contract is the TAL_BLUETOOTH_OPS_T card
+ * tal_bluetooth_ops_platform (tal_bluetooth_ops.h), reached through
+ * tal_bluetooth_get_ops(). Two dispatch macros route calls to it:
+ * TAL_BLUETOOTH_EXEC_OP returns the card result directly, and
+ * TAL_BLUETOOTH_EXEC_OP_VAL stores it in a variable; when the card or the
+ * requested member is missing both log with PR_ERR and report
+ * OPRT_NOT_SUPPORTED.
+ *
+ * The kernel GAP and GATT callbacks translate platform events into the
+ * unified TAL_BLE_EVT_PARAMS_T and forward them to the event callback
+ * registered by tal_ble_bt_init(). GAP translation covers stack
+ * init/deinit, connect, disconnect, advertisement report, connection
+ * parameter request/update and RSSI; GATT translation covers MTU exchange,
+ * notify/write/read/subscribe events and, under TY_HS_BLE_ROLE_CENTRAL,
+ * service, characteristic and descriptor discovery with CCCD enabling.
+ *
+ * tal_ble_bt_init() registers the callbacks first, allocates the service and
+ * characteristic tables with the contract's maximum sizes, builds the common
+ * Tuya GATT service when the peripheral role is requested, and starts the
+ * stack. With TAL_BLE_SERVICE_VERSION 2 the service uses a 16-bit UUID and
+ * three 128-bit characteristics (write, notify and read); otherwise it uses
+ * the version 1 16-bit layout with write and notify characteristics. The
+ * Matter characteristic handles are filled on connect when
+ * ENABLE_MATTER_TUYA_BLE_CHAR is set. Roles are mapped explicitly to the
+ * card's SERVER/CLIENT bits; tal_ble_bt_deinit() treats any role outside
+ * PERIPHERAL/CENTRAL (BEACON and Mesh included) as unsupported.
+ *
+ * The remaining API covers address access, maximum link count, advertising
+ * and scan control, RSSI, connection parameters, connect-and-discovery
+ * (central only), disconnect, server notify/send/read updates, client
+ * send/read, and MTU exchange. Before the service table exists, the notify
+ * and read-update paths return OPRT_RESOURCE_NOT_READY instead of
+ * dereferencing it.
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *
@@ -22,16 +43,16 @@
 
 #include <string.h>
 #include "tal_bluetooth_def.h"
-/* 平台 ops 卡契约 + core 自持镜像类型集（TAL_BLE_*，替代原 TKL 蓝牙类型头） */
+/* Platform ops card contract plus the core-owned mirror type set (TAL_BLE_*) */
 #include "tal_bluetooth_ops.h"
-/* 原引 tal_api.h（伞形头）：本文件实际只用到 tal_malloc/tal_free，
- * 在 core 内直连 tal_memory.h，避免无谓聚合依赖。 */
 #include "tal_memory.h"
 #include "tal_log.h"
 
 /* ---------------------------------------------------------------------------
- * 平台 ops 卡分发：与 tal_kv.c / tal_fs.c 同构——卡不可用时
- * PR_ERR 并返回 OPRT_NOT_SUPPORTED，由调用方（或本文件的降级分支）处理。
+ * Platform ops card dispatch, structurally identical to tal_kv.c / tal_fs.c:
+ * when the card is unavailable, log with PR_ERR and return
+ * OPRT_NOT_SUPPORTED, handled by the caller (or by the degradation branches
+ * in this file).
  * --------------------------------------------------------------------------- */
 extern TAL_BLUETOOTH_OPS_T tal_bluetooth_ops_platform;
 
@@ -40,7 +61,7 @@ TAL_BLUETOOTH_OPS_T *tal_bluetooth_get_ops(void)
     return &tal_bluetooth_ops_platform;
 }
 
-/* 尾位分发：直接以卡调用结果返回 */
+/* Tail dispatch: return the card call result directly */
 #define TAL_BLUETOOTH_EXEC_OP(op_name, ...)                                                                            \
     do {                                                                                                               \
         TAL_BLUETOOTH_OPS_T *ops = tal_bluetooth_get_ops();                                                            \
@@ -51,7 +72,8 @@ TAL_BLUETOOTH_OPS_T *tal_bluetooth_get_ops(void)
         return OPRT_NOT_SUPPORTED;                                                                                     \
     } while (0)
 
-/* 非尾位分发（返回值需参与判断/赋值）：卡不可用时置 OPRT_NOT_SUPPORTED */
+/* Non-tail dispatch (the result takes part in tests/assignments): set
+ * OPRT_NOT_SUPPORTED when the card is unavailable */
 #define TAL_BLUETOOTH_EXEC_OP_VAL(ret, op_name, ...)                                                                   \
     do {                                                                                                               \
         TAL_BLUETOOTH_OPS_T *ops = tal_bluetooth_get_ops();                                                            \
@@ -79,7 +101,8 @@ TAL_BLUETOOTH_OPS_T *tal_bluetooth_get_ops(void)
 #define TAL_BLE_SERVICE_VERSION (2) // Default Service is version 2: Follow the latest service.
 #endif
 
-/**< 用镜像类型（卡契约，替代原 TKL 类型）缓存 GATTS 参数与特征表 */
+/**< Cache GATTS parameters and the characteristic table using the mirror
+ * types of the card contract */
 static TAL_BLE_GATTS_PARAMS_T tal_ble_gatt_service = {0};
 static TAL_BLE_SERVICE_PARAMS_T *ptal_ble_service = NULL;
 static TAL_BLE_CHAR_PARAMS_T *ptal_ble_service_char = NULL;
@@ -162,7 +185,8 @@ static void tal_ble_kernel_gap_event_callback(TAL_BLE_GAP_PARAMS_EVT_T *p_event)
 
             tal_ble_peer.conn_handle = p_event->conn_handle;
             /* Try To Discovery All Service, And Find the correct service
-             * （空卡时 disc_ret=OPRT_NOT_SUPPORTED，按发现失败上报） */
+             * (with an empty card disc_ret=OPRT_NOT_SUPPORTED, reported as a
+             * discovery failure) */
             TAL_BLUETOOTH_EXEC_OP_VAL(disc_ret, gattc_all_service_discovery, p_event->conn_handle);
             if (disc_ret != 0) {
                 tal_event.type = TAL_BLE_EVT_CENTRAL_CONNECT_DISCOVERY;
@@ -447,8 +471,9 @@ OPERATE_RET tal_ble_bt_init(TAL_BLE_ROLE_E role, const TAL_BLE_EVT_FUNC_CB ble_e
         tal_ble_event_callback = ble_event;
 
         /**< Register GAP And GATT Callback
-         * 次序约束：必须先于 stack_init 与 gatts_service_add（bluez 层首次
-         * 调用会锁存回调指针，见 tal_bluetooth_ops.h 契约） */
+         * Ordering constraint: must precede stack_init and
+         * gatts_service_add (the bluez layer latches the callback pointers on
+         * first use; see the tal_bluetooth_ops.h contract) */
         TAL_BLUETOOTH_EXEC_OP(gap_callback_register, tal_ble_kernel_gap_event_callback);
         TAL_BLUETOOTH_EXEC_OP(gatt_callback_register, tal_ble_kernel_gatt_event_callback);
     }
@@ -572,7 +597,8 @@ OPERATE_RET tal_ble_bt_init(TAL_BLE_ROLE_E role, const TAL_BLE_EVT_FUNC_CB ble_e
 #endif
         OPERATE_RET add_ret = OPRT_OK;
 
-        /* 空卡时 add_ret=OPRT_NOT_SUPPORTED，与原"非 0 即初始化失败"语义一致 */
+        /* With an empty card add_ret=OPRT_NOT_SUPPORTED, treated as an
+         * initialization failure (any non-zero result fails) */
         TAL_BLUETOOTH_EXEC_OP_VAL(add_ret, gatts_service_add, p_ble_services);
         if (add_ret != OPRT_OK) {
             return OPRT_OS_ADAPTER_BLE_INIT_FAILED;
@@ -589,15 +615,14 @@ OPERATE_RET tal_ble_bt_init(TAL_BLE_ROLE_E role, const TAL_BLE_EVT_FUNC_CB ble_e
 }
 
 /**
- * @brief 公开 TAL 角色位掩码 → 镜像（卡）角色位掩码
+ * @brief Map the public TAL role bitmask to the mirror (card) role bitmask
  *
- * 原实现把 TAL 角色值直接透传给上游 TKL 的 stack_deinit（TAL_BLE_ROLE_PERIPERAL
- * =0x01→SERVER、TAL_BLE_ROLE_CENTRAL=0x02→CLIENT 只是数值巧合）；卡化后显式
- * 映射，不再依赖数值一致。
+ * The mapping is explicit, so it does not rely on the numeric values being
+ * identical to the mirror role values.
  *
- * 镜像角色集只有 SERVER/CLIENT：TAL_BLE_ROLE_BEACON(0x04) 及 Mesh 角色
- * （0x0100 起）无对应值，含此类位即按"不支持"处理（返回 OPRT_NOT_SUPPORTED），
- * 不做静默丢弃。
+ * The mirror role set has only SERVER/CLIENT: TAL_BLE_ROLE_BEACON (0x04) and
+ * the Mesh roles (from 0x0100) have no counterpart. Any such bit makes the
+ * call unsupported (OPRT_NOT_SUPPORTED) rather than being silently dropped.
  */
 static OPERATE_RET tal_ble_role_to_stack_role(TAL_BLE_ROLE_E role, uint8_t *p_stack_role)
 {
@@ -630,7 +655,8 @@ OPERATE_RET tal_ble_bt_deinit(TAL_BLE_ROLE_E role)
 {
     uint8_t ble_stack_role = 0;
 
-    /* 角色显式映射；BEACON/Mesh 等镜像无对应值的角色按不支持处理 */
+    /* Explicit role mapping; BEACON/Mesh and other roles without a mirror
+     * value are treated as unsupported */
     if (tal_ble_role_to_stack_role(role, &ble_stack_role) != OPRT_OK) {
         return OPRT_NOT_SUPPORTED;
     }
@@ -642,7 +668,8 @@ OPERATE_RET tal_ble_bt_deinit(TAL_BLE_ROLE_E role)
         tal_free(ptal_ble_service);
     }
 
-    /* 空卡（卡或成员为 NULL）时返回 OPRT_NOT_SUPPORTED */
+    /* With an empty card (NULL card or NULL member) return
+     * OPRT_NOT_SUPPORTED */
     TAL_BLUETOOTH_EXEC_OP(stack_deinit, ble_stack_role);
 }
 
@@ -680,7 +707,8 @@ OPERATE_RET tal_ble_address_get(TAL_BLE_ADDR_T *p_addr)
         return OPRT_INVALID_PARM;
     }
 
-    /* 空卡降级：先给中性值（清零），取址不可用时保持中性值并返回错误码 */
+    /* Empty-card degradation: start from the neutral value (zeroed); if the
+     * address is unavailable keep it and return the error code */
     memset(p_addr, 0, sizeof(TAL_BLE_ADDR_T));
 
     TAL_BLUETOOTH_EXEC_OP_VAL(rt, gap_address_get, &tal_addr);
@@ -708,7 +736,8 @@ OPERATE_RET tal_ble_bt_link_max(uint16_t *p_maxlink)
         return OPRT_INVALID_PARM;
     }
 
-    /* 空卡降级：先给中性值 0，卡不可用时保持中性值并返回错误码 */
+    /* Empty-card degradation: start from the neutral value 0; if the card is
+     * unavailable keep it and return the error code */
     *p_maxlink = 0;
 
     TAL_BLUETOOTH_EXEC_OP_VAL(rt, stack_gatt_link, p_maxlink);
@@ -985,8 +1014,10 @@ OPERATE_RET tal_ble_server_common_notify(uint16_t index, TAL_BLE_DATA_T *p_data)
     }
 
     if (NULL == ptal_ble_service_char) {
-        /* init 未完成（平台无 BLE 能力时卡不可用会早退；或 init 未调用）：
-         * 服务特征表不存在，避免解引用空指针（空卡路径新增可达状态，2026-10） */
+        /* init not completed (a platform without BLE capability returns early
+         * because the card is unavailable, or init was never called): the
+         * service characteristic table does not exist, so avoid a NULL
+         * dereference */
         return OPRT_RESOURCE_NOT_READY;
     }
 
@@ -1012,8 +1043,10 @@ OPERATE_RET tal_ble_server_common_send(TAL_BLE_DATA_T *p_data)
     }
 
     if (NULL == ptal_ble_service_char) {
-        /* init 未完成（平台无 BLE 能力时卡不可用会早退；或 init 未调用）：
-         * 服务特征表不存在，避免解引用空指针（空卡路径新增可达状态，2026-10） */
+        /* init not completed (a platform without BLE capability returns early
+         * because the card is unavailable, or init was never called): the
+         * service characteristic table does not exist, so avoid a NULL
+         * dereference */
         return OPRT_RESOURCE_NOT_READY;
     }
 
@@ -1042,8 +1075,10 @@ OPERATE_RET tal_ble_server_common_read_update_ext(uint16_t index, TAL_BLE_DATA_T
     }
 
     if (NULL == ptal_ble_service_char) {
-        /* init 未完成（平台无 BLE 能力时卡不可用会早退；或 init 未调用）：
-         * 服务特征表不存在，避免解引用空指针（空卡路径新增可达状态，2026-10） */
+        /* init not completed (a platform without BLE capability returns early
+         * because the card is unavailable, or init was never called): the
+         * service characteristic table does not exist, so avoid a NULL
+         * dereference */
         return OPRT_RESOURCE_NOT_READY;
     }
 
@@ -1070,8 +1105,10 @@ OPERATE_RET tal_ble_server_common_read_update(TAL_BLE_DATA_T *p_data)
     }
 
     if (NULL == ptal_ble_service_char) {
-        /* init 未完成（平台无 BLE 能力时卡不可用会早退；或 init 未调用）：
-         * 服务特征表不存在，避免解引用空指针（空卡路径新增可达状态，2026-10） */
+        /* init not completed (a platform without BLE capability returns early
+         * because the card is unavailable, or init was never called): the
+         * service characteristic table does not exist, so avoid a NULL
+         * dereference */
         return OPRT_RESOURCE_NOT_READY;
     }
 

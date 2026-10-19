@@ -61,7 +61,6 @@ static mbedtls_entropy_context  ty_entropy;
 static mbedtls_ctr_drbg_context ty_ctr_drbg;
 
 #if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM)
-/* ex_ram 只提供 malloc/free；mbedtls 需要 calloc 语义，本地包装 */
 static void *__ex_ram_calloc(size_t num, size_t size)
 {
     size_t total = num * size;

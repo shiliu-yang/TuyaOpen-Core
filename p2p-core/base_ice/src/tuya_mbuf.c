@@ -2,7 +2,6 @@
  * @file tuya_mbuf.c
  * @brief Byte-budget mbuf queue for KCP send
  * @version 1.0
- * @date 2026-08-04
  * @copyright Copyright (c) Tuya Inc.
  *
  * - Buffer memory comes from PSRAM when ENABLE_EXT_RAM
@@ -28,7 +27,6 @@
 #if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
 #define TUYA_MBUF_MALLOC(s) tal_ex_ram_malloc(s)
 #define TUYA_MBUF_FREE(p) tal_ex_ram_free(p)
-/* ex_ram 只提供 malloc/free；calloc 语义（清零）在此组合 */
 static void *__mbuf_ex_ram_calloc(size_t n, size_t s)
 {
     size_t total = n * s;

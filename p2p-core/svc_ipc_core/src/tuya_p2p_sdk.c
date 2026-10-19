@@ -1,3 +1,18 @@
+/**
+ * @file tuya_p2p_sdk.c
+ * @brief P2P SDK application glue: cloud activation extension parameters,
+ * LAN/MQTT signaling delivery and the SDK start/stop entry points.
+ *
+ * TUYA_APP_Start() stores the application callback table handed in by the
+ * caller and starts the P2P media/streaming services; TUYA_APP_End() stops
+ * them. OnIotInited() builds the activation skill parameters, and
+ * gw_p2p_mqtt_data_cb() feeds MQTT signaling into the P2P stack.
+ * gw_active_set_ext_param()/gw_active_get_ext_param() store the extension
+ * parameter used during activation, and the LAN command callback serves the
+ * local-network command channel.
+ *
+ * @copyright Copyright (c) Tuya Inc.
+ */
 #include "tuya_p2p_sdk.h"
 #include <stdlib.h>
 #include <string.h>
@@ -237,7 +252,7 @@ OPERATE_RET __p2p_v3_login_init(int preconnect, int max_client, int bitrate)
         PR_ERR("mqtt p2p init failed");
         return -2;
     }
-    /* App LAN retry/signaling uses frame type 0x20（局域网协议未编入时无此通道） */
+    /* App LAN retry/signaling uses frame type 0x20 (this channel is absent when the LAN protocol is not built in) */
 #if defined(ENABLE_LOCAL_LINK) && (ENABLE_LOCAL_LINK == 1)
     mqttP2pRet = tuya_lan_register_cb(FRM_LAN_P2P_SIGNAL, ipc_lan_cmd_cb);
     if (OPRT_OK != mqttP2pRet) {

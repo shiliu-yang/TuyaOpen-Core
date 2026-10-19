@@ -1,30 +1,15 @@
 /**
  * @file tal_thread.c
- * @brief Implements thread management functionalities for Tuya IoT
- * applications.
+ * @brief TAL thread management: creation, execution, state queries and
+ * termination through the platform ops card.
  *
- * This source file provides the implementation of thread management
- * functionalities within the Tuya Abstract Layer (TAL), interfacing with the
- * Tuya Kernel Layer (TKL) for thread creation, execution, and termination. It
- * defines structures and functions for managing thread lifecycle, including
- * thread creation parameters, thread state management, and thread termination
- * cleanup. Additionally, it integrates with other TAL components such as
- * mutexes and logging for synchronized access and diagnostic reporting.
- *
- * Key functionalities include:
- * - Thread creation, execution, and termination.
- * - Thread state management and lifecycle tracking.
- * - Synchronization primitives for thread-safe operations.
- * - Integration with TAL logging for diagnostic reporting.
- *
- * The implementation utilizes a linked list to manage active and deleted
- * threads, ensuring efficient resource management and cleanup. It also provides
- * hooks for thread entry and exit callbacks, allowing for custom initialization
- * and cleanup operations.
- *
- * @note This file is part of the Tuya IoT Development Platform and is intended
- * for use in Tuya-based applications. It is subject to the platform's license
- * and copyright terms.
+ * Active threads are tracked in a linked list (THRD_MANAGE) guarded by a
+ * mutex; deleted threads are parked in a separate list and released by the
+ * thread itself on exit. Creation parameters (stack depth, priority, entry and
+ * exit hooks) are passed to the card's .thread_create member, and the thread
+ * entry wraps the user function with the configured enter/exit callbacks.
+ * tal_thread_get_id() dispatches to the card's .thread_get_id member and is
+ * used by p2p's pjlib for TLS row matching.
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *
@@ -34,7 +19,7 @@
 #include "tuya_list.h"
 #include "tal_thread.h"
 #include "tal_api_ops.h"
-#include "tal_api.h"   /* tal_api_get_ops 声明（随契约迁出后回归 tal_api.h） */
+#include "tal_api.h"
 #include "tal_mutex.h"
 #include "tal_log.h"
 #include "tal_memory.h"
@@ -327,15 +312,16 @@ OPERATE_RET tal_thread_delete(const THREAD_HANDLE handle)
 }
 
 /**
- * @brief 取"当前调用线程"的不透明身份句柄
+ * @brief Get an opaque identity handle of the "current calling thread"
  *
- * @param[out] thread: 线程身份句柄。同一线程恒得同一值；不要求与
- *             tal_thread_create_and_start 产出的 handle 同类
+ * @param[out] thread: thread identity handle. The same thread always gets the
+ *             same value; it need not be the same kind of handle produced by
+ *             tal_thread_create_and_start.
  *
  * @return OPERATE_RET
- *     - OPRT_OK: 成功
- *     - OPRT_INVALID_PARM: thread 为 NULL
- *     - OPRT_COM_ERROR: 平台 ops 未提供 thread_get_id
+ *     - OPRT_OK: success
+ *     - OPRT_INVALID_PARM: thread is NULL
+ *     - OPRT_COM_ERROR: the platform ops do not provide thread_get_id
  */
 OPERATE_RET tal_thread_get_id(THREAD_HANDLE *thread)
 {

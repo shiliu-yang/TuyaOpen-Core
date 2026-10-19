@@ -32,7 +32,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
-/* tuya 定制：NetworkContext_t = tuya_transporter_t（见文件尾），类型来源在此 */
+/* tuya customization: NetworkContext_t = tuya_transporter_t (see end of file) */
 #include "tuya_transporter.h"
 #include "tuya_tls.h"
 
@@ -192,7 +192,6 @@
  */
 /* @[define_networkcontext] */
 struct NetworkContext;
-/* tuya 定制：NetworkContext_t 直接取 tuya_transporter_t（见文件尾） */
 /* @[define_networkcontext] */
 
 /**
@@ -318,8 +317,9 @@ typedef struct TransportInterface
 /* *INDENT-ON* */
 
 /* ---------------------------------------------------------------------------
- * tuya 定制：NetworkContext_t = tuya_transporter_t（值类型），传输层
- * （tuya_transporter）即网络上下文。相关符号见 tuya_transporter.h/tuya_tls.h。
+ * tuya customization: NetworkContext_t = tuya_transporter_t (a value type);
+ * the transport layer (tuya_transporter) is the network context. Related
+ * symbols are declared in tuya_transporter.h / tuya_tls.h.
  * --------------------------------------------------------------------------- */
 
 typedef tuya_transporter_t NetworkContext_t;

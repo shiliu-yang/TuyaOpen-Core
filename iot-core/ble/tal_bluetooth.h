@@ -1,22 +1,41 @@
 /**
  * @file tal_bluetooth.h
- * @brief This file contains the declarations of the Bluetooth API functions for
- * Tuya's IoT SDK. It provides functionalities for initializing and
- * deinitializing Bluetooth, setting and getting the local Bluetooth address,
- * managing advertising and scanning processes, handling connections and
- * disconnections, and managing data transmission and reception over Bluetooth.
- * It supports both BLE (Bluetooth Low Energy) and classic Bluetooth roles and
- * operations, making it a comprehensive solution for Bluetooth communication in
- * IoT applications.
+ * @brief TAL Bluetooth Low Energy layer: ops-card dispatch, GAP/GATT event
+ * translation, the common Tuya GATT service and the public BLE API.
  *
- * The API functions defined in this file allow for a wide range of operations
- * including setting advertising parameters and data, starting and stopping
- * advertising, starting and stopping scanning, connecting to and disconnecting
- * from peers, and exchanging data with connected devices. It also includes
- * functions for managing the Bluetooth stack's connection parameters and
- * reading the received signal strength indicator (RSSI) values. This file is
- * essential for developers looking to integrate Bluetooth functionalities into
- * their IoT applications using Tuya's SDK.
+ * The platform contract is the TAL_BLUETOOTH_OPS_T card
+ * tal_bluetooth_ops_platform (tal_bluetooth_ops.h), reached through
+ * tal_bluetooth_get_ops(). Two dispatch macros route calls to it:
+ * TAL_BLUETOOTH_EXEC_OP returns the card result directly, and
+ * TAL_BLUETOOTH_EXEC_OP_VAL stores it in a variable; when the card or the
+ * requested member is missing both log with PR_ERR and report
+ * OPRT_NOT_SUPPORTED.
+ *
+ * The kernel GAP and GATT callbacks translate platform events into the
+ * unified TAL_BLE_EVT_PARAMS_T and forward them to the event callback
+ * registered by tal_ble_bt_init(). GAP translation covers stack
+ * init/deinit, connect, disconnect, advertisement report, connection
+ * parameter request/update and RSSI; GATT translation covers MTU exchange,
+ * notify/write/read/subscribe events and, under TY_HS_BLE_ROLE_CENTRAL,
+ * service, characteristic and descriptor discovery with CCCD enabling.
+ *
+ * tal_ble_bt_init() registers the callbacks first, allocates the service and
+ * characteristic tables with the contract's maximum sizes, builds the common
+ * Tuya GATT service when the peripheral role is requested, and starts the
+ * stack. With TAL_BLE_SERVICE_VERSION 2 the service uses a 16-bit UUID and
+ * three 128-bit characteristics (write, notify and read); otherwise it uses
+ * the version 1 16-bit layout with write and notify characteristics. The
+ * Matter characteristic handles are filled on connect when
+ * ENABLE_MATTER_TUYA_BLE_CHAR is set. Roles are mapped explicitly to the
+ * card's SERVER/CLIENT bits; tal_ble_bt_deinit() treats any role outside
+ * PERIPHERAL/CENTRAL (BEACON and Mesh included) as unsupported.
+ *
+ * The remaining API covers address access, maximum link count, advertising
+ * and scan control, RSSI, connection parameters, connect-and-discovery
+ * (central only), disconnect, server notify/send/read updates, client
+ * send/read, and MTU exchange. Before the service table exists, the notify
+ * and read-update paths return OPRT_RESOURCE_NOT_READY instead of
+ * dereferencing it.
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *
@@ -165,9 +184,10 @@ tal_ble_conn_param_update(const TAL_BLE_PEER_INFO_T peer, TAL_BLE_CONN_PARAMS_T 
  *          The connection event is given through TAL_BLE_EVT_CENTRAL_CONNECT_DISCOVERY
  * event !!!!!!
  *
- * @note    仅 central 角色（编译宏 TY_HS_BLE_ROLE_CENTRAL 开启）时提供：
- *          实现定义在 tal_bluetooth.c 的 #if (TY_HS_BLE_ROLE_CENTRAL) 内，
- *          该宏默认未定义（全仓无定义）。
+ * @note    Provided only for the central role (when the TY_HS_BLE_ROLE_CENTRAL
+ *          build macro is enabled): the implementation is defined inside
+ *          #if (TY_HS_BLE_ROLE_CENTRAL) in tal_bluetooth.c. The macro is not
+ *          defined anywhere in this tree.
  */
 OPERATE_RET
 tal_ble_connect_and_discovery(const TAL_BLE_PEER_INFO_T peer, TAL_BLE_CONN_PARAMS_T const *p_conn_params);

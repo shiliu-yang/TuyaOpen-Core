@@ -1,23 +1,13 @@
 /**
  * @file tal_thread.h
- * @brief Provides thread management functions for Tuya IoT applications.
+ * @brief TAL thread interface: create and start, delete, state query and
+ *        current-thread identity.
  *
- * This header file defines the interface for thread management in Tuya IoT
- * applications, including creating and starting threads, stopping and deleting
- * threads, checking thread context, and getting thread running status. It
- * offers functionalities to manage threads' lifecycle, prioritize tasks, and
- * ensure efficient execution of concurrent operations within Tuya-based IoT
- * applications. The API abstracts underlying threading mechanisms, providing a
- * portable and simplified interface for application development.
- *
- * Thread management is crucial for achieving multitasking and parallel
- * processing in embedded systems, enabling applications to perform multiple
- * operations simultaneously, thus improving responsiveness and operational
- * efficiency.
- *
- * @note This file is part of the Tuya IoT Development Platform and is intended
- * for use in Tuya-based applications. It is subject to the platform's license
- * and copyright terms.
+ * A thread is described by THREAD_CFG_T (stack depth, priority, name and the
+ * optional external-RAM stack flag) and runs its process function between the
+ * optional enter and exit hooks. Creation and deletion dispatch through the
+ * TAL_API_OPS_T thread members. tal_thread_get_id returns an opaque identity
+ * of the calling thread that is stable for that thread's lifetime.
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *
@@ -88,7 +78,7 @@ typedef struct {
     uint32_t stackDepth; // stack size
     uint8_t priority;    // thread priority
     char *thrdname;      // thread name
-    uint8_t ex_ram_mode : 1; // 外部 RAM（如 PSRAM）线程栈标记：core 侧只赋值不读取，为对齐上游 API 保留（开启宏见 board Kconfig 的 ENABLE_EXT_RAM）
+    uint8_t ex_ram_mode : 1; // external RAM (e.g. PSRAM) thread stack flag: core only assigns it, never reads it (enabled via ENABLE_EXT_RAM in the board Kconfig)
 } THREAD_CFG_T;
 
 /**
@@ -125,13 +115,14 @@ OPERATE_RET tal_thread_delete(const THREAD_HANDLE handle);
 THREAD_STATE_E tal_thread_get_state(const THREAD_HANDLE handle);
 
 /**
- * @brief 取"当前调用线程"的不透明身份句柄
+ * @brief Get an opaque identity handle of the "current calling thread"
  *
- * @param[out] thread: 线程身份句柄。同一线程恒得同一值；不要求与
- *             tal_thread_create_and_start 产出的 handle 同类
+ * @param[out] thread: thread identity handle. The same thread always gets the
+ *             same value; it need not be the same kind of handle produced by
+ *             tal_thread_create_and_start.
  *
- * @note 用途：p2p pjlib（os_core_tuyaos.c）的 TLS 行匹配——按身份区分
- *       各 OS 任务，同一线程复用同一行。
+ * @note p2p pjlib (os_core_tuyaos.c) uses it to select a TLS row per OS task:
+ *       tasks are distinguished by identity, and one thread reuses one row.
  * @return OPRT_OK on success. Others on error, please refer to
  * tuya_error_code.h
  */

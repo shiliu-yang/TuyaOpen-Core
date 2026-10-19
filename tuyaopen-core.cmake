@@ -1,31 +1,36 @@
-# tuyaopen-core 构建入口（include 方式使用）。
+# tuyaopen-core build entry (used via include).
 #
-# 宿主接入（普通 CMake 工程）：
+# Host integration (plain CMake project):
 #   include(<tuyaopen-core>/tuyaopen-core.cmake)
-#   add_subdirectory(<port>)                # port 自注入头到 tuyaopen-headers
-# esp-idf：根目录 CMakeLists.txt 是组件入口（idf_component_register 后同样
-# include 本文件）——include 语境不调 project()，无需任何 esp-idf 特判。
+#   add_subdirectory(<port>)                # the port injects its headers into tuyaopen-headers
+# esp-idf: the root CMakeLists.txt is the component entry (it includes this file
+# after idf_component_register) -- an include context does not call project(),
+# so no esp-idf special-casing is needed.
 #
-# 前置：宿主已完成 project()。幂等：重复 include 自动跳过。
+# Prerequisite: the host has already called project(). Idempotent: repeated
+# includes are skipped automatically.
 if(TARGET tuyaopen-headers)
     return()
 endif()
 
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/TuyaOpenOptions.cmake)
 
-# 官方库根路径（third_party 各 submodule），全作用域可用
+# Root path of the official libraries (third_party submodules), visible to all scopes
 set(TUYAOPEN_THIRD_PARTY_DIR ${CMAKE_CURRENT_LIST_DIR}/third_party)
 
-# 环境基底（角色同 esp-idf 的 esp_common）：宿主注入 port 头路径，模块统一
-# PRIVATE 依赖它。模块间依赖各自显式声明（esp-idf REQUIRES/PRIV_REQUIRES
-# 的纯 CMake 形态）。
-# 宿主注入方式：
-#   target_include_directories(tuyaopen-headers INTERFACE <port头>)
+# Environment base (same role as esp-idf's esp_common): the host injects the port
+# header paths and modules depend on it uniformly as PRIVATE. Inter-module
+# dependencies are declared explicitly by each module (the plain-CMake form of
+# esp-idf REQUIRES/PRIV_REQUIRES).
+# Host injection:
+#   target_include_directories(tuyaopen-headers INTERFACE <port headers>)
 add_library(tuyaopen-headers INTERFACE)
 
-# 开关 → 编译宏：只对开启的注入（源码守卫是 defined() 风格，OFF = 不定义）。
-# 手工编译（不用本 CMake）的用户对应做法：编译命令 -DENABLE_WIRED=1 ...，
-# 或在 port 的静态 tuya_kconfig.h 里取消注释对应 #define。
+# Switches -> compile macros: only enabled ones are injected (source guards use
+# the defined() style, so OFF means not defined).
+# For manual builds (not using this CMake), the equivalent is -DENABLE_WIRED=1 ...
+# in the compile command, or uncommenting the matching #define in the port's
+# static tuya_kconfig.h.
 set(_tuyaopen_switch_defs)
 foreach(_tuyaopen_opt IN ITEMS
     ENABLE_WIRED
@@ -67,8 +72,9 @@ add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/agent-core ${CMAKE_CURRENT_BINARY_DIR
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/p2p-core ${CMAKE_CURRENT_BINARY_DIR}/tuyaopen-core/p2p-core)
 
 set(_tuyaopen_core_libs)
-# 仅 core 模块。应用侧组件（ai_agent/ai_skills/ai_mcp/audio_player/ai_audio/
-# utility）已下沉应用层（examples/agent_demo/components），由应用自行聚合链接。
+# Core modules only. Application-side components (ai_agent/ai_skills/ai_mcp/
+# audio_player/ai_audio/utility) live in the application layer
+# (examples/agent_demo/components) and are aggregated and linked by the application.
 foreach(_tuyaopen_mod IN ITEMS
     libcjson
     tuya_utilities
@@ -93,11 +99,13 @@ foreach(_tuyaopen_mod IN ITEMS
     endif()
 endforeach()
 
-# 对外聚合：仅 core 模块。
-# - 目标 tuyaopen-core：平铺传递，供无需处理循环引用的宿主（如 esp-idf 组件）使用
-# - 变量 TUYAOPEN_CORE_LIBS：GNU/Clang 宿主用它把 core 库与 port 放进同一个
-#   --start-group 解析 TAL/云服务与 TKL 的循环引用（CMake 3.16 下 raw flags 与
-#   INTERFACE 目标混排会错位，变量列表可保证顺序）：
+# External aggregation: core modules only.
+# - Target tuyaopen-core: flat passthrough for hosts that need no circular-reference
+#   handling (such as esp-idf components)
+# - Variable TUYAOPEN_CORE_LIBS: GNU/Clang hosts use it to put the core libraries
+#   and the port into the same --start-group and resolve the circular references
+#   between TAL/cloud services and the TKL (under CMake 3.16 raw flags and
+#   INTERFACE targets interleave incorrectly; a variable list preserves the order):
 #   target_link_libraries(app PRIVATE
 #       -Wl,--start-group ${TUYAOPEN_CORE_LIBS} $<TARGET_FILE:tuyaopen-port> -Wl,--end-group
 #       tuyaopen-port)

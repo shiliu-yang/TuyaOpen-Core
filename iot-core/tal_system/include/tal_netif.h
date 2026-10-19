@@ -1,10 +1,13 @@
 /**
  * @file tal_netif.h
- * @brief 本机网络接口 TAL 层：公开 API（get_ip / set_link_cb）
+ * @brief tal_netif platform dispatch: forwards the two interfaces to the
+ *        port's netif implementation (tal_netif_ops_platform).
  *
- * 由原 tal_wired.h 改名——实现不限有线（遍历所有非回环接口），弱化 wired 命名。
- * 与 tal_network.h 同域（网络 TAL 层），随 tal_system 一起被消费者依赖。
- * 实现经 ops 卡分发到 port（见 tal_netif_ops.h）。
+ * core holds no network interface implementation -- interface walking,
+ * ioctl retrieval and the polling thread all live in the port (see the
+ * tal_netif_ops.h contract). Dispatch goes through TAL_NETIF_EXEC_OP, which
+ * checks the card and member before calling them and returns the given
+ * default otherwise.
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *
@@ -14,9 +17,10 @@
 
 #include "tuya_cloud_types.h"
 
-/* 契约层（interface，随所选平台的 port 提供）：TAL_NETIF_LINK_STAT_E /
- * TAL_NETIF_LINK_CHANGE_CB / TAL_NETIF_OPS_T 的定义在 port/interface/tal_netif_ops.h
- * —— core 只消费契约，不定义契约（分层：port 不依赖 core） */
+/* Contract layer (supplied by the selected platform's port):
+ * TAL_NETIF_LINK_STAT_E / TAL_NETIF_LINK_CHANGE_CB / TAL_NETIF_OPS_T are
+ * defined in port/interface/tal_netif_ops.h -- core consumes the contract,
+ * never defines it (layering: port does not depend on core). */
 #include "tal_netif_ops.h"
 
 #ifdef __cplusplus
@@ -31,7 +35,8 @@ extern "C" {
 TAL_NETIF_OPS_T *tal_netif_get_ops(void);
 
 /**
- * @brief  取本机网络接口 IP（第一个非回环且 up 的接口）
+ * @brief  Get the local network interface IP (first non-loopback interface
+ *         that is up)
  *
  * @param[out]  ip: the ip address
  *
@@ -40,7 +45,8 @@ TAL_NETIF_OPS_T *tal_netif_get_ops(void);
 OPERATE_RET tal_netif_get_ip(NW_IP_S *ip);
 
 /**
- * @brief  注册链路状态变化回调（内部起 3s 轮询线程，重复调用幂等）
+ * @brief  Register a link state change callback (starts an internal 3s
+ *         polling thread; repeated calls are idempotent)
  *
  * @param[in]   cb: the callback when link status changed
  *

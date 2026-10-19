@@ -1,23 +1,13 @@
 /**
  * @file tal_memory.h
- * @brief Provides memory management functions for Tuya IoT applications.
+ * @brief TAL heap interface: tal_malloc / tal_free / tal_calloc, the
+ *        Malloc / Calloc / Free aliases, and the optional external-RAM pair.
  *
- * This header file defines a set of memory management functions that abstract
- * the underlying memory allocation mechanisms. It provides a simplified
- * interface for dynamic memory allocation and deallocation, including
- * functions for allocating zero-initialized memory. These functions
- * are designed to be used across the Tuya IoT SDK to ensure consistent and
- * efficient memory management practices. Additionally, it includes a function
- * to retrieve the system's current free heap size, aiding in memory usage
- * diagnostics and optimization.
- *
- * The memory management functions defined in this file are crucial for
- * developing robust and scalable IoT applications on the Tuya platform,
- * providing developers with tools to manage memory usage effectively.
- *
- * @note This file is part of the Tuya IoT Development Platform and is intended
- * for use in Tuya-based applications. It is subject to the platform's license
- * and copyright terms.
+ * tal_malloc and tal_free dispatch to the TAL_API_OPS_T .malloc / .free
+ * members assembled by the port. tal_calloc allocates through tal_malloc,
+ * zeroes the block and returns NULL on a zero size or a nitems * size
+ * overflow. tal_ex_ram_malloc / tal_ex_ram_free exist only when ENABLE_EXT_RAM
+ * is enabled; they are the ex-RAM card members and provide no zeroing.
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *
@@ -84,16 +74,17 @@ void *tal_calloc(size_t nitems, size_t size);
 
 #if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
 /**
- * @brief 外部 RAM（如 PSRAM）分配/释放。
+ * @brief Allocate and free external RAM (e.g. PSRAM).
  *
- * 实现由 port 经 TAL_API_OPS_T 的 ex_ram_* 成员提供（宏隔离：未开启
- * ENABLE_EXT_RAM 时无此接口）。只提供 malloc/free——需要清零的调用方
- * 自行 memset。
+ * The implementation is provided by the port through the ex_ram_* members of
+ * TAL_API_OPS_T (macro-isolated: the interfaces do not exist when
+ * ENABLE_EXT_RAM is disabled). Only malloc/free are provided -- callers that
+ * need zeroed memory must memset it themselves.
  *
- * @param[in] size: memory size（tal_ex_ram_malloc）
- * @param[in] ptr:  memory point（tal_ex_ram_free）
+ * @param[in] size: memory size (tal_ex_ram_malloc)
+ * @param[in] ptr:  memory point (tal_ex_ram_free)
  *
- * @return 外部 RAM 地址，或 NULL（分配失败）
+ * @return external RAM address, or NULL if the allocation fails
  */
 void *tal_ex_ram_malloc(size_t size);
 void tal_ex_ram_free(void *ptr);

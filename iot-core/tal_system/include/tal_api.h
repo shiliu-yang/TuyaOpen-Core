@@ -1,32 +1,26 @@
 /**
  * @file tal_api.h
- * @brief Header file that aggregates all Tuya Abstract Layer (TAL) APIs.
+ * @brief TAL dispatch for semaphores, mutexes, queues and OTA, plus optional
+ * external RAM allocation.
  *
- * This file serves as a central inclusion point for all Tuya Abstract Layer
- * (TAL) components, facilitating access to various system-level functionalities
- * such as logging, memory management, threading, and more. It includes headers
- * for modules that provide interfaces for operating system abstractions,
- * hardware abstraction layers, and utility services. The purpose of TAL is to
- * offer a unified and simplified API layer over different platforms, enhancing
- * portability and reducing the complexity of application development on the
- * Tuya IoT platform.
+ * Every tal_semaphore_*, tal_mutex_* and tal_queue_* function resolves the
+ * platform ops card through tal_api_get_ops(), which returns
+ * tal_api_ops_platform (defined by the port). TAL_EXEC_OP checks that the card
+ * and the requested member are non-NULL, logs the missing operation and
+ * returns a caller-supplied default on failure; TAL_EXEC_OP_VOID is the
+ * variant for operations without a return value. The tal_* signatures match
+ * the ones declared in the tal_semaphore.h, tal_mutex.h and tal_queue.h
+ * headers.
  *
- * Included modules cover a wide range of functionalities:
- * - Logging and diagnostics (tal_log.h)
- * - Memory management (tal_memory.h)
- * - Concurrency primitives (tal_mutex.h, tal_semaphore.h, tal_thread.h)
- * - OTA updates (tal_ota.h)
- * - Inter-thread communication (tal_queue.h, tal_workqueue.h)
- * - Time and timers (tal_sw_timer.h, tal_time_service.h)
- * - System utilities (tal_system.h)
- * - Hardware interfaces (tal_uart.h)
- * - Configuration storage (tal_kv.h)
- * - Security and encryption (tal_security.h)
- * - Event handling (tal_event.h)
+ * OTA is an optional capability delivered by runtime callback injection:
+ * tal_ota_register_cbs() stores a TAL_OTA_CBS_T pointer, and the three
+ * tal_ota_* functions dispatch through it with OPRT_NOT_SUPPORTED as the
+ * default when no callback set is registered. The registrant keeps the
+ * structure alive for the whole OTA flow.
  *
- * This header ensures that applications built on the Tuya platform can leverage
- * these abstractions to achieve platform independence, focusing on application
- * logic rather than underlying system and hardware specifics.
+ * When ENABLE_EXT_RAM is enabled, tal_ex_ram_malloc() and tal_ex_ram_free()
+ * dispatch to the ex_ram_* members of the same ops card and return NULL or do
+ * nothing when those members are absent.
  *
  * @note This file is part of the Tuya IoT Development Platform and is intended
  * for use in Tuya-based applications. It is subject to the platform's license
@@ -59,8 +53,6 @@
 #include "tal_sw_timer.h"
 #include "tal_event.h"
 
-/* 契约层（interface，随所选平台的 port 提供）：TAL_API_OPS_T 在
- * port/interface/tal_api_ops.h —— core 只消费契约，不定义契约 */
 #include "tal_api_ops.h"
 
 #ifdef __cplusplus

@@ -1,22 +1,13 @@
 /**
  * @file tal_network.h
- * @brief Network utilities interface for Tuya SDK.
+ * @brief TAL network utilities: IPv4 address constants, fd-set helpers, socket
+ *        operations, address conversion and the active source address.
  *
- * This header file defines the network utilities interface for the Tuya SDK,
- * providing essential network functionalities such as IP address definitions
- * and network error handling. It includes definitions for loopback address, any
- * address, and broadcast address in the context of the Tuya SDK. Additionally,
- * it offers an API for retrieving the last network error code, which is crucial
- * for diagnosing network-related issues in Tuya-based applications.
- *
- * The interface abstracts underlying network operations, offering a simplified
- * and unified way of handling network communications across different platforms
- * supported by the Tuya SDK. This ensures that applications built on the Tuya
- * platform can manage network operations efficiently and consistently.
- *
- * @note This file is part of the Tuya IoT Development Platform and is intended
- * for use in Tuya-based applications. It requires the Tuya Cloud Types
- * definitions for proper functionality.
+ * The socket functions dispatch through the TAL_NETWORK_SOCKET_OPS_T table
+ * returned by tal_network_get_active_ops() (the port's
+ * tal_network_ops_platform instance). tal_network_set_active_ip and
+ * tal_network_get_active_ip record the source address outbound sockets bind
+ * to; 0 means no link is up and callers must not bind.
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *
@@ -530,13 +521,6 @@ OPERATE_RET tal_net_setsockopt(const int fd, const TUYA_OPT_LEVEL level, const T
 OPERATE_RET tal_net_getsockopt(const int fd, const TUYA_OPT_LEVEL level, const TUYA_OPT_NAME optname, void *optval,
                                int *optlen);
 
-/* ---------------------------------------------------------------------------
- * 标准网络适配接入：ops 类型（TAL_NETWORK_SOCKET_OPS_T / TAL_NETWORK_OPS_T /
- * TAL_NET_TYPE_*）随契约迁到 port/interface/tal_network_ops.h（core 只消费契约，
- * 不定义契约）。
- * 平台在 port 中实现 socket 操作并在同文件组装标准实例 tal_network_ops_platform；
- * 多实例场景（如 AT 蜂窝）由平台额外定义并切换。
- * --------------------------------------------------------------------------- */
 #include "tal_network_ops.h"
 
 /**

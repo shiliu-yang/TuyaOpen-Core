@@ -5,8 +5,6 @@
  * a given input buffer, as well as the HMAC (mac) wrappers built on top of
  * them.
  *
- * 本文件是组合层：底层哈希原语（create/starts/update/finish）由 TAL 哈希实现
- * （mbedtls_hash.c）直接提供，此处不再经 tkl 透传。
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *

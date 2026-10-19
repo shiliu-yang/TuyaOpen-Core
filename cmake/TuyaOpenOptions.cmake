@@ -9,23 +9,27 @@ option(CONFIG_ENABLE_PLATFORM_MBEDTLS "Use platform mbedTLS instead of the bundl
 option(CONFIG_ENABLE_DEVICE_TIMER "Include tuya_device_timer.c in tuya_cloud_service" OFF)
 option(CONFIG_ENABLE_EXT_RAM "Mount the ex-RAM (PSRAM) ops members and build tal_ex_ram_* (default OFF)" OFF)
 option(CONFIG_ENABLE_TUYA_P2P "Build tuya_p2p subtree" OFF)
-# 默认 ON：lan/tuya_lan.c 原先无条件编入，默认保持行为不变；关闭后局域网协议
-# 不编译，port 也无需适配局域网相关 net ops（accept/listen/send_to/recvfrom/recv_nd_size）。
-# lan/lan_sock.c（socket 事件循环）不随之关闭：AI monitor 复用它。
+# Default ON: when disabled, the LAN protocol is not compiled and the port does
+# not need to adapt LAN-related net ops (accept/listen/send_to/recvfrom/recv_nd_size).
+# lan/lan_sock.c (socket event loop) is not disabled along with it: the AI monitor reuses it.
 option(CONFIG_ENABLE_LOCAL_LINK "Build the LAN (local link) service: lan/tuya_lan.c" ON)
 option(CONFIG_ENABLE_LOCAL_STORE "Build tuya_p2p/local_store" OFF)
 option(CONFIG_ENABLE_IPC_RING_BUFFER "Build tuya_p2p/svc_ring_buffer" OFF)
 option(CONFIG_ENABLE_AI_COMPONENTS "Build the agent-core component layer on top of tuya_ai_service" OFF)
 option(CONFIG_ENABLE_COMP_AI_MCP "Build the ai_mcp component (application-side, see examples/agent_demo/components; needs CONFIG_ENABLE_AI_COMPONENTS)" OFF)
-# AI 音频播放编排（应用侧组件，见 examples/agent_demo/components/ai_audio）：依赖
-# audio_player 的 svc_ai_player 接口，需 CONFIG_ENABLE_AI_COMPONENTS + CONFIG_ENABLE_AI_PLAYER（Kconfig 侧 select）
+# AI audio playback orchestration (application-side component, see
+# examples/agent_demo/components/ai_audio): depends on the audio_player svc_ai_player
+# interface; needs CONFIG_ENABLE_AI_COMPONENTS + CONFIG_ENABLE_AI_PLAYER
+# (select'ed on the Kconfig side)
 option(CONFIG_ENABLE_COMP_AI_AUDIO "Build the ai_audio component (needs CONFIG_ENABLE_AI_COMPONENTS + CONFIG_ENABLE_AI_PLAYER)" OFF)
-# 提示音来源（Kconfig choice，默认 LOCAL）：本地素材一期未移植（alert 降级为告警跳过）
+# Alert sound source (Kconfig choice, LOCAL by default): local assets are not
+# ported in phase 1 (the alert degrades to a warning and is skipped)
 option(CONFIG_AI_PLAYER_ALERT_SOURCE_LOCAL "ai_audio alert source: local assets (not ported in phase 1)" OFF)
 option(CONFIG_AI_PLAYER_ALERT_SOURCE_CUSTOM "ai_audio alert source: custom callback registered by the app" OFF)
-# AI 播放器（应用侧组件，见 examples/agent_demo/components/audio_player）：依赖
-# base_event.h，随 ENABLE_AI_COMPONENTS 门控；
-# OPUS/OGGOPUS 解码器开关为二期范围，打开会在 CMake 阶段报错（见其 CMakeLists.txt）
+# AI player (application-side component, see examples/agent_demo/components/audio_player):
+# depends on base_event.h and is gated by ENABLE_AI_COMPONENTS;
+# the OPUS/OGGOPUS decoder switches are phase-2 scope; enabling them fails at the
+# CMake stage (see its CMakeLists.txt)
 option(CONFIG_ENABLE_AI_PLAYER "Build the audio_player module (needs CONFIG_ENABLE_AI_COMPONENTS)" OFF)
 option(CONFIG_ENABLE_AI_PLAYER_DECODER_OPUS "Enable the OPUS decoder of audio_player (phase 2, not ported)" OFF)
 option(CONFIG_ENABLE_AI_PLAYER_DECODER_OGGOPUS "Enable the OGGOPUS decoder of audio_player (phase 2, not ported)" OFF)

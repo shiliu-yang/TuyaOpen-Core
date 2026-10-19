@@ -1,8 +1,12 @@
 /**
  * @file tuya_ai_input.h
- * @brief
- * @version 0.1
- * @date 2025-04-17
+ * @brief AI input sessions: per-scode ring buffers that carry uplink audio and
+ * text packets into the AI business layer.
+ *
+ * Each scode keeps an AI_INPUT_SESSION_CTX_T with a ring buffer and a start
+ * flag. Audio and text input calls append framed packets to the ring buffer
+ * (tuya_ai_audio_input_s / tuya_ai_text_input_s), start/stop control the
+ * session, and the deinit path releases every session context.
  *
  * @copyright Copyright (c) 2025 Tuya Inc. All Rights Reserved.
  *
@@ -27,9 +31,10 @@
 #include "tuya_ai_protocol.h"
 #include "tuya_ai_biz.h"
 
-/* 解与 tuya_ai_agent.h 的循环包含（两者互相 include，展开顺序不同会导致
- * AI_ATTR_BASE_T/AI_INPUT_SEND_T 未定义）：宏内只需该函数声明，
- * 定义见 tuya_ai_agent.h。 */
+/* tuya_ai_agent.h includes this header; including it back here would create
+ * a circular include and leave AI_ATTR_BASE_T/AI_INPUT_SEND_T undefined,
+ * depending on expansion order. Only this function declaration is needed
+ * here; its definition lives in tuya_ai_agent.h. */
 CHAR_T *tuya_ai_agent_get_scode(CHAR_T *scode);
 
 typedef enum {

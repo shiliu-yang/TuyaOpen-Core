@@ -1,3 +1,17 @@
+/**
+ * @file mqtt_client_wrapper.c
+ * @brief coreMQTT client wrapper: connection lifecycle, publish/subscribe and
+ * the receive loop over the transport layer.
+ *
+ * mqtt_client_new()/mqtt_client_free() own the client object;
+ * mqtt_client_init()/mqtt_client_deinit() configure and tear down the coreMQTT
+ * context with its TLS transport; connect/disconnect, subscribe/unsubscribe
+ * and publish forward to coreMQTT; mqtt_client_yield() drives the receive loop
+ * and dispatches incoming packets to the library callback. A registry of live
+ * contexts backs the time and transport helper callbacks.
+ *
+ * @copyright Copyright (c) 2025 Tuya Inc. All Rights Reserved.
+ */
 #include "tuya_error_code.h"
 #include "core_mqtt_config.h"
 #include "core_mqtt.h"
@@ -20,13 +34,15 @@ typedef struct {
     MQTTContext_t mqclient;
     tuya_transporter_t network;
     uint8_t mqttbuffer[CORE_MQTT_BUFFER_SIZE];
-    /* v2.x 起 QoS1/QoS2 需要状态表（MQTT_InitStatefulQoS 初始化） */
+    /* Since coreMQTT v2.x, QoS1/QoS2 require state records (initialized by
+     * MQTT_InitStatefulQoS) */
     MQTTPubAckInfo_t outgoing_records[MQTT_WRAPPER_MAX_PENDING];
     MQTTPubAckInfo_t incoming_records[MQTT_WRAPPER_MAX_PENDING];
 } mqtt_client_context_t;
 
-/* v5.0.2 的 MQTTContext_t 无 userData 字段：wrapper 自建注册表，
- * 事件回调按 pContext 指针反查 wrapper 上下文 */
+/* The MQTTContext_t of coreMQTT v5.0.2 has no userData field: the wrapper
+ * keeps its own registry and the event callback looks up the wrapper context
+ * by pContext pointer */
 #define MQTT_WRAPPER_MAX_CLIENTS 4
 static mqtt_client_context_t *s_ctx_registry[MQTT_WRAPPER_MAX_CLIENTS];
 
@@ -227,7 +243,8 @@ mqtt_client_status_t mqtt_client_init(void *client, const mqtt_client_config_t *
         return OPRT_COM_ERROR;
     }
 
-    /* v2.x 起 QoS1/QoS2 订阅/发布需初始化在途记录表 */
+    /* Since coreMQTT v2.x, QoS1/QoS2 subscribe/publish require the in-flight
+     * record tables to be initialized */
     mqtt_status = MQTT_InitStatefulQoS(&context->mqclient,
                                        context->outgoing_records, MQTT_WRAPPER_MAX_PENDING,
                                        context->incoming_records, MQTT_WRAPPER_MAX_PENDING);
@@ -277,7 +294,8 @@ mqtt_client_status_t mqtt_client_connect(void *client)
     if (MQTTSuccess != mqtt_status) {
         log_error("mqtt connect err: %s(%d)", MQTT_Status_strerror(mqtt_status), mqtt_status);
         tuya_transporter_close(context->network);
-        /* v5.0.2 对 CONNACK 拒绝（含 reason code 5 未授权）统一报 ServerRefused */
+        /* coreMQTT v5.0.2 reports all CONNACK rejections (including reason
+         * code 5, not authorized) as ServerRefused */
         if (MQTTServerRefused == mqtt_status) {
             return MQTT_STATUS_NOT_AUTHORIZED;
         }
@@ -374,7 +392,8 @@ mqtt_client_status_t mqtt_client_yield(void *client)
     mqtt_client_context_t *context = (mqtt_client_context_t *)client;
     MQTTStatus_t mqtt_status;
 
-    /* v5.0.2 的 ProcessLoop 无超时参数：收包超时由 transport recv 控制 */
+    /* The ProcessLoop of coreMQTT v5.0.2 has no timeout parameter: receive
+     * timeout is controlled by transport recv */
     mqtt_status = MQTT_ProcessLoop(&context->mqclient);
     if (mqtt_status != MQTTSuccess) {
         log_error("MQTT_ProcessLoop returned with status = %s.", MQTT_Status_strerror(mqtt_status));

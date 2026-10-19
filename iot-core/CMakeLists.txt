@@ -1,8 +1,9 @@
-# tuya_cloud_service 源码已拍平：原模块子目录（cloud/ netmgr/ netcfg/ ble/ ...）
-# 直接位于 iot-core/ 下，因此目标在此定义，而不是在模块子目录里。
+# tuya_cloud_service sources are flat under iot-core/ (cloud/, lan/, ble/, ...),
+# so the target is defined here rather than in per-module subdirectories.
 
-# 本分组自带的基础库：tuya_utilities（通用工具，零自研依赖）、tal_system（系统抽象）
-# 与 tuya_transport（连接服务层，已吸收 tal_network / tal_security / libtls / http&mqtt wrap）。
+# Base libraries of this group: tuya_utilities (common tools, no internal deps),
+# tal_system (system abstraction) and tuya_transport (connection service layer,
+# which includes tal_network / tal_security / libtls / http&mqtt wrappers).
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/utilities)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tal_system)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tuya_transport)
@@ -17,9 +18,10 @@ if(NOT CONFIG_ENABLE_DEVICE_TIMER)
     list(REMOVE_ITEM _cloud_srcs "${CMAKE_CURRENT_SOURCE_DIR}/cloud/tuya_device_timer.c")
 endif()
 
-# 局域网协议（tuya_lan.c）由 CONFIG_ENABLE_LOCAL_LINK 门控（默认 ON，行为不变）：
-# 关闭后不编译，port 的局域网 net ops（accept/listen/send_to/recvfrom/recv_nd_size）
-# 也无需适配。lan_sock.c（socket 事件循环）不门控——AI monitor 复用它。
+# The LAN protocol (tuya_lan.c) is gated by CONFIG_ENABLE_LOCAL_LINK (default ON):
+# when disabled it is not compiled, and the port's LAN net ops
+# (accept/listen/send_to/recvfrom/recv_nd_size) need no adaptation.
+# lan_sock.c (the socket event loop) is not gated -- AI monitor reuses it.
 if(NOT CONFIG_ENABLE_LOCAL_LINK)
     list(REMOVE_ITEM _cloud_srcs "${CMAKE_CURRENT_SOURCE_DIR}/lan/tuya_lan.c")
 endif()
@@ -34,9 +36,9 @@ set(_cloud_incs
     ${CMAKE_CURRENT_SOURCE_DIR}/weather
 )
 
-# 配网：netcfg/ 目录（框架 + AP softAP 前端）已移除。
-# 蓝牙配网为自包含模块 ble/ble_netcfg.c，随 BLUETOOTH 编入，
-# 由应用层直接启动（tuya_ble_init → ble_netcfg_start(finish_cb)）。
+# BLE network configuration is the self-contained module ble/ble_netcfg.c,
+# compiled with BLUETOOTH and started directly by the application
+# (tuya_ble_init -> ble_netcfg_start(finish_cb)).
 
 # if(CONFIG_ENABLE_WIRED)
 #     list(APPEND _cloud_srcs ${CMAKE_CURRENT_SOURCE_DIR}/netmgr/netconn_wired.c)

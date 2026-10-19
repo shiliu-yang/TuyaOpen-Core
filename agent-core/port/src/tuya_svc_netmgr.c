@@ -1,8 +1,13 @@
 /**
  * @file tuya_svc_netmgr.c
- * @brief tuya_svc_netmgr module is used to 
+ * @brief Network status query for the AI stack.
  * @version 0.1
  * @copyright Copyright (c) 2021-2025 Tuya Inc. All Rights Reserved.
+ *
+ * tuya_svc_netmgr_get_status() reports NETWORK_STATUS_MQTT while the IoT
+ * client exists and reports an MQTT connection, and NETWORK_STATUS_OFFLINE
+ * otherwise. The AI client uses it to gate connection setup and to decide
+ * whether a failed packet read should be retried.
  */
 
 #include "tuya_svc_netmgr.h"
@@ -34,7 +39,6 @@
 ***********************************************************/
 NETWORK_STATUS_E tuya_svc_netmgr_get_status(VOID)
 {
-    /* netmgr 组件已从 iot-core 移除：以 MQTT 连接状态等价替代原链路状态语义 */
     if (tuya_iot_client_get() == NULL) {
         return NETWORK_STATUS_OFFLINE;
     }

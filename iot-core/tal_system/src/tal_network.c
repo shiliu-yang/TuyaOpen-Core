@@ -1,30 +1,16 @@
 /**
  * @file tal_network.c
- * @brief Network utilities implementation for Tuya SDK.
+ * @brief TAL network utilities: active-address tracking and socket operations
+ * through the platform ops instance.
  *
- * This source file implements the network utilities for the Tuya SDK, providing
- * a layer of abstraction over different network operations such as socket
- * creation, configuration, and communication. It supports various operating
- * systems and networking libraries, including POSIX-compliant systems and
- * systems that use the LwIP networking stack.
- *
- * The file includes conditional compilation sections to include different
- * header files and define macros based on the operating system or the
- * networking library in use. For POSIX-compliant systems, standard networking
- * headers like <sys/socket.h>, <netinet/in.h>, and <arpa/inet.h> are included.
- * For systems using the LwIP networking stack, relevant LwIP headers like
- * "lwip/netdb.h" and "lwip/dns.h" are included.
- *
- * Additionally, the file defines macros to facilitate network operations across
- * different platforms, such as `ENABLE_BIND_INTERFACE` for binding operations
- * and `NET_USING_POSIX` to indicate the use of POSIX networking APIs. It aims
- * to provide a consistent and efficient networking interface for Tuya-based
- * applications across different hardware and software environments.
- *
- * @note This file is part of the Tuya IoT Development Platform and is intended
- * for use in Tuya-based applications. It requires configuration through
- * "tuya_iot_config.h" and interfaces with other parts of the Tuya SDK through
- * "tal_api.h".
+ * tal_network_get_active_ops() returns tal_network_ops_platform (defined by the
+ * port); the active IPv4 address is kept in a local static and pushed by the
+ * link owner on link events. Every socket operation -- fd_set helpers, select,
+ * non-blocking mode, create/connect/bind/listen/accept, send/recv,
+ * setsockopt options and address conversion -- resolves that ops instance and
+ * forwards to the matching member, reporting OPRT_COM_ERROR when the member is
+ * absent. Protocol-level types and the socket operation table come from
+ * tal_network_ops.h.
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *
@@ -35,10 +21,12 @@
 #include "tal_network.h"
 #include "dev_evt.h"
 
-/* 标准平台 ops 实例（port 的 port_network.c 定义，.ops 指向其 port_net_* 实现） */
+/* Standard platform ops instance (defined in the port's port_network.c; .ops
+ * points to that port's port_net_* implementations) */
 extern TAL_NETWORK_OPS_T tal_network_ops_platform;
 
-/* 活动链路源地址：由链路管理方（应用/port 层）在链路事件时推送 */
+/* Active link source address: pushed by the link owner (application/port
+ * layer) on link events */
 static TUYA_IP_ADDR_T s_active_ipaddr = 0;
 
 TAL_NETWORK_SOCKET_OPS_T *tal_network_get_active_ops(void)

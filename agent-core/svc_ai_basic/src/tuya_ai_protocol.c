@@ -1,9 +1,9 @@
 /**
  * @file tuya_ai_protocol.c
  * @author tuya
- * @brief ai protocol
+ * @brief AI packet protocol: framing, encryption/signing, fragmentation,
+ *        attribute packing/parsing and the connection control packets.
  * @version 0.1
- * @date 2025-03-02
  *
  * @copyright Copyright (c) 2023 Tuya Inc. All Rights Reserved.
  *
@@ -16,6 +16,29 @@
  * The above copyright notice and this permission notice shall be included
  * in all copies or substantial portions of the Software.
  *
+ * The module keeps one static AI_BASIC_PROTO_T with the transporter, derived
+ * crypt/sign keys, IVs, sequence counters, per-type fragment state and the
+ * receive buffer. tuya_ai_basic_setup() allocates it (or reinitializes an
+ * existing one): random salt is fed together with the device local key into
+ * HKDF-SHA256 to derive AI_KEY_LEN keys for encryption and signing, and the
+ * AES IV mask comes from the derived key.
+ *
+ * Packet layout: head + optional IV + length + payload + signature (version 1)
+ * or head + length + payload (version 2). Outgoing packets are framed by
+ * __ai_packet_write(), which enforces AI_MAX_FRAGMENT_LENGTH, encrypts the
+ * payload according to AI_PACKET_SECURITY_LEVEL (SL0 none, SL2 ChaCha20,
+ * SL3 AES-256-CBC, SL4 AES-256-GCM), signs version-1 packets with
+ * tal_sha256_mac, and writes through the caller's writer or the default
+ * transporter writer. tuya_ai_basic_pkt_send() splits payloads larger than
+ * one packet into FRAG_START/ING/END packets; incoming fragments are decrypted
+ * per packet and reassembled in tuya_ai_basic_pkt_read(), with sequence
+ * checking and signature verification on version 1.
+ *
+ * Attributes are built with tuya_ai_create_attribute(), serialized by
+ * tuya_pack_user_attrs() and parsed back by tuya_parse_user_attrs(); helpers
+ * exist for each media/text/event/session packet type. Connection control
+ * covers connect, client hello, auth request/response, refresh, ping/pong and
+ * close.
  */
 #include "tuya_transporter.h"
 #include "tuya_iot_config.h"
@@ -93,7 +116,7 @@ typedef struct {
 STATIC AI_BASIC_PROTO_T *ai_basic_proto = NULL;
 
 STATIC OPERATE_RET __default_write(AI_PACKET_WRITER_T *writer, VOID *buf, UINT_T buf_len);
-STATIC VOID tuya_free_user_attrs(AI_ATTRIBUTE_T *attr); // 本文件内使用，不再对外导出
+STATIC VOID tuya_free_user_attrs(AI_ATTRIBUTE_T *attr);
 
 STATIC AI_PACKET_WRITER_T s_default_packet_writer = {
     .write = __default_write,

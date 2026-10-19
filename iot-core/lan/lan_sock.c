@@ -1,25 +1,29 @@
 /**
  * @file lan_sock.c
- * @brief This file contains the implementation of a LAN socket loop mechanism.
- * It includes functions for initializing the socket loop, adding and removing
- * socket readers, handling socket events, and deinitializing the socket loop.
- * The mechanism is designed to manage multiple socket readers, handle socket
- * events efficiently, and provide a clean shutdown process.
+ * @brief Select-based socket event loop that drives LAN and AI monitor
+ * sockets from one thread.
  *
- * The implementation utilizes a select-based approach to monitor and react to
- * socket events across multiple sockets. It supports operations such as adding
- * a new socket reader, updating existing readers, and removing readers. Error
- * handling and socket event detection are integral parts of the loop to ensure
- * robust operation.
+ * A single LAN_SLOOP_S instance keeps a fixed-size reader table, the highest
+ * socket number, a termination flag and a queue for adding, updating and
+ * removing readers without taking a lock in the loop thread. The table holds
+ * LAN_UDP_READER_CNT resident slots plus, when ENABLE_LOCAL_LINK is set,
+ * tuya_lan_get_client_num() client slots; without the LAN protocol only the
+ * resident slots remain, which is what the AI monitor registers against.
  *
- * Additionally, the file includes utility functions for setting up the
- * environment for socket event handling, including initializing and
- * deinitializing resources, managing the socket readers list, and processing
- * socket events through a loop mechanism.
+ * tuya_sock_loop_init() allocates the table, creates the queue and starts
+ * the "lan_sock_loop" thread. Each iteration takes at most one queued reader
+ * update, runs every reader's pre_select hook, and, when at least one
+ * descriptor is registered, calls tal_net_select() on the read and exception
+ * sets with a one-second timeout. Exception descriptors invoke their err
+ * hook, readable descriptors their read hook, and the loop ends when
+ * tuya_sock_loop_disable() clears the terminate flag; each reader's quit hook
+ * then runs before the resources are released and, with ENABLE_LOCAL_LINK,
+ * tuya_lan_exit() is called.
  *
- * This implementation is part of the Tuya IoT SDK and aims to provide a
- * reliable and efficient way to handle LAN socket communication for IoT
- * devices.
+ * Registration and unregistration only enqueue a sloop_sock_t, so they are
+ * safe from other threads; the loop performs the actual table update and
+ * closing of removed sockets. A zero-reader table makes the loop sleep for
+ * two seconds per iteration.
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *
@@ -55,8 +59,9 @@ static uint32_t __ty_sock_get_reader_num(void)
 #if defined(ENABLE_LOCAL_LINK) && (ENABLE_LOCAL_LINK == 1)
     return (LAN_UDP_READER_CNT + tuya_lan_get_client_num());
 #else
-    /* 局域网协议未编入：reader 表只剩常驻槽位，供 AI monitor 注册
-     * （1 个服务端 + 最多 3 个客户端，见 AI_MONITOR_MAX_CLIENTS_DEFAULT） */
+    /* LAN protocol not compiled in: the reader table keeps only the resident
+     * slots for AI monitor registration (1 server + up to 3 clients, see
+     * AI_MONITOR_MAX_CLIENTS_DEFAULT) */
     return LAN_UDP_READER_CNT;
 #endif
 }

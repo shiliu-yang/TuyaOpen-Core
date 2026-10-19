@@ -1,26 +1,26 @@
 /**
  * @file tal_api.c
- * @brief Provides Tuya Abstract Layer (TAL) API implementations for semaphores,
- * mutexes, OTA, and queues.
+ * @brief TAL dispatch for semaphores, mutexes, queues and OTA, plus optional
+ * external RAM allocation.
  *
- * This source file implements the Tuya Abstract Layer (TAL) APIs for managing
- * semaphores, mutexes, Over-The-Air (OTA) updates, and message queues. It
- * serves as an abstraction layer that interfaces with the lower-level Tuya
- * Kernel Layer (TKL) to provide simplified and unified API calls for
- * application development. The TAL APIs facilitate the development of Tuya IoT
- * applications by offering standardized operations for synchronization
- * primitives (semaphores and mutexes), handling OTA updates, and managing
- * inter-thread communication through queues.
+ * Every tal_semaphore_*, tal_mutex_* and tal_queue_* function resolves the
+ * platform ops card through tal_api_get_ops(), which returns
+ * tal_api_ops_platform (defined by the port). TAL_EXEC_OP checks that the card
+ * and the requested member are non-NULL, logs the missing operation and
+ * returns a caller-supplied default on failure; TAL_EXEC_OP_VOID is the
+ * variant for operations without a return value. The tal_* signatures match
+ * the ones declared in the tal_semaphore.h, tal_mutex.h and tal_queue.h
+ * headers.
  *
- * The underlying TKL calls are dispatched through the platform ops card
- * (TAL_API_OPS_T, see tal_api_ops.h) assembled in the port, instead of
- * linking against tkl_* symbols directly. The tal_* API signatures are
- * unchanged for callers.
+ * OTA is an optional capability delivered by runtime callback injection:
+ * tal_ota_register_cbs() stores a TAL_OTA_CBS_T pointer, and the three
+ * tal_ota_* functions dispatch through it with OPRT_NOT_SUPPORTED as the
+ * default when no callback set is registered. The registrant keeps the
+ * structure alive for the whole OTA flow.
  *
- * OTA is an optional capability dispatched through callbacks injected at
- * runtime (tal_ota_register_cbs, see tal_ota.h): platforms/applications
- * without OTA simply don't register, and tal_ota_* then returns
- * OPRT_NOT_SUPPORTED (no stub card is required).
+ * When ENABLE_EXT_RAM is enabled, tal_ex_ram_malloc() and tal_ex_ram_free()
+ * dispatch to the ex_ram_* members of the same ops card and return NULL or do
+ * nothing when those members are absent.
  *
  * @note This file is part of the Tuya IoT Development Platform and is intended
  * for use in Tuya-based applications. It is subject to the platform's license
@@ -37,8 +37,6 @@
 #include "tal_log.h"
 #include "tal_api_ops.h"
 
-/* 标准平台 ops 卡（port 的 port_runtime.c 定义，成员指向其 port_semaphore、
- * port_mutex、port_queue 等实现） */
 extern TAL_API_OPS_T tal_api_ops_platform;
 
 TAL_API_OPS_T *tal_api_get_ops(void)
@@ -46,8 +44,9 @@ TAL_API_OPS_T *tal_api_get_ops(void)
     return &tal_api_ops_platform;
 }
 
-/* OTA 回调注入（平台可选能力，见 tal_ota.h）：未注册时 tal_ota_* 返回
- * OPRT_NOT_SUPPORTED；注册方保证回调结构生命周期覆盖整个 OTA 流程 */
+/* OTA callback injection (optional platform capability, see tal_ota.h): when
+ * not registered tal_ota_* returns OPRT_NOT_SUPPORTED; the registrant
+ * guarantees the callback structure outlives the whole OTA flow */
 static const TAL_OTA_CBS_T *s_ota_cbs = NULL;
 
 void tal_ota_register_cbs(const TAL_OTA_CBS_T *cbs)
@@ -93,11 +92,12 @@ void tal_ota_register_cbs(const TAL_OTA_CBS_T *cbs)
         }                                                                                                              \
     } while (0)
 
-/* 主卡（tal_api_ops_platform）便捷宏 */
+/* Convenience macros for the main card (tal_api_ops_platform) */
 #define TAL_API_EXEC_OP(op_name, default_ret, ...) TAL_EXEC_OP(tal_api_get_ops(), op_name, default_ret, __VA_ARGS__)
 #define TAL_API_EXEC_OP_VOID(op_name, ...)         TAL_EXEC_OP_VOID(tal_api_get_ops(), op_name, __VA_ARGS__)
 
-/* OTA 回调分发（s_ota_cbs，平台可选，未注册返回 OPRT_NOT_SUPPORTED）便捷宏 */
+/* Convenience macros for OTA callback dispatch (s_ota_cbs, optional platform
+ * capability; returns OPRT_NOT_SUPPORTED when not registered) */
 #define TAL_OTA_EXEC_OP(op_name, default_ret, ...) TAL_EXEC_OP(s_ota_cbs, op_name, default_ret, __VA_ARGS__)
 
 //! sem
@@ -181,7 +181,7 @@ void tal_queue_free(QUEUE_HANDLE queue)
 }
 
 #if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
-//! ex ram（外部 RAM，如 PSRAM；宏隔离，port 经 TAL_API_OPS_T 的 ex_ram_* 成员提供实现）
+//! ex ram (external RAM, e.g. PSRAM; macro-isolated, the port provides the implementation through the ex_ram_* members of TAL_API_OPS_T)
 void *tal_ex_ram_malloc(size_t size)
 {
     TAL_API_EXEC_OP(ex_ram_malloc, NULL, size);

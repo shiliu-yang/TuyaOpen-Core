@@ -8,8 +8,8 @@ target_include_directories(tal_system PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 
 )
-# tal_api.h 伞形头引用兄弟模块头（esp-idf 的 REQUIRES 语义，需 PUBLIC 传播）；
-# tal_network/tal_security 已并入 tuya_transport（连接服务层）
+# tal_api.h is an umbrella header that includes sibling module headers (the
+# esp-idf REQUIRES semantics), so propagation must be PUBLIC.
 target_link_libraries(tal_system
     PUBLIC tuya_transport tuya_utilities
     PRIVATE tuyaopen-headers

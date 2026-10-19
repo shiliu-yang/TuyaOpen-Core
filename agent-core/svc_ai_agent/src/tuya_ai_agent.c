@@ -1,8 +1,9 @@
 /**
  * @file tuya_ai_agent.c
- * @brief
+ * @brief AI agent session layer: owns per-solution-code sessions, routes
+ *        downlink media/text/events to the output module, and sends uplink
+ *        media/events through the AI business layer.
  * @version 0.1
- * @date 2025-04-17
  *
  * @copyright Copyright (c) 2025 Tuya Inc. All Rights Reserved.
  *
@@ -15,6 +16,28 @@
  * The above copyright notice and this permission notice shall be included
  * in all copies or substantial portions of the Software.
  *
+ * A single static AI_AGENT_CTX_T holds the default scode, up/down attributes,
+ * the input descriptor array, up to AI_SESSION_MAX_NUM sessions, TTS config
+ * and MCP callback. tuya_ai_agent_init() copies the caller configuration,
+ * initializes the AI client, input and output modules, and subscribes to
+ * session-close, client-run and devos-state events; deinit tears all of that
+ * down and zeroes the context.
+ *
+ * Session creation resolves a token through tuya_ai_mq_token_req() unless
+ * internal scode mode is enabled, allocates send/receive ids through the AI
+ * business layer, optionally builds TTS/MCP attributes as JSON, and calls
+ * tuya_ai_biz_crt_session(). Uplink media is passed to
+ * tuya_ai_send_biz_pkt() with a stream flag derived from the first-packet
+ * state; events map to the tuya_ai_event_* family.
+ *
+ * Downlink callbacks handle audio streams, images and files (URL download
+ * requests are passed to tuya_ai_http_dld_*, payloads may also be Base64
+ * decoded; images are additionally AES-GCM decrypted under AI_SUB_VERSION 2),
+ * video (AES-GCM decryption of I frames under AI_SUB_VERSION 2), text JSON
+ * (ASR/NLG/SKILL/CloudEvent dispatch) and events (chat break, server VAD, MCP
+ * commands). When ENABLE_JOYINSIDE is on and jd_cfg is supplied, uplink and
+ * event paths are routed to the joyinside client; otherwise they use the
+ * standard AI stack.
  */
 #include <stdio.h>
 #include "tuya_ai_agent.h"
@@ -65,7 +88,7 @@ typedef struct {
 STATIC AI_AGENT_CTX_T ai_agent_ctx;
 
 STATIC OPERATE_RET __mcp_handle(CHAR_T *sid, CHAR_T *eid, CHAR_T *data);
-STATIC VOID tuya_ai_agent_set_eid(AI_EVENT_ID eid); // 本文件内使用（__cloud_trigger_wq），不再对外导出
+STATIC VOID tuya_ai_agent_set_eid(AI_EVENT_ID eid);
 
 STATIC OPERATE_RET __parse_attr_time(BYTE_T *data, UINT_T len, CHAR_T *time_str)
 {
@@ -1318,10 +1341,6 @@ STATIC OPERATE_RET __ai_upload_stream(CHAR_T *scode, AI_PACKET_PT ptype, AI_BIZ_
 
 OPERATE_RET tuya_ai_agent_upload_stream(CHAR_T *scode, AI_PACKET_PT ptype, AI_BIZ_HD_T *biz, CHAR_T *data, UINT_T len, UINT_T total_len)
 {
-    /* 编码链已裁剪（2026-10-13）：上行音频一律直发（PCM 原始数据），不再经
-     * 编码器。原 OPUS/SPEEX/IPC 编码器从未启用（开关默认关 + IPC 变体因悬空
-     * 的 tkl_audio_enc_request 物理不可编），见 svc_ai_codec 移除提交；
-     * 将来需要上行编码时从 esp32 快照/上游取回。 */
     return __ai_upload_stream(scode, ptype, biz, data, len, total_len);
 }
 

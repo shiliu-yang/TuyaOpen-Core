@@ -1,3 +1,15 @@
+/**
+ * @file http_client_wrapper.c
+ * @brief Thin coreHTTP client wrapper: performs one request/response exchange
+ * over a TransportInterface and releases the allocated response.
+ *
+ * http_client_request() builds the request headers, sends the optional body and
+ * the request through coreHTTP, and returns the parsed response; it uses TCP
+ * or TLS depending on the port in the request. http_client_free() releases the
+ * response buffers allocated by the wrapper.
+ *
+ * @copyright Copyright (c) 2025 Tuya Inc. All Rights Reserved.
+ */
 #include "tuya_error_code.h"
 #include "http_client_interface.h"
 #include "transport_interface.h"
@@ -143,8 +155,9 @@ http_client_status_t http_client_request(const http_client_request_t *request, h
 
     HTTPResponse_t http_response = {0};
 
-    /* v3.1.3 需应用提供响应缓冲（头+体共用），所有权随 response->buffer
-     * 交给调用者，由 http_client_free 释放 */
+    /* coreHTTP v3.1.3 requires the application to provide the response buffer
+     * (shared by headers and body); ownership passes to the caller via
+     * response->buffer and is released by http_client_free */
     http_response.pBuffer = tal_malloc(HTTP_CLIENT_RESPONSE_BUFFER_SIZE);
     if (NULL == http_response.pBuffer) {
         tuya_transporter_close(network);
@@ -186,7 +199,7 @@ int http_client_free(http_client_response_t *response)
         return OPRT_INVALID_PARM;
     }
 
-    /* v3.1.3：body/headers 均指向 buffer 内部，只释放 buffer 一份 */
+    /* coreHTTP v3.1.3: body/headers both point into buffer; free buffer only */
     if (response->buffer) {
         tal_free(response->buffer);
         response->buffer = NULL;

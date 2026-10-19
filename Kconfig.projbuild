@@ -1,7 +1,8 @@
-# esp-idf 组件入口：esp-idf 自动收集每个组件的 Kconfig.projbuild 进根菜单，
-# idf.py menuconfig 中出现 "tuyaopen-core" 菜单，配置写入 sdkconfig。
-# esp-idf 会把 CONFIG_* 设为 CMake 变量（组件作用域可见），core 的
-# TuyaOpenOptions.cmake 接受 y/1 并归一化，链路自动闭合。
+# esp-idf component entry: esp-idf automatically collects every component's
+# Kconfig.projbuild into the root menu, so the "tuyaopen-core" menu appears in
+# idf.py menuconfig and settings are written to sdkconfig.
+# esp-idf makes CONFIG_* visible as CMake variables (in component scope); core's
+# TuyaOpenOptions.cmake accepts y/1 and normalizes them, closing the loop.
 menu "tuyaopen-core"
 
 rsource "Kconfig"

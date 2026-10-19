@@ -1,8 +1,22 @@
 /**
  * @file mqc_app.c
- * @brief mqc_app module is used to
+ * @brief Custom MQTT protocol registry: fixed-size handler table, publish
+ *        helper and the netmgr linkage descriptor.
  * @version 0.1
  * @copyright Copyright (c) 2021-2025 Tuya Inc. All Rights Reserved.
+ *
+ * mqc_app_register_cb() stores {protocol, handler} in a static table of
+ * MAX_MQC_PROTOCOL_NUM entries and registers __mqc_app_handler with the IoT
+ * MQTT context, passing the table entry as user_data. __mqc_app_handler
+ * forwards event->root_json to that handler. mqc_app_unregister_cb()
+ * unregisters the protocol and compacts the table, and
+ * mqc_send_custom_mqtt_msg() publishes a NUL-terminated payload under a
+ * protocol id (the length comes from strlen).
+ *
+ * The same file defines the linkage used by netmgr consumers: g_linkage is a
+ * LINKAGE_TYPE_WIFI descriptor whose get callback answers only LINKAGE_CFG_IP
+ * (through tal_netif_get_ip); other configurations return OPRT_NOT_SUPPORTED.
+ * __ai_port_linkage_get() and mqc_get_connection_linkage() expose it.
  */
 
 #include "mqc_app.h"
@@ -107,8 +121,6 @@ OPERATE_RET mqc_send_custom_mqtt_msg(IN CONST uint32_t protocol, IN CONST uint8_
 
     return OPRT_OK;
 }
-
-// netmgr（netmgr 组件已从 iot-core 移除，此处保留原 linkage 接口形态，IP 取本机网口）
 
 OPERATE_RET __linkage_get(IN LINKAGE_CFG_E cfg, OUT VOID *data)
 {

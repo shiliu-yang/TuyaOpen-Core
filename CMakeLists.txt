@@ -1,6 +1,8 @@
-# 仅作 esp-idf 组件入口：component manager 经 idf_component.yml 的 git 依赖
-# 拉取本仓库时，从根目录注册组件。普通 CMake 宿主请 include(tuyaopen-core.cmake)，
-# 不要使用本文件（idf_component_register 仅在 esp-idf 构建中可用）。
+# esp-idf component entry only: when the component manager pulls this repository
+# through the git dependency in idf_component.yml, the component is registered
+# from the repository root. Plain CMake hosts should include(tuyaopen-core.cmake)
+# and must not use this file (idf_component_register is only available in
+# esp-idf builds).
 idf_component_register(SRCS "" INCLUDE_DIRS "")
 
 include(${CMAKE_CURRENT_LIST_DIR}/tuyaopen-core.cmake)

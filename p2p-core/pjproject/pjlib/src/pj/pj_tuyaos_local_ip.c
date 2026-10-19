@@ -1,9 +1,14 @@
 /**
  * @file pj_tuyaos_local_ip.c
- * @brief Local IPv4 helper via TAL (WiFi STA or wired)
+ * @brief Local IPv4 helper for pj: reports the interface address in network
+ * byte order through TAL.
  * @version 1.2
- * @date 2026-08-06
  * @copyright Copyright (c) Tuya Inc.
+ *
+ * tal_compat_get_sta_ipv4_nbo() reads the address with tal_netif_get_ip()
+ * when ENABLE_WIRED is set, parses the dotted string, and rejects loopback
+ * and unspecified hosts. Without ENABLE_WIRED, or when no usable address is
+ * available, it returns -1.
  */
 #include "tal_local_ip.h"
 #include "tuya_cloud_types.h"
@@ -12,8 +17,6 @@
 #include <stdio.h>
 #include <string.h>
 
-/* 本机 IP 取 wired（tal_netif）路径；原 WiFi 分支已随 tal_wifi 从 core 移除
- * 一并删除（恢复方法见 git 历史）。 */
 #if defined(ENABLE_WIRED) && (ENABLE_WIRED == 1)
 #include "tal_netif.h"
 #endif

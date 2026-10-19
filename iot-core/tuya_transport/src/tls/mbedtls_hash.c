@@ -1,15 +1,11 @@
 /**
  * @file mbedtls_hash.c
- * @brief Provides functions for SHA256, MD5, and SHA1 hash operations using MbedTLS.
+ * @brief TAL hash primitives backed by mbedtls: SHA-1, SHA-224, SHA-256 and
+ * MD5, in streaming (create/update/finish) and one-shot forms.
  *
- * This file contains the implementation of functions to create, initialize, update,
- * and finalize SHA256, MD5, and SHA1 hash operations. It utilizes the MbedTLS library
- * for cryptographic operations, providing a wrapper for easier usage within applications
- * that require cryptographic hashing. The functions are designed to be used with Tuya's
- * IoT platform, encapsulating common operations in a simplified API.
- *
- * 本文件即 TAL 哈希原语的实现本体：原 tkl_* 透传层已删除，此处的 mbedtls 实现
- * 直接作为 tal_hash.h 中声明的实现（合并式收编）。
+ * Each family exposes context create/free, start/update/finish and a one-shot
+ * helper (tal_sha256_ret, tal_md5_ret, tal_sha1_ret). This file is the backend
+ * behind tal_hash.c.
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *

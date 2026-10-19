@@ -1,18 +1,17 @@
 /**
  * @file tal_fs_ops.h
- * @brief tal_fs 的平台 ops 契约：文件系统 18 接口（9 文件 + 4 路径 + 5 目录）
+ * @brief TAL file system platform ops contract: TAL_FS_OPS_T with 18
+ *        interfaces (9 file + 4 path + 5 directory).
  *
- * 定义 TAL_FS_OPS_T：消费方在 fs_card.c 组装 tal_fs_ops_platform（成员绑定本
- * 平台 fs_card_fopen / fs_card_mkdir 等 / fs_card_dir_* 实现），core 的 tal_fs.c
- * 经 getter 完成 tal_fs_* 分发，对上签名不变。
+ * The consumer assembles tal_fs_ops_platform in fs_card.c, binding the members
+ * to its fs_card_fopen / fs_card_mkdir / fs_card_dir_* implementations; core's
+ * tal_fs.c dispatches tal_fs_* through tal_fs_get_ops().
  *
- * 与主卡 TAL_API_OPS_T（tal_api_ops.h）解耦：文件系统是 p2p / AI 播放可选能力
- * （调用方 p2p-core/local_store 与 agent_demo 的 audio_player 文件源），不用的
- * 平台不编 fs_card.c（2026-10-13 自 port/src/port_fs.c 下沉：p2p_demo 与
- * agent_demo 各持一份副本，由 ENABLE_TUYA_P2P || ENABLE_AI_PLAYER 门控）。
- *
- * 契约只收编 local_store 实际用到的 18 个接口；其余接口（faccess / fgetsize /
- * ftell / ftruncate 等）零调用，已随历史清理删除（无实现）。
+ * The file system is an optional capability. Its callers are
+ * p2p-core/local_store and the audio_player file source; platforms that do not
+ * use it do not compile fs_card.c, which is gated by
+ * ENABLE_TUYA_P2P || ENABLE_AI_PLAYER. The contract contains exactly the 18
+ * interfaces listed below.
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *
@@ -29,52 +28,54 @@ extern "C" {
 #endif
 
 /**
- * @brief tal_fs 平台 ops：成员与 port 的 port_fs / port_dir 实现一一对应
+ * @brief tal_fs platform ops: members map one-to-one to the platform file
+ *        system implementation assembled in fs_card.c
  *
- * @note 句柄类型沿用 port 定义（TUYA_FILE / TUYA_DIR / TUYA_FILEINFO 均为
- *       void* 别名），可直接绑定 port 的 tkl_* 实现；返回值语义与 tal_fs.h
- *       对应接口逐条一致（句柄类 NULL 失败；读写类返回字节数；tal_fileno
- *       返回 fd；其余 0 成功、非 0 失败）
+ * @note Handle types come from tuya_cloud_types.h (TUYA_FILE / TUYA_DIR /
+ *       TUYA_FILEINFO are void* aliases) and bind directly to the platform
+ *       implementation. Return values follow tal_fs.h one-to-one (handles:
+ *       NULL on failure; read/write: byte counts; tal_fileno: fd; others:
+ *       0 on success, non-zero on failure).
  */
 typedef struct {
-    //! 文件
-    /* 打开文件；见 tal_fs.h 的 tal_fopen */
+    //! file
+    /* Open a file; see tal_fopen in tal_fs.h */
     TUYA_FILE (*fopen)(const char *path, const char *mode);
-    /* 关闭文件；见 tal_fs.h 的 tal_fclose */
+    /* Close a file; see tal_fclose in tal_fs.h */
     int (*fclose)(TUYA_FILE file);
-    /* 写文件；见 tal_fs.h 的 tal_fwrite */
+    /* Write a file; see tal_fwrite in tal_fs.h */
     int (*fwrite)(void *buf, int bytes, TUYA_FILE file);
-    /* 读文件；见 tal_fs.h 的 tal_fread */
+    /* Read a file; see tal_fread in tal_fs.h */
     int (*fread)(void *buf, int bytes, TUYA_FILE file);
-    /* 定位文件读写位置；见 tal_fs.h 的 tal_fseek */
+    /* Seek to an offset; see tal_fseek in tal_fs.h */
     int (*fseek)(TUYA_FILE file, int64_t offs, int whence);
-    /* 冲刷文件流缓冲；见 tal_fs.h 的 tal_fflush */
+    /* Flush the stream buffer; see tal_fflush in tal_fs.h */
     int (*fflush)(TUYA_FILE file);
-    /* 落盘（按 fd）；见 tal_fs.h 的 tal_fsync */
+    /* Flush to storage by fd; see tal_fsync in tal_fs.h */
     int (*fsync)(int fd);
-    /* 取文件 fd；见 tal_fs.h 的 tal_fileno */
+    /* Get the file fd; see tal_fileno in tal_fs.h */
     int (*fileno)(TUYA_FILE file);
-    /* 读一行；见 tal_fs.h 的 tal_fgets */
+    /* Read one line; see tal_fgets in tal_fs.h */
     char *(*fgets)(char *buf, int len, TUYA_FILE file);
-    //! 路径
-    /* 判断文件/目录是否存在；见 tal_fs.h 的 tal_fs_is_exist */
+    //! path
+    /* Check whether a file/directory exists; see tal_fs_is_exist in tal_fs.h */
     int (*fs_is_exist)(const char *path, BOOL_T *is_exist);
-    /* 建目录；见 tal_fs.h 的 tal_fs_mkdir */
+    /* Create a directory; see tal_fs_mkdir in tal_fs.h */
     int (*fs_mkdir)(const char *path);
-    /* 删除文件/目录；见 tal_fs.h 的 tal_fs_remove */
+    /* Remove a file/directory; see tal_fs_remove in tal_fs.h */
     int (*fs_remove)(const char *path);
-    /* 重命名；见 tal_fs.h 的 tal_fs_rename */
+    /* Rename; see tal_fs_rename in tal_fs.h */
     int (*fs_rename)(const char *path_old, const char *path_new);
-    //! 目录
-    /* 打开目录；见 tal_fs.h 的 tal_dir_open */
+    //! directory
+    /* Open a directory; see tal_dir_open in tal_fs.h */
     int (*dir_open)(const char *path, TUYA_DIR *dir);
-    /* 关闭目录；见 tal_fs.h 的 tal_dir_close */
+    /* Close a directory; see tal_dir_close in tal_fs.h */
     int (*dir_close)(TUYA_DIR dir);
-    /* 读目录项（内部指针后移）；见 tal_fs.h 的 tal_dir_read */
+    /* Read a directory entry (advances the internal pointer); see tal_dir_read in tal_fs.h */
     int (*dir_read)(TUYA_DIR dir, TUYA_FILEINFO *info);
-    /* 取目录项名字；见 tal_fs.h 的 tal_dir_name */
+    /* Get the entry name; see tal_dir_name in tal_fs.h */
     int (*dir_name)(TUYA_FILEINFO info, const char **name);
-    /* 判断目录项是否目录；见 tal_fs.h 的 tal_dir_is_directory */
+    /* Check whether the entry is a directory; see tal_dir_is_directory in tal_fs.h */
     int (*dir_is_directory)(TUYA_FILEINFO info, BOOL_T *is_dir);
 } TAL_FS_OPS_T;
 

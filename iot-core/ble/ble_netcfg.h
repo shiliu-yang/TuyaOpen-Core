@@ -1,10 +1,12 @@
 /**
  * @file ble_netcfg.h
- * @brief 蓝牙配网（自包含模块，原 netcfg 框架的 BLE 前端）
+ * @brief BLE network configuration channel: receives ssid/passwd/token from
+ *        the APP over BLE and reports the result through a finish callback.
  *
- * 提供 APP 经 BLE 下发 ssid/passwd/token 的配网通道。应用层直接启动：
- *   tuya_ble_init → ble_netcfg_start(finish_cb)
- * 完成回调里应用自行联网并发布 EVENT_LINK_ACTIVATE 完成绑定激活。
+ * The application layer starts it directly:
+ *   tuya_ble_init -> ble_netcfg_start(finish_cb)
+ * In the finish callback the application connects to the network itself and
+ * publishes EVENT_LINK_ACTIVATE to complete binding activation.
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *
@@ -15,9 +17,6 @@
 
 #include "tuya_cloud_types.h"
 
-/* 配网下发缓冲区定长：原先取自 tkl_wifi.h，但 WIFI TKL 层已随 netmgr 移除
- * （linux port 不再提供该头），此处自持。取值与 port HEAD 的 tkl_wifi.h 一致；
- * #ifndef 守卫兼容将来 WIFI TKL 回归时的同名定义。 */
 #ifndef WIFI_SSID_LEN
 #define WIFI_SSID_LEN 32
 #endif
@@ -29,13 +28,14 @@
 extern "C" {
 #endif
 
-/** APP 经 BLE 下发的 token 长度（原 netcfg.h WL_TOKEN_LEN） */
+/** Token length delivered by the APP over BLE */
 #define BLE_NETCFG_TOKEN_LEN 16
 
 /**
- * @brief 蓝牙配网结果
+ * @brief BLE network configuration result
  *
- * APP 绑定流程中经 BLE 下发：ssid/passwd 供联网，token 供绑定激活
+ * Delivered by the APP over BLE during binding: ssid/passwd are used to join
+ * the network, token is used for binding activation.
  */
 typedef struct {
     /** ssid array */
@@ -53,25 +53,27 @@ typedef struct {
 } ble_netcfg_info_t;
 
 /**
- * @brief 蓝牙配网完成回调
+ * @brief BLE network configuration finish callback
  *
- * @param[in] info 配网结果（ssid/passwd/token）
+ * @param[in] info configuration result (ssid/passwd/token)
  * @return OPRT_OK on success. Others on error, please refer to
  * tuya_error_code.h
  */
 typedef int (*ble_netcfg_finish_cb_t)(ble_netcfg_info_t *info);
 
 /**
- * @brief 启动蓝牙配网：注册配网通道并刷新广播
+ * @brief Start BLE network configuration: register the channel and refresh
+ *        advertising
  *
- * @param[in] cb 配网完成回调（不可为 NULL）
+ * @param[in] cb finish callback (must not be NULL)
  * @return OPRT_OK on success. Others on error, please refer to
  * tuya_error_code.h
  */
 int ble_netcfg_start(ble_netcfg_finish_cb_t cb);
 
 /**
- * @brief 停止蓝牙配网：移除配网通道（未启动时调用安全）
+ * @brief Stop BLE network configuration: remove the channel (safe to call
+ *        when not started)
  *
  * @return OPRT_OK on success. Others on error, please refer to
  * tuya_error_code.h

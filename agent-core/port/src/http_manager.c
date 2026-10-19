@@ -1,8 +1,25 @@
 /**
  * @file http_manager.c
- * @brief http_manager module is used to
+ * @brief HTTP session manager: pooled sessions, URL parsing, and
+ *        request/response-header exchange over TCP or TLS.
  * @version 0.1
  * @copyright Copyright (c) 2021-2025 Tuya Inc. All Rights Reserved.
+ *
+ * get_http_manager_instance() lazily creates a singleton that exposes
+ * create/send/receive/destroy callbacks over a fixed pool of
+ * MAX_HTTP_SESSION_NUM sessions, serialized by one mutex. Each session keeps
+ * its own context: URL, parsed host/path/port/TLS flag and response info.
+ *
+ * http_session_send() parses the request URL, creates a transporter (TLS when
+ * the scheme is https, otherwise TCP), fetches the server certificate through
+ * iotdns for TLS, connects with the default 60 s timeout, and hands the
+ * request to coreHTTP (HTTPClient_InitializeRequestHeaders / HTTPClient_Send)
+ * with a 512-byte header buffer. The body is not parsed (DO_NOT_PARSE_BODY
+ * flag): http_session_receive() returns only the status line, content length
+ * and keep-alive flag, and this layer never reads the body.
+ *
+ * Session memory uses tal_ex_ram_malloc/tal_ex_ram_free when ENABLE_EXT_RAM is
+ * enabled, and tal_malloc/tal_free otherwise.
  */
 
 #include "http_manager.h"
@@ -95,7 +112,7 @@ S_HTTP_MANAGER *get_http_manager_instance(VOID_T)
 
 static SESSION_ID http_session_create_internal(const char *url, BOOL_T is_persistent)
 {
-    (void)is_persistent; /* session 不再保存持久化标志（vtable 签名保留该参数） */
+    (void)is_persistent;
 
     if (NULL == url) {
         return NULL;
@@ -163,7 +180,7 @@ static void http_session_ctx_reset_response(http_session_ctx_t *ctx)
         return;
     }
 
-    /* Cleanup legacy response */
+    /* Free the previous response */
     if (ctx->response.buffer || ctx->response.body) {
         http_client_free(&ctx->response);
         memset(&ctx->response, 0, sizeof(ctx->response));
@@ -256,11 +273,6 @@ static const char *http_method_to_string(http_method_t method)
     }
 }
 
-/*
- * 解析 URL：拆出 host / path(含 query) / port / 是否 TLS。
- * 替代原 nodejs http-parser 依赖（本仓已移除该第三方库），
- * 仅覆盖 http_manager 使用到的 URL 形态：scheme://host[:port][/path][?query]。
- */
 static OPERATE_RET http_parse_url(const char *url, char **host, char **path, uint16_t *port, BOOL_T *use_tls)
 {
     if (!url || !host || !path || !port || !use_tls) {
@@ -269,7 +281,7 @@ static OPERATE_RET http_parse_url(const char *url, char **host, char **path, uin
 
     const char *cursor = url;
 
-    /* 1) scheme（无 scheme 时按裸 host 处理） */
+    /* 1) scheme (a bare host is accepted when no scheme is present) */
     *use_tls = false;
     const char *schema_sep = strstr(cursor, "://");
     if (schema_sep) {
@@ -280,7 +292,7 @@ static OPERATE_RET http_parse_url(const char *url, char **host, char **path, uin
         cursor = schema_sep + 3;
     }
 
-    /* 2) host 段：到 ':'（端口）/ '/' / '?' / '#' 结束 */
+    /* 2) host segment: ends at ':' (port), '/', '?' or '#' */
     const char *host_start = cursor;
     while (*cursor && (*cursor != ':') && (*cursor != '/') && (*cursor != '?') && (*cursor != '#')) {
         cursor++;
@@ -291,12 +303,6 @@ static OPERATE_RET http_parse_url(const char *url, char **host, char **path, uin
         return OPRT_INVALID_PARM;
     }
 
-    /* 3) 可选端口。三态必须分离（1c 评审）：
-     *   a) 未写端口 → 用默认（80/443）；
-     *   b) 显式 :0 → 非法（端口 0 保留），报错；
-     *   c) >65535 → 非法，报错（uint16 回绕会静默连错端口：:73616→8080 实测可连到
-     *      本地其他服务；:65536→0 曾被"0 判假"吞掉、静默落默认 80/443）。
-     * 原三元 `url_port ? url_port : default` 把三种语义混为一谈。 */
     uint32_t url_port = 0;
     BOOL_T   has_port = false;
     if (*cursor == ':') {
@@ -311,7 +317,7 @@ static OPERATE_RET http_parse_url(const char *url, char **host, char **path, uin
             url_port = next;
             cursor++;
         }
-        /* 跳过端口后的非 path 字符，定位到 path/query 起点 */
+        /* Skip non-path characters after the port to reach the path/query start */
         while (*cursor && (*cursor != '/') && (*cursor != '?') && (*cursor != '#')) {
             cursor++;
         }
@@ -327,7 +333,8 @@ static OPERATE_RET http_parse_url(const char *url, char **host, char **path, uin
     }
     memcpy(*host, host_start, host_len);
 
-    /* 4) path + query（无 path 时补 "/"；'#' 之后为 fragment，不发送） */
+    /* 4) path + query (defaults to "/" when absent; anything after '#' is a
+     * fragment and is not sent) */
     BOOL_T need_slash = (*cursor == '?');
     size_t tail_len = 0;
     while (cursor[tail_len] && (cursor[tail_len] != '#')) {
@@ -400,17 +407,10 @@ static OPERATE_RET http_session_send(const SESSION_ID session, const http_req_t 
     ctx->network = tuya_transporter_create(transport_type, NULL);
     if (!ctx->network) {
         PR_ERR("Failed to create transporter");
-        /* host/path 已存入 ctx（上方），交由 destory_http_session →
-         * reset_response 统一释放；此处不得再 free（悬空指针会让 destroy 二次
-         * 释放 → mem_heap double free，1c 评审 finding）。下同。 */
         return OPRT_MALLOC_FAILED;
     }
 
-    /* Configure TLS if needed.
-     * cacert 生命周期（上游 b021da62 UAF 修复）：TLS 层只保留指针——
-     * tuya_tls_config_set() 只 memcpy config 结构体、不拷贝证书数据，
-     * mbedtls 解析在 tuya_transporter_connect() 内才执行。故 cacert 必须
-     * 存活到 connect 返回，在其后释放（见下）。 */
+    /* Configure TLS if needed. */
     uint8_t *cacert = NULL;
     if (use_tls) {
         uint16_t cacert_len = 0;
@@ -418,7 +418,6 @@ static OPERATE_RET http_session_send(const SESSION_ID session, const http_req_t 
         if (OPRT_OK != rt) {
             tuya_transporter_destroy(ctx->network);
             ctx->network = NULL;
-            /* host/path 交 destroy 统一释放，不在此 free（见上注） */
             return rt;
         }
 
@@ -439,12 +438,11 @@ static OPERATE_RET http_session_send(const SESSION_ID session, const http_req_t 
             http_safe_free(cacert);
             tuya_transporter_destroy(ctx->network);
             ctx->network = NULL;
-            /* host/path 交 destroy 统一释放，不在此 free（见上注） */
             return rt;
         }
     }
 
-    /* Connect to server（cacert 在本调用内被 mbedtls 解析） */
+    /* Connect to server (cacert is parsed by mbedtls inside this call) */
     rt = tuya_transporter_connect(ctx->network, host, port, HTTP_TIMEOUT_MS_DEFAULT);
     http_safe_free(cacert);
     if (OPRT_OK != rt) {
@@ -452,9 +450,6 @@ static OPERATE_RET http_session_send(const SESSION_ID session, const http_req_t 
         tuya_transporter_close(ctx->network);
         tuya_transporter_destroy(ctx->network);
         ctx->network = NULL;
-        /* host/path 交 destroy 统一释放，不在此 free（见上注）——
-         * 原实现在此 free 后未置 NULL，destroy 时 reset_response 会二次释放
-         * （mem_heap double free 调试狗告警，1c 评审 finding）。 */
         return rt;
     }
 
@@ -470,7 +465,6 @@ static OPERATE_RET http_session_send(const SESSION_ID session, const http_req_t 
         tuya_transporter_close(ctx->network);
         tuya_transporter_destroy(ctx->network);
         ctx->network = NULL;
-        /* host/path 交 destroy 统一释放，不在此 free（见上注） */
         return OPRT_MALLOC_FAILED;
     }
 
@@ -497,7 +491,6 @@ static OPERATE_RET http_session_send(const SESSION_ID session, const http_req_t 
         tuya_transporter_close(ctx->network);
         tuya_transporter_destroy(ctx->network);
         ctx->network = NULL;
-        /* host/path 交 destroy 统一释放，不在此 free（见上注） */
         return OPRT_COM_ERROR;
     }
 
@@ -506,10 +499,6 @@ static OPERATE_RET http_session_send(const SESSION_ID session, const http_req_t 
     ctx->http_response.pBuffer = ctx->header_buffer;
     ctx->http_response.bufferLen = 512;
 
-    /* 只解析响应头，body 由后续 streaming 按需读取。
-     * 注：原实现用旧版 coreHTTP 的 HTTPClient_Request + HTTP_SEND_DISABLE_RECV_BODY_FLAG；
-     * 本仓为官方 v3.1.3（零修改），等价机制是 respOptionFlags + HTTPClient_Send
-     * （与 iot-core/tuya_transport/src/http/http_session.c 用法一致）。 */
     ctx->http_response.respOptionFlags = HTTP_RESPONSE_DO_NOT_PARSE_BODY_FLAG;
     httpStatus = HTTPClient_Send(&ctx->transport, &ctx->request_headers, (const uint8_t *)req->content,
                                  (req->content && req->content_len > 0) ? (size_t)req->content_len : 0,
@@ -522,7 +511,6 @@ static OPERATE_RET http_session_send(const SESSION_ID session, const http_req_t 
         tuya_transporter_close(ctx->network);
         tuya_transporter_destroy(ctx->network);
         ctx->network = NULL;
-        /* host/path 交 destroy 统一释放，不在此 free（见上注） */
         return OPRT_LINK_CORE_HTTP_CLIENT_SEND_ERROR;
     }
 

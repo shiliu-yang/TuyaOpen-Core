@@ -1,27 +1,13 @@
 /**
  * @file tal_system.c
- * @brief Implements system-level functionalities for Tuya IoT applications.
+ * @brief TAL memory interface: allocation and deallocation through the
+ * platform ops card.
  *
- * This source file provides the implementation of system-level functionalities
- * for Tuya IoT applications, including memory allocation and deallocation. It
- * serves as a wrapper around the Tuya Kernel Layer (TKL) memory management
- * functions, offering a simplified interface for dynamic memory management
- * within the Tuya Abstract Layer (TAL). Additionally, it integrates logging
- * functionalities to report memory allocation failures, aiding in the debugging
- * and monitoring of memory usage.
- *
- * Key functionalities include:
- * - Dynamic memory allocation and deallocation.
- * - Logging of memory allocation failures with current free heap size.
- * - Integration with Tuya's IoT SDK for system-level operations.
- *
- * The implementation aims to provide robust and efficient memory management
- * practices, essential for the reliable operation of IoT devices in
- * resource-constrained environments.
- *
- * @note This file is part of the Tuya IoT Development Platform and is intended
- * for use in Tuya-based applications. It is subject to the platform's license
- * and copyright terms.
+ * tal_malloc(), tal_free() and tal_calloc() resolve the platform ops card
+ * through tal_api_get_ops() and dispatch to its .malloc/.free members; a zero
+ * size yields NULL, and a failed allocation is logged with the return address
+ * and the requested size. tal_calloc() builds zeroed memory from tal_malloc()
+ * plus memset with an overflow check on the element count.
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *
@@ -31,16 +17,16 @@
 #include "tal_log.h"
 #include "tal_memory.h"
 #include "tal_api_ops.h"
-#include "tal_api.h"   /* tal_api_get_ops 声明（随契约迁出后回归 tal_api.h） */
+#include "tal_api.h"
 
 /**
- * @brief Allocates a block of memory of the specified size.
+ * @brief Allocates a block of memory through the platform ops card.
  *
- * This function is used to dynamically allocate memory of the specified size.
+ * A zero size returns NULL without touching the card. A failed allocation is
+ * logged with the caller return address and the requested size.
  *
  * @param size The size of the memory block to allocate.
- * @return A pointer to the allocated memory block, or NULL if the allocation
- * fails.
+ * @return A pointer to the allocated memory block, or NULL on failure.
  */
 void *tal_malloc(size_t size)
 {
@@ -61,11 +47,10 @@ void *tal_malloc(size_t size)
 }
 
 /**
- * @brief Frees the memory pointed to by the given pointer.
+ * @brief Frees a block of memory through the platform ops card.
  *
- * This function is used to deallocate memory that was previously allocated
- * using the `malloc` or `calloc` functions. It takes a pointer to the memory
- * block that needs to be freed and releases the memory back to the system.
+ * NULL is ignored. Memory must come from tal_malloc()/tal_calloc() so that it
+ * is released by the same allocator.
  *
  * @param ptr Pointer to the memory block to be freed.
  */

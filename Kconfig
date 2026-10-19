@@ -1,13 +1,16 @@
-# tuyaopen-core 统一 Kconfig 入口
+# tuyaopen-core unified Kconfig entry
 #
-# 作为子模块使用：宿主工程在自己的 Kconfig 里 rsource 本文件即可，例如
+# Used as a submodule: the host project only needs to rsource this file from
+# its own Kconfig, for example
 #     rsource "third_party/tuyaopen-core/Kconfig"
-# （rsource 的路径相对本文件所在目录，宿主放在任何位置都可。）
+# (rsource paths are relative to this file's directory, so the host may place
+# it anywhere.)
 #
-# 生成的 .config 形如 CONFIG_ENABLE_BLUETOOTH=y，可直接传给本仓库的 CMake：
+# The generated .config looks like CONFIG_ENABLE_BLUETOOTH=y and can be passed
+# to this repository's CMake directly:
 #     cmake -DCONFIG_ENABLE_BLUETOOTH=y ...
-# TuyaOpenOptions.cmake 会把 y/1/on 归一化为 ON。
-# 布尔开关的默认值与 cmake/TuyaOpenOptions.cmake 中的 option() 保持一致。
+# TuyaOpenOptions.cmake normalizes y/1/on to ON.
+# Boolean switch defaults match the option() calls in cmake/TuyaOpenOptions.cmake.
 
 menu "tuyaopen-core"
 
@@ -16,9 +19,7 @@ menu "tuyaopen-core"
     rsource "agent-core/Kconfig"
     rsource "p2p-core/Kconfig"
 
-    # 连接层开关（原 core-communication/Kconfig 并入；tal_bluetooth/
-    # tal_cellular 等模块已删除，tal_wired 已改 tal_netif 归
-    # iot-core/tal_system）
+    # Connectivity layer switches
     config ENABLE_WIRED
         bool "ENABLE_WIRED: wired (Ethernet) support"
         default n

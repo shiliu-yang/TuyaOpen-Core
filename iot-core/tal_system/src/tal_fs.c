@@ -1,14 +1,17 @@
 /**
  * @file tal_fs.c
- * @brief tal_fs 平台分发：18 接口透传到 port 的 port_fs / port_dir（tal_fs_ops_platform）
+ * @brief tal_fs platform dispatch: forwards the 18 interfaces to the port's
+ *        file system implementation (tal_fs_ops_platform).
  *
- * iot-core 不持有任何文件系统逻辑——介质、路径映射、句柄形态都在 port
- * （见 tal_fs_ops.h 契约）。本文件只做 ops 卡分发，与 tal_kv.c 的
- * TAL_KV_EXEC_OP / tal_api.c 的 TAL_API_EXEC_OP 同构。
+ * iot-core holds no file system logic -- medium, path mapping and handle
+ * shape all live in the port (see the tal_fs_ops.h contract). Dispatch goes
+ * through TAL_FS_EXEC_OP, which checks the card and the member before calling
+ * them and returns the given default otherwise.
  *
- * 唯一调用方是 p2p-core/local_store：不用 p2p 时无人引用本文件任何符号，
- * 静态库不拉入 tal_fs.o，port 侧的 tal_fs_ops_platform 也就不需要存在
- * （port_fs.c 整文件由 ENABLE_TUYA_P2P 门控）。
+ * Within this repository the only caller is p2p-core/local_store; when no
+ * tal_fs symbol is referenced the static library does not pull in tal_fs.o
+ * and the port's tal_fs_ops_platform need not exist. The platform
+ * implementation (fs_card.c) is supplied by the application build.
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  */
@@ -16,7 +19,8 @@
 #include "tal_fs_ops.h"
 #include "tal_log.h"
 
-/* 平台 ops 卡（port 的 port_fs.c 定义），core 侧经 getter 分发 */
+/* Platform ops card (defined in the platform's fs_card.c), dispatched by core
+ * through the getter */
 extern TAL_FS_OPS_T tal_fs_ops_platform;
 
 TAL_FS_OPS_T *tal_fs_get_ops(void)
@@ -35,7 +39,7 @@ TAL_FS_OPS_T *tal_fs_get_ops(void)
     } while (0)
 
 /* ---------------------------------------------------------------------------
- * 文件
+ * File
  * --------------------------------------------------------------------------- */
 TUYA_FILE tal_fopen(const char *path, const char *mode)
 {
@@ -83,7 +87,7 @@ char *tal_fgets(char *buf, int len, TUYA_FILE file)
 }
 
 /* ---------------------------------------------------------------------------
- * 路径
+ * Path
  * --------------------------------------------------------------------------- */
 int tal_fs_is_exist(const char *path, BOOL_T *is_exist)
 {
@@ -106,7 +110,7 @@ int tal_fs_rename(const char *path_old, const char *path_new)
 }
 
 /* ---------------------------------------------------------------------------
- * 目录
+ * Directory
  * --------------------------------------------------------------------------- */
 int tal_dir_open(const char *path, TUYA_DIR *dir)
 {

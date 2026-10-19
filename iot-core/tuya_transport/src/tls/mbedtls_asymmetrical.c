@@ -1,12 +1,13 @@
 /**
  * @file mbedtls_asymmetrical.c
- * @brief 非对称加密（RSA/ECC）占位文件：当前无任何实现，待后续接入。
+ * @brief TAL asymmetric encryption primitives (RSA/ECC): no functions are
+ * defined at present.
  *
- * 原文件仅为非对称加密的 mbedtls 实现预留位置，未定义任何函数；后续按需在此
- * 补充 RSA/ECC 的 TAL 实现（直接作为 TAL 层实现，不再经 tkl 透传）。
- * 本文件保留（至少保留一个 include），以避免空编译单元告警。
+ * The file includes the mbedtls RSA header so that asymmetric implementations
+ * are added here as TAL layer implementations, and to keep the translation
+ * unit non-empty.
  *
- * @copyright Copyright 2021-2024 Tuya Inc. All Rights Reserved.
+ * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *
  */
 

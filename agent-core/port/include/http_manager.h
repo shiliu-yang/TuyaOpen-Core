@@ -1,8 +1,25 @@
 /**
  * @file http_manager.h
- * @brief http_manager module is used to
+ * @brief HTTP session manager: pooled sessions, URL parsing, and
+ *        request/response-header exchange over TCP or TLS.
  * @version 0.1
  * @copyright Copyright (c) 2021-2025 Tuya Inc. All Rights Reserved.
+ *
+ * get_http_manager_instance() lazily creates a singleton that exposes
+ * create/send/receive/destroy callbacks over a fixed pool of
+ * MAX_HTTP_SESSION_NUM sessions, serialized by one mutex. Each session keeps
+ * its own context: URL, parsed host/path/port/TLS flag and response info.
+ *
+ * http_session_send() parses the request URL, creates a transporter (TLS when
+ * the scheme is https, otherwise TCP), fetches the server certificate through
+ * iotdns for TLS, connects with the default 60 s timeout, and hands the
+ * request to coreHTTP (HTTPClient_InitializeRequestHeaders / HTTPClient_Send)
+ * with a 512-byte header buffer. The body is not parsed (DO_NOT_PARSE_BODY
+ * flag): http_session_receive() returns only the status line, content length
+ * and keep-alive flag, and this layer never reads the body.
+ *
+ * Session memory uses tal_ex_ram_malloc/tal_ex_ram_free when ENABLE_EXT_RAM is
+ * enabled, and tal_malloc/tal_free otherwise.
  */
 
 #ifndef __HTTP_MANAGER_H__
@@ -38,9 +55,6 @@ typedef enum {
     HTTP_VER_1_1,
 } http_ver_t;
 
-/* HTTP 方法。原依赖 nodejs http-parser 的 enum http_method（本仓已移除该库），
- * 按使用面（http_manager.c 的 http_method_to_string）保留同名枚举，
- * 顺序与 http-parser 一致。 */
 typedef enum {
     HTTP_DELETE = 0,
     HTTP_GET,

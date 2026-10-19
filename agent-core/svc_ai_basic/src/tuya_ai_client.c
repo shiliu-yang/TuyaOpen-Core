@@ -1,9 +1,9 @@
 /**
  * @file tuya_ai_client.c
  * @author tuya
- * @brief ai client
+ * @brief AI basic client: connection state machine, authentication, heartbeat
+ *        and downlink packet dispatch.
  * @version 0.1
- * @date 2025-03-02
  *
  * @copyright Copyright (c) 2023 Tuya Inc. All Rights Reserved.
  *
@@ -16,6 +16,27 @@
  * The above copyright notice and this permission notice shall be included
  * in all copies or substantial portions of the Software.
  *
+ * tuya_ai_client_init() allocates the singleton AI_BASIC_CLIENT_T, stores the
+ * security configuration, initializes MQTT/business sub-modules, timers, the
+ * delayed ping work and a dedicated "ai_client" thread, and registers the CA
+ * save/restore callbacks with the certificate manager. The thread drives the
+ * AI_STATE_* state machine: IDLE waits for MQTT connectivity and time sync,
+ * SETUP fetches the server configuration, then CONNECT -> CLIENT_HELLO ->
+ * AUTH_REQ -> AUTH_RESP -> RUNNING. Reconnect delays grow over
+ * AI_RECONN_TIME_NUM steps; any error is handled per state by
+ * __ai_client_handle_err().
+ *
+ * In RUNNING, received packets are classified: pong, refresh response,
+ * connection close, delay-disconnect and all other (business) packets, which
+ * are forwarded to the registered AI_BASIC_DATA_HANDLE callback. A ping is
+ * scheduled every heartbeat interval; the pong must arrive within
+ * AT_PING_TIMEOUT seconds, and three consecutive timeouts close the
+ * connection. Under AI_VERSION 2 the runtime also performs an idle check that
+ * closes the connection when no business packet arrives inside the check
+ * window.
+ *
+ * TLS server certificates obtained during connection setup are persisted via
+ * tal_kv under AI_DOMAIN_CA_KV_KEY and restored on reconnect.
  */
 #include "gw_intf.h"
 #include "uni_log.h"
@@ -95,7 +116,7 @@ STATIC UINT_T __ai_get_random_value(UINT_T min, UINT_T max)
     return min + uni_random() % (max - min + 1);
 }
 
-STATIC VOID tuya_ai_client_stop_ping(VOID); // 本文件内使用（__ai_conn_close），不再对外导出
+STATIC VOID tuya_ai_client_stop_ping(VOID);
 
 STATIC VOID __ai_client_set_state(AI_CLIENT_STATE_E state)
 {

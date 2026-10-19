@@ -1,8 +1,12 @@
 /**
  * @file tuya_ai_input.c
- * @brief
- * @version 0.1
- * @date 2025-04-17
+ * @brief AI input sessions: per-scode ring buffers that carry uplink audio and
+ * text packets into the AI business layer.
+ *
+ * Each scode keeps an AI_INPUT_SESSION_CTX_T with a ring buffer and a start
+ * flag. Audio and text input calls append framed packets to the ring buffer
+ * (tuya_ai_audio_input_s / tuya_ai_text_input_s), start/stop control the
+ * session, and the deinit path releases every session context.
  *
  * @copyright Copyright (c) 2025 Tuya Inc. All Rights Reserved.
  *

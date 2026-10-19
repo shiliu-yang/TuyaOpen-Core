@@ -1,25 +1,17 @@
 /**
  * @file tal_kv.h
- * @brief TAL 键值存储接口：init / set / get / del 四接口
+ * @brief tal_kv platform dispatch: forwards the four interfaces to the port's
+ *        KV implementation (tal_kv_ops_platform).
  *
- * 只定义存储语义，不涉及实现：key 为 C 字符串，value 为任意二进制数据。
- * 存储介质、记录格式、加密、序列化全部由平台 port 的 port_kv 决定
- * （Linux = littlefs + AES；NVS 类平台直接映射芯片 KV），iot-core 不持有
- * 任何 KV 逻辑，仅经 tal_kv_ops.h 的 ops 卡透传。
+ * iot-core holds no KV logic -- storage medium, record format, encryption and
+ * serialization all live in the port (see the tal_kv_ops.h contract).
+ * Dispatch goes through TAL_KV_EXEC_OP, which checks the card and member
+ * before calling them and returns the given default otherwise.
  *
- * 内存约定：tal_kv_get 成功时返回堆内存（*value），调用者用 tal_free 释放；
- * 失败时 *value 置 NULL、*length 置 0。
- *
- * key 契约：key 为 C 字符串（非 NULL）。长度上限与字符集由平台决定——
- * Linux/littlefs：≤255 且不含 '/'；NVS 类平台：≤15 字符，此类平台必须由 port
- * 做 key 映射（如 SHA-256 取前 16 字节 hex），否则 core 现用 key 会写入失败
- * （实测超限样例："<namespace>.devid" 26 字符、云端下发的 schemaId 长度不受控）。
- *
- * init 约定：tal_kv_init 必须先于其它接口调用、单线程、只调一次（用不同 cfg
- * 重复 init 会使已写数据无法解密）；init 失败后其它接口不可用。
+ * tal_kv_get() clears *value to NULL and *length to 0 before dispatching, so
+ * callers observe that contract even when the operation is unavailable.
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
- *
  */
 #ifndef __TAL_KV_H__
 #define __TAL_KV_H__
@@ -30,9 +22,10 @@ extern "C" {
 
 #include "tuya_cloud_types.h"
 
-/* 契约层（interface，随所选平台的 port 提供）：tal_kv_cfg_t 与 TAL_KV_OPS_T
- * 的定义在 port/interface/tal_kv_ops.h —— core 只消费契约，不定义契约
- * （分层：port 不依赖 core；core 经宿主注入的 include 路径取契约头） */
+/* Contract layer (supplied by the selected platform's port): tal_kv_cfg_t and
+ * TAL_KV_OPS_T are defined in port/interface/tal_kv_ops.h -- core consumes the
+ * contract, never defines it (layering: port does not depend on core; core
+ * takes the contract header from the host-injected include path). */
 #include "tal_kv_ops.h"
 
 /**
@@ -43,46 +36,51 @@ extern "C" {
 TAL_KV_OPS_T *tal_kv_get_ops(void);
 
 /**
- * @brief 初始化 KV 存储（挂载介质 / 打开芯片 KV）
+ * @brief Initialize KV storage (mount the medium / open the chip KV)
  *
- * @note 必须先于其它接口调用、单线程、只调一次；init 失败后其它接口不可用
- *       （详见文件头的 init 约定）
+ * @note Must run before any other interface, from a single thread, exactly
+ *       once; after a failed init the other interfaces are unusable (see the
+ *       init contract in the file header).
  *
- * @param kv_cfg 配置（不可为 NULL）
- * @return OPRT_OK 成功，负值为错误码
+ * @param kv_cfg configuration (must not be NULL)
+ * @return OPRT_OK on success; negative values are error codes
  */
 int tal_kv_init(tal_kv_cfg_t *kv_cfg);
 
 /**
- * @brief 写入一个键值对（key 已存在则覆盖）
+ * @brief Write a key-value pair (overwrites an existing key)
  *
- * @param key 键（C 字符串，非 NULL）
- * @param value 值（任意二进制，非 NULL）
- * @param length 值长度（字节），**必须 > 0**：为 0 视为非法参数返回
- *               OPRT_INVALID_PARM（空值无意义——tal_kv_get 读回的值恒含
- *               结尾 '\0'，长度至少 1）
- * @return OPRT_OK 成功；参数非法返回 OPRT_INVALID_PARM；其它负值为错误码
+ * @param key key (C string, non-NULL)
+ * @param value value (arbitrary binary, non-NULL)
+ * @param length value length in bytes, **must be > 0**: 0 is rejected as an
+ *               invalid parameter with OPRT_INVALID_PARM (an empty value is
+ *               meaningless -- tal_kv_get always returns a value containing
+ *               the terminating '\0', so the length is at least 1)
+ * @return OPRT_OK on success; OPRT_INVALID_PARM for invalid parameters; other
+ *         negative values are error codes
  */
 int tal_kv_set(const char *key, const uint8_t *value, size_t length);
 
 /**
- * @brief 读取一个键值对
+ * @brief Read a key-value pair
  *
- * 成功时 *value 为堆内存（含结尾 '\0'，调用者用 tal_free 释放），*length 为
- * 数据长度（不含 '\0'）；失败时 *value 置 NULL、*length 置 0。
+ * On success *value is heap memory (including the terminating '\0', released
+ * by the caller with tal_free) and *length is the data length (excluding
+ * '\0'); on failure *value is NULL and *length is 0.
  *
- * @param key 键（C 字符串，非 NULL）
- * @param value 输出：值的堆指针
- * @param length 输出：值长度
- * @return OPRT_OK 成功，OPRT_NOT_FOUND 键不存在，负值为其它错误码
+ * @param key key (C string, non-NULL)
+ * @param value output: heap pointer to the value
+ * @param length output: value length
+ * @return OPRT_OK on success, OPRT_NOT_FOUND if the key does not exist, other
+ *         negative values are error codes
  */
 int tal_kv_get(const char *key, uint8_t **value, size_t *length);
 
 /**
- * @brief 删除一个键（键不存在视为成功）
+ * @brief Delete a key (a missing key is treated as success)
  *
- * @param key 键（C 字符串，非 NULL）
- * @return OPRT_OK 成功，负值为错误码
+ * @param key key (C string, non-NULL)
+ * @return OPRT_OK on success; negative values are error codes
  */
 int tal_kv_del(const char *key);
 

@@ -1,10 +1,23 @@
+/**
+ * @file http_client_interface.h
+ * @brief HTTP client interface: request/response types and the request/free
+ * entry points implemented by http_client_wrapper.c.
+ *
+ * http_client_request_t carries the method, URL, headers, optional body and
+ * transport; http_client_response_t returns the status code, headers and body
+ * buffer. http_client_request() performs one exchange and http_client_free()
+ * releases the response.
+ *
+ * @copyright Copyright (c) 2025 Tuya Inc. All Rights Reserved.
+ */
 #ifndef HTTP_CLIENT_INTERFACE_H
 #define HTTP_CLIENT_INTERFACE_H
 
 #include "tuya_cloud_types.h"
 #include "tal_memory.h"
 
-/* 一次性请求的响应缓冲大小（头+体共用，v3.1.3 需应用提供） */
+/* Response buffer size for one-shot requests (shared by headers and body;
+ * coreHTTP v3.1.3 requires the application to provide it) */
 #define HTTP_CLIENT_RESPONSE_BUFFER_SIZE (8 * 1024)
 
 /**

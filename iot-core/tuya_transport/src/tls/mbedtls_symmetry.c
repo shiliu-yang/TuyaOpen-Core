@@ -1,31 +1,14 @@
 /**
  * @file mbedtls_symmetry.c
- * @brief Provides symmetric encryption and decryption functionalities using mbedtls.
- *        This includes operations like AES encryption and decryption in various modes
- *        (e.g., ECB, CBC).
- * 
- * This file implements the symmetric encryption and decryption functionalities provided
- * by the mbedtls library. It wraps the mbedtls AES functionalities into a more simplified
- * interface for ease of use within applications requiring encryption and decryption
- * capabilities. The provided functions include initialization, setting encryption and
- * decryption keys, performing encryption and decryption operations, and cleanup.
- * 
- * Supported operations:
- * - AES encryption and decryption in ECB mode.
- * - AES encryption and decryption in CBC mode.
- * - Key initialization for both encryption and decryption.
- * - Context initialization and free operations.
- * 
- * Usage of this file should be preceded by proper initialization of the AES context
- * and followed by the appropriate cleanup to prevent memory leaks.
+ * @brief TAL symmetric primitives backed by mbedtls: AES context management,
+ * key setup and ECB/CBC/CTR encryption and decryption.
  *
- * 本文件即 TAL 对称原语的实现本体：原 tkl_* 透传层已删除，此处的 mbedtls 实现
- * 直接作为 tal_symmetry.h 中声明的实现（合并式收编）。
+ * Provides context create/free, encode/decode key initialization, block and
+ * buffer level crypt operations, and the raw (unpadded) helpers used by
+ * tal_symmetry.c.
  *
- * @note This file is part of the Tuya IoT SDK and is subject to the SDK's license terms.
- * 
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
- * 
+ *
  */
 
 #include "tuya_iot_config.h"

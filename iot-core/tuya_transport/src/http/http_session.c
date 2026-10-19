@@ -1,13 +1,23 @@
 /**
  * @file http_session.c
- * @brief HTTP Session implementation for persistent HTTP connections
- * @version 0.1
+ * @brief HTTP sessions over the transport layer: URL parsing, request send,
+ * response-header retrieval and streaming body reads.
+ *
+ * http_open_session() parses the URL, builds the transporter (TLS for https)
+ * and connects; http_send_request() emits the request through coreHTTP with a
+ * caller-allocated response-header buffer (HTTP_SESSION_RESP_HEADER_BUF_SIZE);
+ * http_get_response_hdr()/http_free_response_hdr() expose and release the
+ * parsed status line and headers; http_read_content()/http_write_content()
+ * stream the body; http_send_request_stream() sends a request and leaves the
+ * body on the transport for direct reads. http_close_session() releases the
+ * session and its resources.
+ *
  * @copyright Copyright (c) 2025 Tuya Inc. All Rights Reserved.
  */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <inttypes.h> /* PRIu32：uint32_t 在不同平台是 unsigned int 或 long unsigned */
+#include <inttypes.h> /* PRIu32: uint32_t is unsigned int or long unsigned on different platforms */
 
 #include "tal_api.h"
 #include "tuya_transporter.h"
@@ -22,8 +32,6 @@
 #define DEFAULT_TIMEOUT_MS   (5000)
 #define MAX_URL_LEN          (1024)
 #define HEADER_BUFFER_LENGTH (2048)
-/* response header 接收缓冲（HTTPClient_Send 要求调用方提供；取 coreHTTP 惯例
- * 的 response header 尺寸量级——上游 libhttp 用 HTTP_MAX_RESPONSE_HEADERS_SIZE_BYTES+1） */
 #define HTTP_SESSION_RESP_HEADER_BUF_SIZE (4096)
 
 
@@ -480,11 +488,6 @@ OPERATE_RET http_send_request(http_session_t session, const http_req_t *req, uin
 
     PR_DEBUG("Sending HTTP %s request to %s", method_str, ctx->host);
 
-    /* coreHTTP 的 HTTPClient_Send 要求调用方提供 response header 缓冲（pBuffer
-     * 为 NULL 时直接判参失败 HTTPInvalidParameter；上游 libhttp 走
-     * HTTPClient_Request/RecvInit 模式由 coreHTTP 内部分配，本仓 Send 模式须自行
-     * 分配——2026-10-12 音乐 URL 播放（datasink_url 流式拉流）接通时补上，
-     * 连带激活本文件下方"预收 body 片段"分支，见释放处注释） */
     if (ctx->response.pBuffer == NULL) {
         ctx->response.bufferLen = HTTP_SESSION_RESP_HEADER_BUF_SIZE;
         ctx->response.pBuffer = HTTP_MALLOC(ctx->response.bufferLen);
@@ -612,12 +615,8 @@ OPERATE_RET http_close_session(http_session_t *session)
     ctx->total_body_length = 0;
     ctx->bytes_read = 0;
 
-    /* Free response body。注意（2026-10-12 修复）：pBody 的归属取决于调用模式——
-     * HTTPClient_Request 模式下 coreHTTP 独立分配（上游 libhttp 走此模式）；
-     * 本仓走 HTTPClient_Send + DO_NOT_PARSE_BODY，此时 pBody 指向 pBuffer 内部
-     * （coreHTTP 契约：pBody = parsingContext.pBufferCur），随 pBuffer 一并释放，
-     * 单独 free 即非法释放堆内指针（音乐 URL 播放接通时实测 SIGSEGV 于此）。
-     * 故仅在 pBody 不落在 pBuffer 范围内时才独立释放。 */
+    /* pBody points into pBuffer in Send+DO_NOT_PARSE_BODY mode; only free it
+     * when outside pBuffer */
     if (ctx->response.pBody) {
         const uint8_t *p_body  = (const uint8_t *)ctx->response.pBody;
         bool           in_buf  = (ctx->response.pBuffer != NULL) &&
@@ -629,9 +628,6 @@ OPERATE_RET http_close_session(http_session_t *session)
         ctx->response.pBody = NULL;
     }
     
-    /* 释放 response 缓冲。注意：pBuffer 由 http_send_request 在 Send 前分配
-     * （HTTP_SESSION_RESP_HEADER_BUF_SIZE；coreHTTP 的 Send 要求调用方提供，
-     * 2026-10-12 音乐 URL 播放接通时补上——此前恒 NULL 导致流式 HTTP 未接入） */
     if (ctx->response.pBuffer) {
         HTTP_FREE(ctx->response.pBuffer);
         ctx->response.pBuffer = NULL;
@@ -693,14 +689,13 @@ int http_read_content(http_session_t session, void *buf, unsigned int max_len)
         return 0; // EOF
     }
 
-    /* 先吐 Send(DO_NOT_PARSE_BODY) 时预收进 pBuffer 的 body 片段（若有），
-     * 之后直接经 transport recv 裸读 body（头已收完，body 为纯数据流）。
-     * （pBuffer 自 2026-10-12 起由 http_send_request 分配，本分支已可达） */
     if (ctx->response.bodyLen > 0 && ctx->response.pBody != NULL) {
         size_t copy_len = (ctx->response.bodyLen < (size_t)max_len) ? ctx->response.bodyLen : (size_t)max_len;
         memcpy(buf, ctx->response.pBody, copy_len);
-        /* pBody 是 pBuffer 内的偏移（coreHTTP 契约），经 pBuffer 前移剩余 body——
-         * 避免对 const 指针强转去 const，把"该缓冲可写"的约束显式落在代码里 */
+        /* pBody is an offset into pBuffer (coreHTTP contract); advance the
+         * remaining body through pBuffer to avoid casting away const on the
+         * pointer, making the "this buffer is writable" constraint explicit
+         * in the code */
         uint8_t *body = ctx->response.pBuffer + (ctx->response.pBody - ctx->response.pBuffer);
         memmove(body, body + copy_len, ctx->response.bodyLen - copy_len);
         ctx->response.bodyLen -= copy_len;

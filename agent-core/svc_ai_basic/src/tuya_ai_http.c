@@ -1,9 +1,8 @@
 /**
  * @file tuya_ai_http.c
  * @author tuya
- * @brief ai http
+ * @brief AI HTTP media download entry points and secret-key retrieval.
  * @version 0.1
- * @date 2025-05-18
  *
  * @copyright Copyright (c) 2025 Tuya Inc. All Rights Reserved.
  *
@@ -16,6 +15,19 @@
  * The above copyright notice and this permission notice shall be included
  * in all copies or substantial portions of the Software.
  *
+ * tuya_ai_http_dld_audio/image/file build an AI_HTTP_DLD_T descriptor and
+ * schedule __ai_http_dld_work on the system work queue. The worker fills the
+ * media attributes (codec, format, dimensions, fps; URL payload types are
+ * converted to raw under AI_VERSION 2), opens an HTTP session through
+ * http_manager, sends a GET request and checks for a 200/201 response with a
+ * body. Media body download is not implemented on this side: the stored
+ * callback is not invoked, the request is rejected with an error log, and the
+ * descriptor, session and URL helper are released.
+ *
+ * tuya_ai_http_get_secret_key() posts to "thing.km.secret.get.device" and
+ * Base64-decodes "secretValue" into the caller's key buffer; it only performs
+ * this request under AI_SUB_VERSION 2 and otherwise returns OPRT_OK without
+ * touching the buffer.
  */
 #include <stdio.h>
 #include <string.h>
@@ -128,14 +140,8 @@ STATIC VOID __ai_http_dld_work(VOID *data)
         goto EXIT;
     }
 
-    /* 媒体 URL 下载：agent-core 侧未实现（见 README 已知限制）。
-     * 原实现直接调用 http_read_content(http_sesion->s, ...)，而该符号唯一实现属
-     * iot-core（iot-core/tuya_transport/src/http/http_session.c），会按 iot-core 的
-     * http_session_ctx_t 布局解释 agent-core 的 session context——两者字段序列不同
-     * （iot-core 多 cacert/cacert_len，response/response_ready/transport 偏移均不同），
-     * 实测（把 agent-core ctx 喂给该函数）段错误。
-     * 此处安全失败：下载请求被拒并告警，不再崩溃；完整流式下载（经本 manager 的
-     * transport 直读 body）待按需实现。 */
+    /* Media URL download is not implemented on the agent-core side: the
+     * download request is rejected and an error is logged. */
     PR_ERR("http media download not implemented (agent-core), abort");
     rt = OPRT_COM_ERROR;
 

@@ -1,14 +1,37 @@
 /**
  * @file tuya_iot.c
- * @brief Implementation of Tuya IoT client core logic and state machine.
+ * @brief Tuya IoT client: initialization, the run-state machine, cloud
+ * activation, MQTT service callbacks and DP reporting.
  *
- * This file contains the main logic for initializing, starting, stopping,
- * and managing the Tuya IoT client, including MQTT communication, activation,
- * event dispatching, and device data reporting.
+ * tuya_iot_init() stores the configuration, creates the token semaphore and
+ * the auto-upgrade timer, initializes the TLS layer, the register center,
+ * the certificate manager, the endpoint store, the OTA module, the MQTT
+ * dispatcher, the device metadata (and the device timer when
+ * ENABLE_DEVICE_TIMER is set), and reloads local activation data so an
+ * already-activated device can start without rebinding.
+ *
+ * tuya_iot_yield() advances one state per call: idle, start, local data
+ * load, token pending (binding through EVENT_LINK_ACTIVATE), network check,
+ * endpoint get/update, activation over ATOP, startup update (version sync
+ * and MQTT init), MQTT connect start/connecting/yield, MQTT reconnect,
+ * network reconnect, restart, reset and stop. The state machine drives the
+ * client through binding, activation and cloud connectivity and dispatches
+ * events through the configured handler.
+ *
+ * MQTT service callbacks handle DP commands, reset commands, upgrade
+ * notifications, DP cache notifications and RTC requests. Activation
+ * responses persist the schema and activation record in KV, sync the
+ * timestamp, and publish the corresponding events; the activated-data
+ * removal path clears the schema, activation record and endpoint data and
+ * stops the LAN service and the BLE network-configuration service when their
+ * build switches are enabled.
+ *
+ * The public API also exposes start/stop/reconnect/reset/destroy, token
+ * registration, activated-state queries, JSON DP reporting with optional
+ * timestamp, notify callback and async mode, synchronized version update and
+ * accessors for device ID, local key, secret key and timezone.
  *
  * @copyright Copyright (c) 2021-2025 Tuya Inc. All Rights Reserved.
- *
- * 2025-07-11   yangjie     support link type change
  *
  */
 
@@ -1394,8 +1417,7 @@ int tuya_iot_version_update_sync(tuya_iot_client_t *client)
         PR_WARN("version save info not found:%d", rt);
     }
 
-    /* Compare the version info changed? 先比长度再 memcmp：旧实现靠 tal_kv_get 返回的
-     * "密文长+1" 缓冲冗余掩盖了长度不足，新引擎返回"明文长+1"，直接 memcmp 会越界读 */
+    /* Compare the version info changed? */
     if (readbuf && readlen == version_len && memcmp(version_buffer, readbuf, version_len) == 0) {
         PR_DEBUG("The verison unchanged, dont need sync.");
         tal_free((uint8_t *)readbuf);

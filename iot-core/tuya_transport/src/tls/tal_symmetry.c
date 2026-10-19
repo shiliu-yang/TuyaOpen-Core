@@ -5,8 +5,6 @@
  * decryption operations in various modes (ECB, CBC, CTR), the PKCS7 padding
  * helpers, and the one-shot buffer level helpers.
  *
- * 本文件是组合层：AES 原语（create/free/setkey/crypt_ecb/crypt_cbc/GCM）由 TAL
- * 对称实现（mbedtls_symmetry.c）直接提供，此处不再经 tkl 透传。
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *

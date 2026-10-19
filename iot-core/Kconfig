@@ -1,7 +1,8 @@
 
-# tal_system 随 iot-core 分组（third_party 不再托管），系统参数符号在此挂入
+# tal_system belongs to the iot-core group; its system parameter symbols are
+# sourced here
 rsource "tal_system/Kconfig"
-# 连接服务层（tuya_transport）的 mbedtls 配置菜单
+# mbedtls configuration menu of the connection service layer (tuya_transport)
 rsource "tuya_transport/Kconfig"
 
 menu "configure tuya cloud service"

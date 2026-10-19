@@ -37,10 +37,9 @@ target_include_directories(pjproject PUBLIC ${_pj_incs})
 target_compile_options(pjproject PRIVATE -w)
 target_compile_definitions(pjproject PRIVATE ${_p2p_pj_defines})
 set(_pj_deps tuyaopen-headers tal_system)
-# pj_tuyaos_local_ip.c 在 ENABLE_WIRED 下引 tal_netif.h：tal_netif 已回归
-# iot-core/tal_system（编入 tal_system，头经其 PUBLIC include 传递），
-# 不存在 tal_netif target——原 if(TARGET tal_netif) 是注册时序死代码，已删。
-# 原 if(TARGET tal_wifi) 同因删除（tal_wifi 已从 core 移除）。
+# pj_tuyaos_local_ip.c includes tal_netif.h under ENABLE_WIRED: tal_netif is part
+# of iot-core/tal_system (built into tal_system; its headers propagate through the
+# PUBLIC include), so there is no separate tal_netif target.
 target_link_libraries(pjproject PRIVATE ${_pj_deps})
 unset(_pj_deps)
 unset(_pj_srcs)

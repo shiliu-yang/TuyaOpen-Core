@@ -1,3 +1,16 @@
+/**
+ * @file http_download.c
+ * @brief HTTP file download: size query, ranged requests and sequential
+ * write-out through an http_session.
+ *
+ * http_file_download() drives a small state machine (start, connect, filesize
+ * query, range request, data retrieval, complete) that opens a session for the
+ * URL, learns the remote file size, requests the remaining range and appends
+ * the received body to the destination file until the transfer completes or
+ * fails.
+ *
+ * @copyright Copyright (c) 2025 Tuya Inc. All Rights Reserved.
+ */
 #include "tal_api.h"
 #include "tuya_log.h"
 #include "tuya_error_code.h"
@@ -82,7 +95,8 @@ static int http_download_filesize_get(http_download_t *ctx)
     PR_DEBUG("Getting file object size from host...");
     TUYA_CALL_ERR_GOTO(HTTPClient_InitializeRequestHeaders(&ctx->requestHeaders, &ctx->requestInfo), __exit);
     TUYA_CALL_ERR_GOTO(HTTPClient_AddRangeHeader(&ctx->requestHeaders, 0, 0), __exit);
-    /* Range: 0-0 的 body 仅 1 字节，收完整响应；pBuffer 用下载缓冲承接 */
+    /* Range: 0-0 returns a 1-byte body, so the full response is received;
+     * the download buffer serves as pBuffer */
     ctx->response.pBuffer = ctx->buffer;
     ctx->response.bufferLen = ctx->config.range_length;
     ctx->response.respOptionFlags = 0;
@@ -109,7 +123,8 @@ static int http_download_filesize_get(http_download_t *ctx)
     pFileSizeStr += sizeof(char);
     ctx->file_size = (size_t)strtoul(pFileSizeStr, NULL, 10);
     PR_INFO("The file is %d bytes long.", (int32_t)ctx->file_size);
-    /* pBuffer 即 ctx->buffer（不释放），仅重置响应状态供下次请求使用 */
+    /* pBuffer is ctx->buffer (do not free); only reset the response state
+     * for the next request */
     memset(&ctx->response, 0, sizeof(ctx->response));
 __exit:
     return rt;
@@ -123,7 +138,6 @@ static int http_download_range_request(http_download_t *ctx, uint32_t range_star
     TUYA_CALL_ERR_GOTO(HTTPClient_InitializeRequestHeaders(&ctx->requestHeaders, &ctx->requestInfo), __exit);
     TUYA_CALL_ERR_GOTO(HTTPClient_AddRangeHeader(&ctx->requestHeaders, range_start, range_end), __exit);
     PR_TRACE("Request Headers:\n%.*s", (int32_t)ctx->requestHeaders.headersLen, (char *)ctx->requestHeaders.pBuffer);
-    /* 只收头：body 留在 socket，由 DATE_GET 状态裸读（等价旧 DISABLE_RECV_BODY） */
     ctx->response.pBuffer = ctx->buffer;
     ctx->response.bufferLen = ctx->config.range_length;
     ctx->response.respOptionFlags = HTTP_RESPONSE_DO_NOT_PARSE_BODY_FLAG;
@@ -266,14 +280,17 @@ int http_file_download(http_download_config_t *config)
             }
             ctx->state = DL_STATE_DATE_GET;
             /* fall through */
-            /* 设计意图：range 请求发出后不必再绕一圈 while，直接进入本轮数据读取
-             * （DATE_GET 是 RANGE_REQUEST 的唯一后继，不跳过任何状态）。
-             * 上一行是 GCC 认可的英文关键词注释，缺了它 esp32 构建会告警 */
+            /* Intent: after the range request is sent, go straight to reading
+             * data in this iteration instead of looping through the while
+             * again (DATE_GET is the only successor of RANGE_REQUEST, so no
+             * state is skipped).
+             * The previous line is the English keyword comment recognized by
+             * GCC; without it the esp32 build emits a warning. */
 
         case DL_STATE_DATE_GET: {
-            /* 首轮先消费 Send(DO_NOT_PARSE_BODY) 时预收进 pBuffer 的 body 片段
-             * （pBody 指向 pBuffer 内 body 区），之后经 transport 裸读
-             * （头已收完，body 为纯数据流，等价旧 HTTPClient_Recv） */
+            /* On the first round, consume the body fragment pre-received into
+             * pBuffer by Send(DO_NOT_PARSE_BODY) (pBody points into the body
+             * area of pBuffer); later data is read raw through the transport. */
             if (ctx->response.bodyLen > 0 && ctx->response.pBody != NULL) {
                 memmove(ctx->buffer, ctx->response.pBody, ctx->response.bodyLen);
                 read_size = (int32_t)ctx->response.bodyLen;

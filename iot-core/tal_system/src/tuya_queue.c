@@ -1,11 +1,14 @@
 /**
- * @file tuya_queue.h
- * @brief tuya common queue module
- * @version 1.0
- * @date 2019-10-30
- * 
+ * @file tuya_queue.c
+ * @brief Fixed-capacity message queue built on a circular buffer.
+ *
+ * A queue keeps a byte buffer, its item size, head/tail indexes and a count,
+ * plus a mutex for multi-threaded access. Creation, push, pop, peek, clear and
+ * free are provided; every operation locks the queue mutex through
+ * tal_mutex_*, so the implementation is platform independent.
+ *
  * @copyright Copyright 2021-2025 Tuya Inc. All Rights Reserved.
- * 
+ *
  */
 
 #include "tal_memory.h"
@@ -14,10 +17,6 @@
 #include "tuya_list.h"
 #include "tuya_queue.h"
 
-/* 锁统一走 tal_mutex：经主卡（tal_api ops）分发到各 port 的 mutex 实现，跨平台
- * 文件不直调 tkl、不依赖单平台私有符号。原 SYSTEM_NON_OS 分支依赖 TKL_ENTER/
- * EXIT_CRITICAL 宏，已随 linux port 清理删除（裸机 port 需自行实现 mutex 卡成员，
- * 即把 mutex 实现为临界区或等价物）。 */
 #define QUEUE_CREATE_LOCK(queue)  tal_mutex_create_init(&queue->mutex)
 #define QUEUE_RELEASE_LOCK(queue) tal_mutex_release(queue->mutex)
 #define QUEUE_LOCK(queue)   tal_mutex_lock(queue->mutex)

@@ -1,12 +1,34 @@
 /**
- * @file ble_mgr.C
- * @brief BLE management module for handling BLE operations, including
- * advertising, packet transmission, and encryption.
+ * @file ble_mgr.c
+ * @brief BLE manager for the Tuya BLE service: advertising payload, framed
+ * packet encode/decode with encryption, and session dispatch.
  *
- * This file contains the implementation of the BLE management functionalities
- * required for initializing BLE services, handling advertising data, managing
- * BLE sessions, and processing received BLE packets. It also includes
- * encryption and decryption of BLE packets for secure communication.
+ * A single tuya_ble_mgr_t holds the runtime state: a copy of tuya_ble_cfg_t,
+ * the role, peer information, packet sequence numbers, the reassembly
+ * buffers and the session slots. The manager is created by tuya_ble_init()
+ * and released by tuya_ble_deinit().
+ *
+ * The advertising payload carries Tuya service UUID 0xFD50, and the scan
+ * response carries company ID 0x07D0 with the encryption mode, communication
+ * ability and device name. Frame-control bits mark Security V2, ID
+ * inclusion, the request-connection flag (set when config.network_check is
+ * absent or reports that the network is not ready) and the bound flag; on a
+ * bound device the 16-byte ID is encrypted with the activation secret key.
+ * Advertising content follows the pairing and cloud link state.
+ *
+ * Incoming write reports are reassembled by ble_frame_trsmitr, decrypted and
+ * validated with CRC16 and a strictly increasing sequence number; plaintext
+ * frames are rejected on a bound device. Outgoing packets are encoded as
+ * SN / ACK_SN / CMD / LEN / DATA / CRC16, encrypted with a random IV and sent
+ * in sub-packets through tal_ble_server_common_send().
+ *
+ * BLE events arrive through the TAL callback on the high-priority work queue.
+ * A pair-detection timer disconnects a connection that does not pair within
+ * 30 seconds, and a 3-second monitor timer starts or stops advertising
+ * according to the cloud connection state. Session slots (BLE_SESSION_MAX)
+ * dispatch decrypted packets: this file installs the system session
+ * (device-information queries, pairing, unbind/reset) along with the channel
+ * and DP sessions implemented in ble_channel.c and ble_dp.c.
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *
@@ -153,8 +175,6 @@ static int ble_adv_set(tuya_ble_mgr_t *ble)
     SETBIT(frame_ctrl, 3); // bit3, Security_V2_Confirmed
     SETBIT(frame_ctrl, 8); // bit8, id include, value:1
 
-    /* 链路状态经 core 的 network_check 回调获取（原 netmgr_conn_get）：
-     * 网络未就绪时置位 bit9，APP 据此发起 BLE 连接 */
     if (client->config.network_check == NULL || !client->config.network_check()) {
         SETBIT(frame_ctrl, 9); // bit9, request connection flag (1 - request
                                // connection, 0 - no connection requested)
@@ -749,7 +769,6 @@ static int ble_pair_req(ble_packet_t *req, void *priv_data)
 
     TUYA_CALL_ERR_GOTO(ble_packet_resp(ble, &resp), __exit);
 
-    /* 协议值与原 netmgr_status_e 对齐：0 = 链路断开，1 = 链路已连接 */
     uint8_t netstat = 0;
     tuya_iot_client_t *client = ble->cfg.client;
     if (client != NULL && client->config.network_check != NULL && client->config.network_check()) {

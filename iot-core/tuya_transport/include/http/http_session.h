@@ -1,7 +1,17 @@
 /**
  * @file http_session.h
- * @brief HTTP Session API for persistent HTTP connections
- * @version 0.1
+ * @brief HTTP sessions over the transport layer: URL parsing, request send,
+ * response-header retrieval and streaming body reads.
+ *
+ * http_open_session() parses the URL, builds the transporter (TLS for https)
+ * and connects; http_send_request() emits the request through coreHTTP with a
+ * caller-allocated response-header buffer (HTTP_SESSION_RESP_HEADER_BUF_SIZE);
+ * http_get_response_hdr()/http_free_response_hdr() expose and release the
+ * parsed status line and headers; http_read_content()/http_write_content()
+ * stream the body; http_send_request_stream() sends a request and leaves the
+ * body on the transport for direct reads. http_close_session() releases the
+ * session and its resources.
+ *
  * @copyright Copyright (c) 2025 Tuya Inc. All Rights Reserved.
  */
 
@@ -35,7 +45,6 @@ typedef struct {
     const char *value;
 } http_custom_header_t;
 
-/* HTTP request method（原 http_parser 的 enum http_method，改自定义） */
 typedef enum {
     HTTP_GET,
     HTTP_POST,
@@ -44,7 +53,8 @@ typedef enum {
     HTTP_HEAD,
 } http_method_t;
 
-/* URL 解析结果（各字段指向 url 内部，port 为显式端口或默认 80/443） */
+/* URL parse result (each field points into url; port is the explicit port or
+ * the default 80/443) */
 typedef struct {
     const char *schema;
     uint16_t schema_len;
