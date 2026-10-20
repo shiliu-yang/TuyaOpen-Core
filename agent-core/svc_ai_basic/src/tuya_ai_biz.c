@@ -18,20 +18,20 @@
  *
  */
 #include <stdio.h>
-#include "tal_system.h"
-#include "tal_thread.h"
-#include "tal_mutex.h"
+#include "core_system.h"
+#include "core_thread.h"
+#include "core_mutex.h"
 #include "uni_random.h"
 #include "uni_log.h"
-#include "tal_memory.h"
+#include "core_memory.h"
 #include "tuya_ai_protocol.h"
 #include "tuya_ai_client.h"
 #include "tuya_ai_biz.h"
 #include "base_event.h"
 #include "tuya_ai_private.h"
 #include "tuya_ai_http.h"
-#include "tal_symmetry.h"
-#include "tal_event_info.h"
+#include "core_symmetry.h"
+#include "core_event_info.h"
 
 #ifndef AI_SESSION_MAX_NUM
 #define AI_SESSION_MAX_NUM 2
@@ -183,7 +183,7 @@ OPERATE_RET tuya_ai_send_biz_pkt_custom(USHORT_T id, AI_BIZ_ATTR_INFO_T *attr, A
                 if (key) {
                     UINT32_T enc_len = 0;
                     BYTE_T tag[AI_GCM_TAG_LEN] = {0};
-                    rt = tal_aes_gcm_encode(key, TUYA_AI_SECRET_KEY_LEN, video_head->iv, AI_IV_LEN,
+                    rt = core_aes_gcm_encode(key, TUYA_AI_SECRET_KEY_LEN, video_head->iv, AI_IV_LEN,
                                             NULL, 0, (UINT8_T *)payload, head->len,
                                             (UINT8_T *)(video + video_head_len), &enc_len,
                                             tag, AI_GCM_TAG_LEN);
@@ -310,7 +310,7 @@ OPERATE_RET tuya_ai_send_biz_pkt_custom(USHORT_T id, AI_BIZ_ATTR_INFO_T *attr, A
             if (key) {
                 UINT32_T enc_len = 0;
                 BYTE_T tag[AI_GCM_TAG_LEN] = {0};
-                rt = tal_aes_gcm_encode(key, TUYA_AI_SECRET_KEY_LEN, image_head->iv, AI_IV_LEN,
+                rt = core_aes_gcm_encode(key, TUYA_AI_SECRET_KEY_LEN, image_head->iv, AI_IV_LEN,
                                         NULL, 0, (UINT8_T *)payload, head->len,
                                         (UINT8_T *)(image + image_head_len), &enc_len,
                                         tag, AI_GCM_TAG_LEN);
@@ -452,11 +452,11 @@ STATIC VOID __ai_biz_thread_exit()
 {
     if (ai_basic_biz) {
         if (ai_basic_biz->thread) {
-            tal_thread_delete(ai_basic_biz->thread);
+            core_thread_delete(ai_basic_biz->thread);
             ai_basic_biz->thread = NULL;
         }
         if (ai_basic_biz->mutex) {
-            tal_mutex_release(ai_basic_biz->mutex);
+            core_mutex_release(ai_basic_biz->mutex);
             ai_basic_biz->mutex = NULL;
         }
         OS_FREE(ai_basic_biz);
@@ -468,12 +468,12 @@ STATIC VOID __ai_biz_thread_cb(PVOID_T args)
 {
     OPERATE_RET rt  = OPRT_OK;
     UINT_T      idx = 0, sidx = 0, kdx = 0;
-    while (!ai_basic_biz->terminate && tal_thread_get_state(ai_basic_biz->thread) == THREAD_STATE_RUNNING) {
+    while (!ai_basic_biz->terminate && core_thread_get_state(ai_basic_biz->thread) == THREAD_STATE_RUNNING) {
         if (!tuya_ai_client_is_ready()) {
-            tal_system_sleep(200);
+            core_system_sleep(200);
             continue;
         }
-        tal_mutex_lock(ai_basic_biz->mutex);
+        core_mutex_lock(ai_basic_biz->mutex);
         USHORT_T sent_ids[AI_BIZ_MAX_NUM * AI_SESSION_MAX_NUM] = {0};
         UINT_T   sent_ids_count                                = 0;
         for (idx = 0; idx < AI_SESSION_MAX_NUM; idx++) {
@@ -508,8 +508,8 @@ STATIC VOID __ai_biz_thread_cb(PVOID_T args)
                 }
             }
         }
-        tal_mutex_unlock(ai_basic_biz->mutex);
-        tal_system_sleep(AI_BIZ_TASK_DELAY);
+        core_mutex_unlock(ai_basic_biz->mutex);
+        core_system_sleep(AI_BIZ_TASK_DELAY);
     }
     __ai_biz_thread_exit();
     PR_NOTICE("ai biz thread exit");
@@ -546,7 +546,7 @@ STATIC OPERATE_RET __ai_biz_create_task(VOID)
     thrd_param.ex_ram_mode = 1;
 #endif
 
-    rt = tal_thread_create_and_start(&ai_basic_biz->thread, NULL, NULL, __ai_biz_thread_cb, NULL, &thrd_param);
+    rt = core_thread_create_and_start(&ai_basic_biz->thread, NULL, NULL, __ai_biz_thread_cb, NULL, &thrd_param);
     if (OPRT_OK != rt) {
         PR_ERR("ai biz thread create err, rt:%d", rt);
     }
@@ -1121,7 +1121,7 @@ STATIC OPERATE_RET __ai_biz_recv_event(AI_EVENT_ATTR_T *event, AI_EVENT_HEAD_T *
     OPERATE_RET rt  = OPRT_OK;
     UINT_T      idx = 0;
 
-    tal_mutex_lock(ai_basic_biz->mutex);
+    core_mutex_lock(ai_basic_biz->mutex);
     for (idx = 0; idx < AI_SESSION_MAX_NUM; idx++) {
         if ((ai_basic_biz->session[idx].id[0] != 0) &&
             (!strncmp(ai_basic_biz->session[idx].id, event->session_id, strlen(ai_basic_biz->session[idx].id)))) {
@@ -1136,7 +1136,7 @@ STATIC OPERATE_RET __ai_biz_recv_event(AI_EVENT_ATTR_T *event, AI_EVENT_HEAD_T *
             }
         }
     }
-    tal_mutex_unlock(ai_basic_biz->mutex);
+    core_mutex_unlock(ai_basic_biz->mutex);
 
     if (idx == AI_SESSION_MAX_NUM) {
         PR_ERR("session not found");
@@ -1155,7 +1155,7 @@ STATIC OPERATE_RET __ai_biz_session_destory(AI_SESSION_ID id, AI_STATUS_CODE cod
     }
 
     PR_NOTICE("del sessoion id:%s", id);
-    tal_mutex_lock(ai_basic_biz->mutex);
+    core_mutex_lock(ai_basic_biz->mutex);
     for (idx = 0; idx < AI_SESSION_MAX_NUM; idx++) {
         if (ai_basic_biz->session[idx].id[0] != 0 &&
             !strcmp(ai_basic_biz->session[idx].id, id)) {
@@ -1164,7 +1164,7 @@ STATIC OPERATE_RET __ai_biz_session_destory(AI_SESSION_ID id, AI_STATUS_CODE cod
             break;
         }
     }
-    tal_mutex_unlock(ai_basic_biz->mutex);
+    core_mutex_unlock(ai_basic_biz->mutex);
     if (idx == AI_SESSION_MAX_NUM) {
         PR_ERR("session not found");
         return OPRT_COM_ERROR;
@@ -1266,7 +1266,7 @@ OPERATE_RET __ai_biz_recv_handle(CHAR_T *data, UINT_T len, AI_FRAG_FLAG frag)
         recv_id = UNI_NTOHS(recv_id);
         AI_PROTO_D("recv data id:%d", recv_id);
 
-        tal_mutex_lock(ai_basic_biz->mutex);
+        core_mutex_lock(ai_basic_biz->mutex);
         for (idx = 0; idx < AI_SESSION_MAX_NUM; idx++) {
             if (ai_basic_biz->session[idx].id[0] != 0) {
                 AI_SESSION_T *session = &ai_basic_biz->session[idx];
@@ -1285,7 +1285,7 @@ OPERATE_RET __ai_biz_recv_handle(CHAR_T *data, UINT_T len, AI_FRAG_FLAG frag)
                 }
             }
         }
-        tal_mutex_unlock(ai_basic_biz->mutex);
+        core_mutex_unlock(ai_basic_biz->mutex);
         if (ai_basic_biz->monitor && ai_basic_biz->monitor->recv_cb) {
             rt = ai_basic_biz->monitor->recv_cb(recv_id, &attr_info, &biz_head, payload + offset, ai_basic_biz->monitor->usr_data);
             if (OPRT_OK != rt) {
@@ -1331,7 +1331,7 @@ STATIC OPERATE_RET __ai_clt_close_evt(VOID *data)
         PR_ERR("ai biz is null");
         return OPRT_OK;
     }
-    tal_mutex_lock(ai_basic_biz->mutex);
+    core_mutex_lock(ai_basic_biz->mutex);
     for (idx = 0; idx < AI_SESSION_MAX_NUM; idx++) {
         if (ai_basic_biz->session[idx].id[0] != 0) {
             PR_NOTICE("close session id:%s", ai_basic_biz->session[idx].id);
@@ -1339,7 +1339,7 @@ STATIC OPERATE_RET __ai_clt_close_evt(VOID *data)
             memset(&ai_basic_biz->session[idx], 0, SIZEOF(AI_SESSION_T));
         }
     }
-    tal_mutex_unlock(ai_basic_biz->mutex);
+    core_mutex_unlock(ai_basic_biz->mutex);
     PR_NOTICE("close all session success");
     return OPRT_OK;
 }
@@ -1352,7 +1352,7 @@ STATIC OPERATE_RET __ai_clt_run_evt(VOID *data)
         TUYA_CHECK_NULL_RETURN(ai_basic_biz, OPRT_MALLOC_FAILED);
         memset(ai_basic_biz, 0, SIZEOF(AI_BASIC_BIZ_T));
         ai_basic_biz->monitor = &ai_monitor;
-        TUYA_CALL_ERR_GOTO(tal_mutex_create_init(&ai_basic_biz->mutex), EXIT);
+        TUYA_CALL_ERR_GOTO(core_mutex_create_init(&ai_basic_biz->mutex), EXIT);
         tuya_ai_client_reg_cb(__ai_biz_recv_handle);
         tuya_ai_http_get_secret_key(ai_basic_biz->key);
         PR_NOTICE("ai biz init success");
@@ -1386,7 +1386,7 @@ VOID tuya_ai_biz_deinit(VOID)
             ai_basic_biz->terminate = TRUE;
         } else {
             if (ai_basic_biz->mutex) {
-                tal_mutex_release(ai_basic_biz->mutex);
+                core_mutex_release(ai_basic_biz->mutex);
                 ai_basic_biz->mutex = NULL;
             }
             OS_FREE(ai_basic_biz);
@@ -1465,7 +1465,7 @@ OPERATE_RET tuya_ai_biz_crt_session(UINT_T bizCode, UINT64_T bizTag, AI_SESSION_
         return rt;
     }
 
-    tal_mutex_lock(ai_basic_biz->mutex);
+    core_mutex_lock(ai_basic_biz->mutex);
     UINT_T idx = 0;
     for (idx = 0; idx < AI_SESSION_MAX_NUM; idx++) {
         if (ai_basic_biz->session[idx].id[0] == 0) {
@@ -1478,7 +1478,7 @@ OPERATE_RET tuya_ai_biz_crt_session(UINT_T bizCode, UINT64_T bizTag, AI_SESSION_
     if (__ai_biz_need_send_task()) {
         __ai_biz_create_task();
     }
-    tal_mutex_unlock(ai_basic_biz->mutex);
+    core_mutex_unlock(ai_basic_biz->mutex);
 
     if (idx == AI_SESSION_MAX_NUM) {
         PR_ERR("session num is full");
@@ -1522,7 +1522,7 @@ AI_SESSION_CFG_T *tuya_ai_biz_get_session_cfg(AI_SESSION_ID id)
     UINT_T            idx = 0;
     AI_SESSION_CFG_T *cfg = NULL;
     if (ai_basic_biz) {
-        tal_mutex_lock(ai_basic_biz->mutex);
+        core_mutex_lock(ai_basic_biz->mutex);
         if (NULL == id) {
             cfg = &ai_basic_biz->session[0].cfg;
         } else {
@@ -1535,7 +1535,7 @@ AI_SESSION_CFG_T *tuya_ai_biz_get_session_cfg(AI_SESSION_ID id)
                 }
             }
         }
-        tal_mutex_unlock(ai_basic_biz->mutex);
+        core_mutex_unlock(ai_basic_biz->mutex);
     }
     return cfg;
 }

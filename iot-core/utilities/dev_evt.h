@@ -11,7 +11,7 @@
  * wakelock around each network activity instead of only around the connection
  * lifecycle.
  *
- * Placed in the leaf "common" component so every layer (from tal_network up to
+ * Placed in the leaf "common" component so every layer (from core_network up to
  * the cloud service and other subscribers) can both notify and
  * subscribe without introducing a circular dependency.
  *
@@ -33,7 +33,7 @@ extern "C" {
  * Kept identical (order and names) to the tuyaos-ai DEV_EVT_E so the ULP
  * consumer logic can be ported verbatim. Note: DEV_EVT_TLS_CONNECT and
  * DEV_EVT_HTTP_CONNECT are defined for parity but not fired - the DNS/TCP
- * notify points at the tal_network layer already cover every TLS/HTTP/MQTT/ATOP
+ * notify points at the core_network layer already cover every TLS/HTTP/MQTT/ATOP
  * socket setup.
  */
 typedef enum {

@@ -19,7 +19,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "tal_api.h"
+#include "core_api.h"
 
 #include "tuya_ai_agent.h"
 #include "uni_base64.h"
@@ -31,11 +31,11 @@
 ************************macro define************************
 ***********************************************************/
 #ifdef ENABLE_EXT_RAM
-#define AI_MCP_MALLOC    tal_ex_ram_malloc
-#define AI_MCP_FREE      tal_ex_ram_free
+#define AI_MCP_MALLOC    core_ex_ram_malloc
+#define AI_MCP_FREE      core_ex_ram_free
 #else
-#define AI_MCP_MALLOC    tal_malloc
-#define AI_MCP_FREE      tal_free
+#define AI_MCP_MALLOC    core_malloc
+#define AI_MCP_FREE      core_free
 #endif
 
 /***********************************************************
@@ -618,7 +618,7 @@ MCP_TOOL_T *ai_mcp_tool_create(const char *name, const char *description,
     if (!name || !description || !callback)
         return NULL;
 
-    tool = tal_calloc(1, sizeof(*tool));
+    tool = core_calloc(1, sizeof(*tool));
     if (!tool)
         return NULL;
 
@@ -1202,7 +1202,7 @@ static OPERATE_RET __handle_tools_call(char *sid, char *eid, cJSON *params, cons
     }
 
     /* Call the tool in workqueue */
-    ret = tal_workq_schedule(WORKQ_SYSTEM, __tool_call, msg);
+    ret = core_workq_schedule(WORKQ_SYSTEM, __tool_call, msg);
     if (ret != OPRT_OK) {
         error_msg = "Failed to schedule tool call";
         error_code = MCP_ERROR_INTERNAL;

@@ -18,12 +18,12 @@
  *
  */
 #include <stdio.h>
-#include "tal_system.h"
-#include "tal_thread.h"
-#include "tal_mutex.h"
+#include "core_system.h"
+#include "core_thread.h"
+#include "core_mutex.h"
 #include "uni_random.h"
 #include "uni_log.h"
-#include "tal_memory.h"
+#include "core_memory.h"
 #include "tuya_ai_protocol.h"
 #include "tuya_ai_client.h"
 #include "tuya_ai_event.h"

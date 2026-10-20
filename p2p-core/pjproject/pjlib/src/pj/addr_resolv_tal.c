@@ -1,8 +1,8 @@
 /**
  * @file addr_resolv_tal.c
- * @brief Host resolution on TuyaOpen TAL — replaces addr_resolv_sock.c
+ * @brief Host resolution on TuyaOpen CORE — replaces addr_resolv_sock.c
  *
- * TAL exposes a single IPv4 resolver (tal_net_gethostbyname), which is what
+ * CORE exposes a single IPv4 resolver (core_net_gethostbyname), which is what
  * the TKL/lwIP and POSIX backends both implement. That keeps pjlib free of
  * <netdb.h> and of the lwIP DNS headers.
  *
@@ -15,9 +15,9 @@
 #include <pj/log.h>
 #include <pj/string.h>
 
-#include "tal_api.h"
-#include "tal_network.h"
-#include "tal_ip_addr.h"
+#include "core_api.h"
+#include "core_network.h"
+#include "core_ip_addr.h"
 
 #define THIS_FILE "addr_resolv_tal.c"
 
@@ -52,7 +52,7 @@ PJ_DEF(pj_status_t) pj_gethostbyname(const pj_str_t *hostname, pj_hostent *phe)
     name[hostname->slen] = '\0';
 
     pj_bzero(&addr, sizeof(addr));
-    if (tal_net_gethostbyname(name, &addr) != OPRT_OK) {
+    if (core_net_gethostbyname(name, &addr) != OPRT_OK) {
         PJ_LOG(4, (THIS_FILE, "unable to resolve %s", name));
         return PJ_ERESOLVE;
     }
@@ -81,7 +81,7 @@ PJ_DEF(pj_status_t) pj_gethostbyname(const pj_str_t *hostname, pj_hostent *phe)
  * @param[in,out] count in: array capacity, out: entries filled
  * @param[out] ai resolved addresses
  *
- * @note TAL resolves to a single IPv4 address, so at most one entry is
+ * @note CORE resolves to a single IPv4 address, so at most one entry is
  * returned even when the caller offers a larger array.
  *
  * @return PJ_SUCCESS on success, otherwise an error

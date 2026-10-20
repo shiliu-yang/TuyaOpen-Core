@@ -1,7 +1,7 @@
 
-# tal_system belongs to the iot-core group; its system parameter symbols are
+# core_system belongs to the iot-core group; its system parameter symbols are
 # sourced here
-rsource "tal_system/Kconfig"
+rsource "core_system/Kconfig"
 # mbedtls configuration menu of the connection service layer (tuya_transport)
 rsource "tuya_transport/Kconfig"
 

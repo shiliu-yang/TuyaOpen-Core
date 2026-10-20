@@ -5,7 +5,7 @@ menu "configure mbedtls"
         default n
         help
             Use the mbedtls shipped by the platform instead of the copy
-            bundled in tal_security/libtls/mbedtls-3.1.0. Maps to the CMake
+            bundled in core_security/libtls/mbedtls-3.1.0. Maps to the CMake
             switch CONFIG_ENABLE_PLATFORM_MBEDTLS.
 
     config ENABLE_MBEDTLS_DEBUG

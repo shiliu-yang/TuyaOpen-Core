@@ -14,12 +14,12 @@
 
 #include <errno.h>
 #include "tuya_cloud_types.h"
-#include "tal_network.h"
-#include "tal_api.h"
-#include "tal_network.h"
+#include "core_network.h"
+#include "core_api.h"
+#include "core_network.h"
 #include "tuya_transporter.h"
 #include "tcp_transporter.h"
-#include "tal_network.h"
+#include "core_network.h"
 
 typedef struct tcp_transporter_inter_t {
     struct tuya_transporter_inter_t base;
@@ -56,37 +56,37 @@ OPERATE_RET tuya_tcp_transporter_connect(tuya_transporter_t t, const char *host,
 
     /*resolve ip addr of host*/
     TUYA_IP_ADDR_T hostaddr;
-    op_ret = tal_net_gethostbyname(host, &hostaddr);
+    op_ret = core_net_gethostbyname(host, &hostaddr);
     if (op_ret != OPRT_OK) {
         PR_ERR("DNS parser host %s failed %d", host, op_ret);
         return OPRT_MID_TRANSPORT_DNS_PARSED_FAILED;
     }
 
-    tcp_transporter->socket_fd = tal_net_socket_create(PROTOCOL_TCP);
+    tcp_transporter->socket_fd = core_net_socket_create(PROTOCOL_TCP);
     if (tcp_transporter->socket_fd < 0) {
         op_ret = OPRT_MID_TRANSPORT_SOCK_CREAT_FAILED;
         goto err_out;
     }
     // reuse socket port
-    if (tcp_transporter->config.isReuse && (OPRT_OK != tal_net_set_reuse(tcp_transporter->socket_fd))) {
+    if (tcp_transporter->config.isReuse && (OPRT_OK != core_net_set_reuse(tcp_transporter->socket_fd))) {
         op_ret = OPRT_MID_TRANSPORT_SOCK_SET_REUSE_FAILED;
         goto err_out;
     }
     // disable Nagle Algorithm
-    if (tcp_transporter->config.isDisableNagle && (OPRT_OK != tal_net_disable_nagle(tcp_transporter->socket_fd))) {
+    if (tcp_transporter->config.isDisableNagle && (OPRT_OK != core_net_disable_nagle(tcp_transporter->socket_fd))) {
         op_ret = OPRT_MID_TRANSPORT_SOCK_SET_DISABLE_NAGLE_FAILED;
         goto err_out;
     }
     // keepalive ,idle time, interval, count setting
     if (tcp_transporter->config.isKeepAlive &&
-        (OPRT_OK != tal_net_set_keepalive(tcp_transporter->socket_fd, TRUE, tcp_transporter->config.keepAliveIdleTime,
+        (OPRT_OK != core_net_set_keepalive(tcp_transporter->socket_fd, TRUE, tcp_transporter->config.keepAliveIdleTime,
                                           tcp_transporter->config.keepAliveInterval,
                                           tcp_transporter->config.keepAliveCount))) {
         op_ret = OPRT_MID_TRANSPORT_SOCK_SET_KEEP_ALIVE_FAILED;
         goto err_out;
     }
     // block socket port
-    if (tcp_transporter->config.isBlock && (OPRT_OK != tal_net_set_block(tcp_transporter->socket_fd, TRUE))) {
+    if (tcp_transporter->config.isBlock && (OPRT_OK != core_net_set_block(tcp_transporter->socket_fd, TRUE))) {
         op_ret = OPRT_MID_TRANSPORT_SOCK_SET_BLOCK_FAILED;
         goto err_out;
     }
@@ -96,18 +96,18 @@ OPERATE_RET tuya_tcp_transporter_connect(tuya_transporter_t t, const char *host,
     // default routing unless the caller asked for a bind.
     //
     // config.bindAddr is the caller's setting and is never written back to: the
-    // active address is owned by tal_network and refreshed on every link event, so
+    // active address is owned by core_network and refreshed on every link event, so
     // a cellular redial or DHCP renew is picked up here immediately. 0 means no
     // link address is known, and an unbound socket lets the stack choose.
     TUYA_IP_ADDR_T bind_addr = tcp_transporter->config.bindAddr;
 #if OPERATING_SYSTEM != SYSTEM_LINUX
     if (bind_addr == 0 && tcp_transporter->config.bindPort == 0) {
-        bind_addr = tal_network_get_active_ip();
+        bind_addr = core_network_get_active_ip();
     }
 #endif
 
     if ((tcp_transporter->config.bindPort || bind_addr) &&
-        (OPRT_OK != tal_net_bind(tcp_transporter->socket_fd, bind_addr,
+        (OPRT_OK != core_net_bind(tcp_transporter->socket_fd, bind_addr,
                                  tcp_transporter->config.bindPort))) { // socket bind port
         op_ret = OPRT_MID_TRANSPORT_SOCK_NET_BIND_FAILED;
         goto err_out;
@@ -115,7 +115,7 @@ OPERATE_RET tuya_tcp_transporter_connect(tuya_transporter_t t, const char *host,
 
     if (tcp_transporter->config.sendTimeoutMs &&
         (OPRT_OK !=
-         tal_net_set_timeout(tcp_transporter->socket_fd, tcp_transporter->config.sendTimeoutMs, TRANS_SEND))) {
+         core_net_set_timeout(tcp_transporter->socket_fd, tcp_transporter->config.sendTimeoutMs, TRANS_SEND))) {
         // PR_DEBUG("socket fd set sendTimeout:%d
         // failed",tcp_transporter->config.sendTimeoutMs); op_ret =
         // OPRT_MID_TRANSPORT_SOCK_SET_TIMEOUT_FAILED; goto err_out;
@@ -123,14 +123,14 @@ OPERATE_RET tuya_tcp_transporter_connect(tuya_transporter_t t, const char *host,
 
     if (tcp_transporter->config.recvTimeoutMs &&
         (OPRT_OK !=
-         tal_net_set_timeout(tcp_transporter->socket_fd, tcp_transporter->config.recvTimeoutMs, TRANS_RECV))) {
+         core_net_set_timeout(tcp_transporter->socket_fd, tcp_transporter->config.recvTimeoutMs, TRANS_RECV))) {
         // op_ret = OPRT_MID_TRANSPORT_SOCK_SET_TIMEOUT_FAILED;
         // goto err_out;
     }
 
     errno = 0;
-    if (tal_net_connect(tcp_transporter->socket_fd, hostaddr, port) < 0) {
-        PR_ERR("tcp connect %s:%d failed, errno %d", tal_net_addr2str(hostaddr), port, tal_net_get_errno());
+    if (core_net_connect(tcp_transporter->socket_fd, hostaddr, port) < 0) {
+        PR_ERR("tcp connect %s:%d failed, errno %d", core_net_addr2str(hostaddr), port, core_net_get_errno());
         op_ret = OPRT_MID_TRANSPORT_TCP_CONNECD_FAILED;
         goto err_out;
     }
@@ -138,7 +138,7 @@ OPERATE_RET tuya_tcp_transporter_connect(tuya_transporter_t t, const char *host,
     return OPRT_OK;
 err_out:
     if (tcp_transporter->socket_fd >= 0) {
-        tal_net_close(tcp_transporter->socket_fd);
+        core_net_close(tcp_transporter->socket_fd);
         tcp_transporter->socket_fd = -1;
     }
     return op_ret; // tbd
@@ -205,7 +205,7 @@ OPERATE_RET tuya_tcp_transporter_close(tuya_transporter_t t)
 
     if (tcp_transporter->socket_fd >= 0) {
         PR_DEBUG("tcp transporter close socket fd:%d", tcp_transporter->socket_fd);
-        tal_net_close(tcp_transporter->socket_fd);
+        core_net_close(tcp_transporter->socket_fd);
     }
     tcp_transporter->socket_fd = -1;
 
@@ -240,13 +240,13 @@ OPERATE_RET tuya_tcp_transporter_poll_read(tuya_transporter_t t, int timeout_ms)
         return OPRT_INVALID_PARM;
     }
 
-    tal_net_fd_zero(&readfd);
-    tal_net_fd_zero(&errfd);
-    tal_net_fd_set(socket_fd, &readfd);
-    tal_net_fd_set(socket_fd, &errfd);
+    core_net_fd_zero(&readfd);
+    core_net_fd_zero(&errfd);
+    core_net_fd_set(socket_fd, &readfd);
+    core_net_fd_set(socket_fd, &errfd);
 
-    ret = tal_net_select(socket_fd + 1, &readfd, NULL, &errfd, timeout_ms);
-    if ((ret > 0) && tal_net_fd_isset(socket_fd, &errfd)) {
+    ret = core_net_select(socket_fd + 1, &readfd, NULL, &errfd, timeout_ms);
+    if ((ret > 0) && core_net_fd_isset(socket_fd, &errfd)) {
         ret = -1; // socket is fault
         PR_ERR("socket fd %d is fault", socket_fd);
     }
@@ -272,10 +272,10 @@ OPERATE_RET tuya_tcp_transporter_poll_write(tuya_transporter_t t, int timeout_ms
     TUYA_FD_SET_T writefd;
     tuya_tcp_transporter_t tcp_transporter = (tuya_tcp_transporter_t)t;
 
-    tal_net_fd_zero(&writefd);
-    tal_net_fd_set(tcp_transporter->socket_fd, &writefd);
+    core_net_fd_zero(&writefd);
+    core_net_fd_set(tcp_transporter->socket_fd, &writefd);
 
-    return tal_net_select(tcp_transporter->socket_fd + 1, NULL, &writefd, NULL, timeout_ms);
+    return core_net_select(tcp_transporter->socket_fd + 1, NULL, &writefd, NULL, timeout_ms);
 }
 
 /**
@@ -311,7 +311,7 @@ OPERATE_RET tuya_tcp_transporter_read(tuya_transporter_t t, uint8_t *buf, int le
         return OPRT_RESOURCE_NOT_READY;
     }
 
-    return tal_net_recv(tcp_transporter->socket_fd, buf, len);
+    return core_net_recv(tcp_transporter->socket_fd, buf, len);
 }
 
 /**
@@ -338,11 +338,11 @@ OPERATE_RET tuya_tcp_transporter_write(tuya_transporter_t t, uint8_t *buf, int l
         return OPRT_RESOURCE_NOT_READY;
     }
 
-    ret = tal_net_send(tcp_transporter->socket_fd, buf, len);
+    ret = core_net_send(tcp_transporter->socket_fd, buf, len);
     if (ret < 0) {
-        if ((tal_net_get_errno() == UNW_EINTR) || (tal_net_get_errno() == UNW_EAGAIN)) {
-            tal_system_sleep(30);
-            ret = tal_net_send(tcp_transporter->socket_fd, buf, len);
+        if ((core_net_get_errno() == UNW_EINTR) || (core_net_get_errno() == UNW_EAGAIN)) {
+            core_system_sleep(30);
+            ret = core_net_send(tcp_transporter->socket_fd, buf, len);
         }
     }
 
@@ -362,7 +362,7 @@ OPERATE_RET tuya_tcp_transporter_write(tuya_transporter_t t, uint8_t *buf, int l
 OPERATE_RET tuya_tcp_transporter_destroy(tuya_transporter_t transporter)
 {
     if (transporter) {
-        tal_free(transporter);
+        core_free(transporter);
     }
     return OPRT_OK;
 }
@@ -378,7 +378,7 @@ OPERATE_RET tuya_tcp_transporter_destroy(tuya_transporter_t transporter)
 tuya_transporter_t tuya_tcp_transporter_create(void)
 {
 
-    tuya_tcp_transporter_t t = tal_malloc(sizeof(struct tcp_transporter_inter_t));
+    tuya_tcp_transporter_t t = core_malloc(sizeof(struct tcp_transporter_inter_t));
     if (t == NULL) {
         PR_ERR("websocket transporter malloc fail");
         return NULL;

@@ -29,10 +29,10 @@
  */
 
 #include "tuya_endpoint.h"
-#include "tal_api.h"
+#include "core_api.h"
 
-#include "tal_kv.h"
-#include "tal_memory.h"
+#include "core_kv.h"
+#include "core_memory.h"
 
 extern int iotdns_cloud_endpoint_get(const char *region, const char *env, tuya_endpoint_t *endpoint);
 
@@ -53,15 +53,15 @@ static int tuya_region_regist_key_write(const char *region, const char *regist_k
 
     /* Write kv storage */
     int ret = 0;
-    ret = tal_kv_set("region", (const uint8_t *)region, strlen(region));
+    ret = core_kv_set("region", (const uint8_t *)region, strlen(region));
     if (ret != OPRT_OK) {
-        PR_ERR("tal_kv_set region, error:0x%02x", ret);
+        PR_ERR("core_kv_set region, error:0x%02x", ret);
         return OPRT_KVS_WR_FAIL;
     }
 
-    ret = tal_kv_set("regist_key", (const uint8_t *)regist_key, strlen(regist_key));
+    ret = core_kv_set("regist_key", (const uint8_t *)regist_key, strlen(regist_key));
     if (ret != OPRT_OK) {
-        PR_ERR("tal_kv_set regist_key, error:0x%02x", ret);
+        PR_ERR("core_kv_set regist_key, error:0x%02x", ret);
         return OPRT_KVS_WR_FAIL;
     }
 
@@ -79,19 +79,19 @@ static int tuya_region_regist_key_read(char *region, char *regist_key)
     int ret = 0;
     size_t len = 0;
     uint8_t *value = NULL;
-    ret = tal_kv_get("region", &value, &len);
+    ret = core_kv_get("region", &value, &len);
     if (ret != OPRT_OK) {
-        PR_ERR("tal_kv_get region fail:0x%02x", ret);
+        PR_ERR("core_kv_get region fail:0x%02x", ret);
         return OPRT_KVS_RD_FAIL;
     }
     size_t copy = (len < MAX_LENGTH_REGION) ? len : MAX_LENGTH_REGION;
     memcpy(region, value, copy);
     region[copy] = 0;
-    tal_free(value);
+    core_free(value);
 
-    ret = tal_kv_get("regist_key", &value, &len);
+    ret = core_kv_get("regist_key", &value, &len);
     if (ret != OPRT_OK) {
-        PR_ERR("tal_kv_get regist_key fail:0x%02x", ret);
+        PR_ERR("core_kv_get regist_key fail:0x%02x", ret);
         return OPRT_KVS_RD_FAIL;
     }
     /* regist_key comes from the cloud env field, its length is not locally
@@ -99,7 +99,7 @@ static int tuya_region_regist_key_read(char *region, char *regist_key)
     copy = (len < MAX_LENGTH_REGIST) ? len : MAX_LENGTH_REGIST;
     memcpy(regist_key, value, copy);
     regist_key[copy] = 0;
-    tal_free(value);
+    core_free(value);
 
     return OPRT_OK;
 }
@@ -122,9 +122,9 @@ int tuya_endpoint_cert_get(tuya_endpoint_t *endpoint)
         return OPRT_INVALID_PARM;
     }
 
-    int ret = tal_kv_get("endpoint.cert", &endpoint->cert, &endpoint->cert_len);
+    int ret = core_kv_get("endpoint.cert", &endpoint->cert, &endpoint->cert_len);
     if (ret != OPRT_OK) {
-        PR_ERR("tal_kv_get endpoint.cert fail:0x%02x", ret);
+        PR_ERR("core_kv_get endpoint.cert fail:0x%02x", ret);
     }
 
     return ret;
@@ -146,9 +146,9 @@ int tuya_endpoint_cert_set(tuya_endpoint_t *endpoint)
         return OPRT_INVALID_PARM;
     }
 
-    int ret = tal_kv_set("endpoint.cert", endpoint->cert, endpoint->cert_len);
+    int ret = core_kv_set("endpoint.cert", endpoint->cert, endpoint->cert_len);
     if (ret != OPRT_OK) {
-        PR_ERR("tal_kv_set endpoint.cert fail:0x%02x", ret);
+        PR_ERR("core_kv_set endpoint.cert fail:0x%02x", ret);
     }
 
     return ret;
@@ -160,15 +160,15 @@ static int tuya_endpoint_kv_str_read(const char *key, char *buf, size_t buf_size
 {
     uint8_t *value = NULL;
     size_t len = 0;
-    int ret = tal_kv_get(key, &value, &len);
+    int ret = core_kv_get(key, &value, &len);
     if (ret != OPRT_OK) {
-        PR_ERR("tal_kv_get %s error:%d", key, ret);
+        PR_ERR("core_kv_get %s error:%d", key, ret);
         return ret;
     }
 
     if (0 == buf_size || len > buf_size) {
-        PR_ERR("tal_kv_get %s value too long: %u > %u", key, (unsigned int)len, (unsigned int)buf_size);
-        tal_free(value);
+        PR_ERR("core_kv_get %s value too long: %u > %u", key, (unsigned int)len, (unsigned int)buf_size);
+        core_free(value);
         return OPRT_COM_ERROR;
     }
 
@@ -178,7 +178,7 @@ static int tuya_endpoint_kv_str_read(const char *key, char *buf, size_t buf_size
         memcpy(buf, value, len);
         buf[len - 1] = 0; /* fallback terminator; the last byte on the write side is already '\0', so this is idempotent */
     }
-    tal_free(value);
+    core_free(value);
 
     return OPRT_OK;
 }
@@ -188,19 +188,19 @@ static int tuya_endpoint_kv_u16_read(const char *key, uint16_t *out)
 {
     uint8_t *value = NULL;
     size_t len = 0;
-    int ret = tal_kv_get(key, &value, &len);
+    int ret = core_kv_get(key, &value, &len);
     if (ret != OPRT_OK) {
-        PR_ERR("tal_kv_get %s error:%d", key, ret);
+        PR_ERR("core_kv_get %s error:%d", key, ret);
         return ret;
     }
     if (len != sizeof(*out)) {
-        PR_ERR("tal_kv_get %s length error:%u", key, (unsigned int)len);
-        tal_free(value);
+        PR_ERR("core_kv_get %s length error:%u", key, (unsigned int)len);
+        core_free(value);
         return OPRT_COM_ERROR;
     }
 
     memcpy(out, value, sizeof(*out));
-    tal_free(value);
+    core_free(value);
 
     return OPRT_OK;
 }
@@ -243,7 +243,7 @@ int tuya_endpoint_domain_get(tuya_endpoint_t *endpoint)
     }
 
     if (ret != OPRT_OK) {
-        PR_ERR("tal_kv_get endpoint domain error:%d", ret);
+        PR_ERR("core_kv_get endpoint domain error:%d", ret);
     }
 
     return ret;
@@ -270,33 +270,33 @@ int tuya_endpoint_domain_set(tuya_endpoint_t *endpoint)
     /* Write key by key (key name = field name): strings include the trailing
      * '\0'; ports store the 2-byte fields as binary. Return the first error
      * code. */
-    int ret = tal_kv_set("atop.host", (const uint8_t *)endpoint->atop.host, strlen(endpoint->atop.host) + 1);
+    int ret = core_kv_set("atop.host", (const uint8_t *)endpoint->atop.host, strlen(endpoint->atop.host) + 1);
     if (ret != OPRT_OK) {
-        PR_ERR("tal_kv_set atop.host error:%d", ret);
+        PR_ERR("core_kv_set atop.host error:%d", ret);
         return ret;
     }
 
-    ret = tal_kv_set("atop.port", (const uint8_t *)&endpoint->atop.port, sizeof(endpoint->atop.port));
+    ret = core_kv_set("atop.port", (const uint8_t *)&endpoint->atop.port, sizeof(endpoint->atop.port));
     if (ret != OPRT_OK) {
-        PR_ERR("tal_kv_set atop.port error:%d", ret);
+        PR_ERR("core_kv_set atop.port error:%d", ret);
         return ret;
     }
 
-    ret = tal_kv_set("atop.path", (const uint8_t *)endpoint->atop.path, strlen(endpoint->atop.path) + 1);
+    ret = core_kv_set("atop.path", (const uint8_t *)endpoint->atop.path, strlen(endpoint->atop.path) + 1);
     if (ret != OPRT_OK) {
-        PR_ERR("tal_kv_set atop.path error:%d", ret);
+        PR_ERR("core_kv_set atop.path error:%d", ret);
         return ret;
     }
 
-    ret = tal_kv_set("mqtt.host", (const uint8_t *)endpoint->mqtt.host, strlen(endpoint->mqtt.host) + 1);
+    ret = core_kv_set("mqtt.host", (const uint8_t *)endpoint->mqtt.host, strlen(endpoint->mqtt.host) + 1);
     if (ret != OPRT_OK) {
-        PR_ERR("tal_kv_set mqtt.host error:%d", ret);
+        PR_ERR("core_kv_set mqtt.host error:%d", ret);
         return ret;
     }
 
-    ret = tal_kv_set("mqtt.port", (const uint8_t *)&endpoint->mqtt.port, sizeof(endpoint->mqtt.port));
+    ret = core_kv_set("mqtt.port", (const uint8_t *)&endpoint->mqtt.port, sizeof(endpoint->mqtt.port));
     if (ret != OPRT_OK) {
-        PR_ERR("tal_kv_set mqtt.port error:%d", ret);
+        PR_ERR("core_kv_set mqtt.port error:%d", ret);
         return ret;
     }
 
@@ -340,15 +340,15 @@ int tuya_endpoint_region_regist_set(const char *region, const char *regist_key)
  */
 int tuya_endpoint_remove(void)
 {
-    tal_kv_del("region");
-    tal_kv_del("regist_key");
-    tal_kv_del("endpoint.cert");
-    tal_kv_del("atop.host");
-    tal_kv_del("atop.port");
-    tal_kv_del("atop.path");
-    tal_kv_del("mqtt.host");
-    tal_kv_del("mqtt.port");
-    tal_kv_del("endpoint.domain");
+    core_kv_del("region");
+    core_kv_del("regist_key");
+    core_kv_del("endpoint.cert");
+    core_kv_del("atop.host");
+    core_kv_del("atop.port");
+    core_kv_del("atop.path");
+    core_kv_del("mqtt.host");
+    core_kv_del("mqtt.port");
+    core_kv_del("endpoint.domain");
 
     return OPRT_OK;
 }
@@ -398,7 +398,7 @@ int tuya_endpoint_update(void)
      * the allocated certificate memory needs to be released. */
     if (endpoint_mgr.endpoint.cert != NULL && endpoint_mgr.endpoint.cert_len > 0) {
         PR_TRACE("Free endpoint already exist cert.");
-        tal_free(endpoint_mgr.endpoint.cert);
+        core_free(endpoint_mgr.endpoint.cert);
         endpoint_mgr.endpoint.cert = NULL;
         endpoint_mgr.endpoint.cert_len = 0;
     }
@@ -426,7 +426,7 @@ int tuya_endpoint_update_auto_region(void)
      * the allocated certificate memory needs to be released. */
     if (endpoint_mgr.endpoint.cert != NULL && endpoint_mgr.endpoint.cert_len > 0) {
         PR_TRACE("Free endpoint already exist cert.");
-        tal_free(endpoint_mgr.endpoint.cert);
+        core_free(endpoint_mgr.endpoint.cert);
         endpoint_mgr.endpoint.cert = NULL;
         endpoint_mgr.endpoint.cert_len = 0;
     }

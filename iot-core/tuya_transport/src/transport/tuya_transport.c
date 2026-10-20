@@ -21,7 +21,7 @@
  */
 
 #include "tuya_cloud_types.h"
-#include "tal_api.h"
+#include "core_api.h"
 #include "tuya_transporter.h"
 #include "tls_transporter.h"
 #include "tcp_transporter.h"

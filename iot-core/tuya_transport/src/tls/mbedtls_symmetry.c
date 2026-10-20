@@ -1,19 +1,19 @@
 /**
  * @file mbedtls_symmetry.c
- * @brief TAL symmetric primitives backed by mbedtls: AES context management,
+ * @brief CORE symmetric primitives backed by mbedtls: AES context management,
  * key setup and ECB/CBC/CTR encryption and decryption.
  *
  * Provides context create/free, encode/decode key initialization, block and
  * buffer level crypt operations, and the raw (unpadded) helpers used by
- * tal_symmetry.c.
+ * core_symmetry.c.
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *
  */
 
 #include "tuya_iot_config.h"
-#include "tal_memory.h"
-#include "tal_symmetry.h"
+#include "core_memory.h"
+#include "core_symmetry.h"
 #include "cipher_wrapper.h"
 #include "mbedtls/aes.h"
 
@@ -26,11 +26,11 @@
 *
 * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
 */
-OPERATE_RET  tal_aes_create_init( TAL_SYMMETRY_HANDLE *ctx ){
+OPERATE_RET  core_aes_create_init( CORE_SYMMETRY_HANDLE *ctx ){
 
     mbedtls_aes_context *mbedtls_aes_ctx;
 
-    mbedtls_aes_ctx =(mbedtls_aes_context *) tal_malloc(sizeof(mbedtls_aes_context));
+    mbedtls_aes_ctx =(mbedtls_aes_context *) core_malloc(sizeof(mbedtls_aes_context));
     if (mbedtls_aes_ctx) {
         mbedtls_aes_init(mbedtls_aes_ctx);
     } else {
@@ -49,11 +49,11 @@ OPERATE_RET  tal_aes_create_init( TAL_SYMMETRY_HANDLE *ctx ){
 *
 * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
 */
-OPERATE_RET  tal_aes_free( TAL_SYMMETRY_HANDLE ctx )
+OPERATE_RET  core_aes_free( CORE_SYMMETRY_HANDLE ctx )
 {
     if(ctx != NULL){
         mbedtls_aes_free( (mbedtls_aes_context *) ctx );
-        tal_free(ctx);
+        core_free(ctx);
     }
 
     return OPRT_OK;
@@ -73,7 +73,7 @@ OPERATE_RET  tal_aes_free( TAL_SYMMETRY_HANDLE ctx )
 *
 * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
 */
-OPERATE_RET  tal_aes_setkey_enc( TAL_SYMMETRY_HANDLE ctx, uint8_t *key,
+OPERATE_RET  core_aes_setkey_enc( CORE_SYMMETRY_HANDLE ctx, uint8_t *key,
                     uint32_t keybits )
 {
     if( mbedtls_aes_setkey_enc( (mbedtls_aes_context *)ctx, key,keybits ) != 0)
@@ -96,7 +96,7 @@ OPERATE_RET  tal_aes_setkey_enc( TAL_SYMMETRY_HANDLE ctx, uint8_t *key,
 *
 * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
 */
-OPERATE_RET  tal_aes_setkey_dec( TAL_SYMMETRY_HANDLE ctx, uint8_t *key,
+OPERATE_RET  core_aes_setkey_dec( CORE_SYMMETRY_HANDLE ctx, uint8_t *key,
                     uint32_t keybits )
 {
     if( mbedtls_aes_setkey_dec( (mbedtls_aes_context *)ctx, key,keybits ) != 0)
@@ -121,7 +121,7 @@ OPERATE_RET  tal_aes_setkey_dec( TAL_SYMMETRY_HANDLE ctx, uint8_t *key,
 *
 * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
 */
-OPERATE_RET  tal_aes_crypt_ecb( TAL_SYMMETRY_HANDLE ctx,
+OPERATE_RET  core_aes_crypt_ecb( CORE_SYMMETRY_HANDLE ctx,
                     int32_t mode,
                     size_t length,
                     uint8_t *input,
@@ -149,8 +149,8 @@ OPERATE_RET  tal_aes_crypt_ecb( TAL_SYMMETRY_HANDLE ctx,
 *         the \p input parameter.
 *
 *         It can be called as many times as needed, until all the input
-*         data is processed. tal_aes_init(), and either
-*         tal_aes_setkey_enc() or tal_aes_setkey_dec() must be called
+*         data is processed. core_aes_init(), and either
+*         core_aes_setkey_enc() or core_aes_setkey_dec() must be called
 *         before the first call to this API with the same context.
 * 
 * @param[in] ctx:  The AES context to use for encryption or decryption.
@@ -175,7 +175,7 @@ OPERATE_RET  tal_aes_crypt_ecb( TAL_SYMMETRY_HANDLE ctx,
 *         either save it manually or use the cipher module instead.
 * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
 */
-OPERATE_RET  tal_aes_crypt_cbc( TAL_SYMMETRY_HANDLE ctx,
+OPERATE_RET  core_aes_crypt_cbc( CORE_SYMMETRY_HANDLE ctx,
                     int32_t mode,
                     size_t length,
                     uint8_t iv[16],
@@ -212,7 +212,7 @@ OPERATE_RET  tal_aes_crypt_cbc( TAL_SYMMETRY_HANDLE ctx,
 *
 * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
 */
-OPERATE_RET tal_aes_gcm_encode(const uint8_t *key, uint32_t key_len,
+OPERATE_RET core_aes_gcm_encode(const uint8_t *key, uint32_t key_len,
                                 const uint8_t *nonce, uint32_t nonce_len,
                                 const uint8_t *ad, uint32_t ad_len,
                                 const uint8_t *input, uint32_t input_len,
@@ -273,7 +273,7 @@ OPERATE_RET tal_aes_gcm_encode(const uint8_t *key, uint32_t key_len,
 *
 * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
 */
-OPERATE_RET tal_aes_gcm_decode(const uint8_t *key, uint32_t key_len,
+OPERATE_RET core_aes_gcm_decode(const uint8_t *key, uint32_t key_len,
                                 const uint8_t *nonce, uint32_t nonce_len,
                                 const uint8_t *ad, uint32_t ad_len,
                                 const uint8_t *input, uint32_t input_len,

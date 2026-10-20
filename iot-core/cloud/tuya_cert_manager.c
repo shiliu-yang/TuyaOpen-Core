@@ -41,17 +41,17 @@
 #include <string.h>
 #include "tuya_cloud_com_defs.h"
 #include "tuya_list.h"
-#include "tal_log.h"
-#include "tal_memory.h"
-#include "tal_mutex.h"
-#include "tal_kv.h"
-#include "tal_workqueue.h"
-#include "tal_sw_timer.h"
-#include "tal_workq_service.h"
-#include "tal_hash.h"
-#include "tal_x509.h"
-#include "tal_event.h"
-#include "tal_event_info.h"
+#include "core_log.h"
+#include "core_memory.h"
+#include "core_mutex.h"
+#include "core_kv.h"
+#include "core_workqueue.h"
+#include "core_sw_timer.h"
+#include "core_workq_service.h"
+#include "core_hash.h"
+#include "core_x509.h"
+#include "core_event.h"
+#include "core_event_info.h"
 #include "tuya_tools.h"
 #include "tuya_tls.h"
 #include "tuya_iot.h"
@@ -113,15 +113,15 @@ OPERATE_RET __ty_third_cloud_ca_init(void)
     if (s_tuya_cert_mng.p_third_cloud_ca != NULL) {
         return OPRT_OK;
     }
-    s_tuya_cert_mng.p_third_cloud_ca = tal_malloc(sizeof(THIRD_CLOUD_CA_MNG));
+    s_tuya_cert_mng.p_third_cloud_ca = core_malloc(sizeof(THIRD_CLOUD_CA_MNG));
     if (NULL == s_tuya_cert_mng.p_third_cloud_ca) {
-        PR_ERR("tal_malloc failed");
+        PR_ERR("core_malloc failed");
         return OPRT_MALLOC_FAILED;
     }
     INIT_LIST_HEAD(&s_tuya_cert_mng.p_third_cloud_ca->listHead);
-    op_ret = tal_mutex_create_init(&s_tuya_cert_mng.p_third_cloud_ca->mutex);
+    op_ret = core_mutex_create_init(&s_tuya_cert_mng.p_third_cloud_ca->mutex);
     if (OPRT_OK != op_ret) {
-        tal_free(s_tuya_cert_mng.p_third_cloud_ca);
+        core_free(s_tuya_cert_mng.p_third_cloud_ca);
         return op_ret;
     }
     return OPRT_OK;
@@ -130,7 +130,7 @@ OPERATE_RET __ty_third_cloud_ca_init(void)
 bool __ty_iot_third_cloud_load_ca(void *p_ctx, char *p_url)
 {
     __ty_third_cloud_ca_init();
-    tal_mutex_lock(s_tuya_cert_mng.p_third_cloud_ca->mutex);
+    core_mutex_lock(s_tuya_cert_mng.p_third_cloud_ca->mutex);
     P_LIST_HEAD          pPos;
     THIRD_CLOUD_CA_NODE *ca_node;
     tuya_list_for_each(pPos, &(s_tuya_cert_mng.p_third_cloud_ca->listHead))
@@ -139,11 +139,11 @@ bool __ty_iot_third_cloud_load_ca(void *p_ctx, char *p_url)
         if ((ca_node) && (!strncmp(ca_node->url, p_url, strlen(p_url)))) {
             int rt = tuya_tls_register_x509_crt_der(p_ctx, ca_node->ca_info->ca, ca_node->ca_info->len);
             PR_DEBUG("load ca to tls %d", rt);
-            tal_mutex_unlock(s_tuya_cert_mng.p_third_cloud_ca->mutex);
+            core_mutex_unlock(s_tuya_cert_mng.p_third_cloud_ca->mutex);
             return TRUE;
         }
     }
-    tal_mutex_unlock(s_tuya_cert_mng.p_third_cloud_ca->mutex);
+    core_mutex_unlock(s_tuya_cert_mng.p_third_cloud_ca->mutex);
     if (s_tuya_cert_mng.ca_restore) {
         return s_tuya_cert_mng.ca_restore(p_ctx, p_url);
     }
@@ -182,7 +182,7 @@ static OPERATE_RET __tuya_iot_store_third_cloud_ca(char *p_url, const uint8_t *c
 
     // Allocate memory for CA info
     uint32_t alloc_len = ca_data_len + 1;
-    ca_node->ca_info   = tal_malloc(sizeof(THIRD_CLOUD_CA_INFO) + alloc_len);
+    ca_node->ca_info   = core_malloc(sizeof(THIRD_CLOUD_CA_INFO) + alloc_len);
     if (NULL == ca_node->ca_info) {
         PR_ERR("malloc error");
         FreeNode(ca_node);
@@ -206,13 +206,13 @@ static OPERATE_RET __tuya_iot_store_third_cloud_ca(char *p_url, const uint8_t *c
     // Initialize third cloud CA manager
     op_ret = __ty_third_cloud_ca_init();
     if (OPRT_OK != op_ret) {
-        tal_free(ca_node->ca_info);
+        core_free(ca_node->ca_info);
         FreeNode(ca_node);
         return op_ret;
     }
 
     // Lock and search for existing CA
-    tal_mutex_lock(s_tuya_cert_mng.p_third_cloud_ca->mutex);
+    core_mutex_lock(s_tuya_cert_mng.p_third_cloud_ca->mutex);
     P_LIST_HEAD          pPos, pNext;
     THIRD_CLOUD_CA_NODE *ca_node_old;
     tuya_list_for_each_safe(pPos, pNext, &(s_tuya_cert_mng.p_third_cloud_ca->listHead))
@@ -222,15 +222,15 @@ static OPERATE_RET __tuya_iot_store_third_cloud_ca(char *p_url, const uint8_t *c
             if (!strncmp(ca_node_old->url, p_url, strlen(p_url))) { // same url
                 if (!strncmp((char *)ca_node_old->ca_info->ca, (char *)ca_node->ca_info->ca, ca_node->ca_info->len)) {
                     // Same URL and CA, no need to update
-                    tal_free(ca_node->ca_info);
+                    core_free(ca_node->ca_info);
                     FreeNode(ca_node);
-                    tal_mutex_unlock(s_tuya_cert_mng.p_third_cloud_ca->mutex);
+                    core_mutex_unlock(s_tuya_cert_mng.p_third_cloud_ca->mutex);
                     PR_DEBUG("same url and ca %s", p_url);
                     return OPRT_OK;
                 } else {
                     if (ca_node_old->ca_info->ref == 0) {
                         // Same url but ca change and no ref, delete then add
-                        tal_free(ca_node_old->ca_info);
+                        core_free(ca_node_old->ca_info);
                         DeleteNodeAndFree(ca_node_old, node);
                         PR_DEBUG("same url but ca change and no ref");
                         break;
@@ -245,7 +245,7 @@ static OPERATE_RET __tuya_iot_store_third_cloud_ca(char *p_url, const uint8_t *c
             } else if (!strncmp((char *)ca_node_old->ca_info->ca, (char *)ca_node->ca_info->ca,
                                 ca_node->ca_info->len)) {
                 // Different url but same CA
-                tal_free(ca_node->ca_info);
+                core_free(ca_node->ca_info);
                 ca_node_old->ca_info->ref++;
                 ca_node->ca_info = ca_node_old->ca_info;
                 PR_DEBUG("diff url but ca same %d", ca_node_old->ca_info->ref);
@@ -259,7 +259,7 @@ static OPERATE_RET __tuya_iot_store_third_cloud_ca(char *p_url, const uint8_t *c
     if (s_tuya_cert_mng.ca_save) {
         s_tuya_cert_mng.ca_save(p_url, ca_node->ca_info->ca, ca_node->ca_info->len);
     }
-    tal_mutex_unlock(s_tuya_cert_mng.p_third_cloud_ca->mutex);
+    core_mutex_unlock(s_tuya_cert_mng.p_third_cloud_ca->mutex);
     PR_DEBUG("new CA stored for url %s", p_url);
 
     return OPRT_OK;
@@ -291,7 +291,7 @@ void tuya_iot_get_third_cloud_ca(char *p_url)
 
     // Store the certificate (raw DER format from iotdns, no base64 decoding needed)
     op_ret = __tuya_iot_store_third_cloud_ca(p_url, cacert, cacert_len, FALSE);
-    tal_free(cacert);
+    core_free(cacert);
 
     if (OPRT_OK != op_ret) {
         PR_ERR("store CA failed %d", op_ret);
@@ -364,17 +364,17 @@ OPERATE_RET httpc_domain_certs_get(cJSON **result, const char *url_msg)
 
     // Encode the DER cert as base64 and return as a cJSON string
     uint32_t b64_len = cacert_len / 3 * 4 + 8;
-    char *b64_buf = tal_malloc(b64_len);
+    char *b64_buf = core_malloc(b64_len);
     if (NULL == b64_buf) {
-        tal_free(cacert);
+        core_free(cacert);
         return OPRT_MALLOC_FAILED;
     }
     memset(b64_buf, 0, b64_len);
     tuya_base64_encode(cacert, b64_buf, cacert_len);
-    tal_free(cacert);
+    core_free(cacert);
 
     *result = cJSON_CreateString(b64_buf);
-    tal_free(b64_buf);
+    core_free(b64_buf);
 
     return OPRT_OK;
 }
@@ -397,9 +397,9 @@ OPERATE_RET tuya_client_cert_write(const uint8_t *value, const uint32_t len)
         }
         PR_DEBUG("pem format,change to der,pem len:%d,der len:%d", len, size);
     }
-    rt = tal_kv_set(CLT_CERT_MF, p, size);
+    rt = core_kv_set(CLT_CERT_MF, p, size);
     if (pem_format) {
-        tal_free(p);
+        core_free(p);
     }
     if (OPRT_OK != rt) {
         PR_ERR("kv set error, key:%s, rt:%d", CLT_CERT_MF, rt);
@@ -413,9 +413,9 @@ OPERATE_RET tuya_client_private_key_write(const uint8_t *value, const uint32_t l
 {
     OPERATE_RET rt = OPRT_OK;
 
-    rt = tal_kv_set(CLT_PVT_KEY_MF, value, len);
+    rt = core_kv_set(CLT_PVT_KEY_MF, value, len);
     if (OPRT_OK != rt) {
-        PR_ERR("tal_kv_set fails %s %d", CLT_PVT_KEY_MF, rt);
+        PR_ERR("core_kv_set fails %s %d", CLT_PVT_KEY_MF, rt);
         return rt;
     }
 
@@ -438,7 +438,7 @@ const client_psk_info_t *tuya_client_psk_get(void)
 
 void tuya_cert_save_to_kv(cJSON *result)
 {
-    tal_kv_del("tls_ca_cnt");
+    core_kv_del("tls_ca_cnt");
 
     cJSON *p_ca_arr = cJSON_GetObjectItem(result, "caArr");
     if (p_ca_arr != NULL) {
@@ -449,17 +449,17 @@ void tuya_cert_save_to_kv(cJSON *result)
             char   tls_ca_name[20] = {0};
             snprintf(tls_ca_name, sizeof(tls_ca_name), "tls_ca%d", index);
             PR_DEBUG("tls_ca_name:%s", tls_ca_name);
-            tal_kv_set(tls_ca_name, (uint8_t *)(p_ca->valuestring), strlen(p_ca->valuestring) + 1);
+            core_kv_set(tls_ca_name, (uint8_t *)(p_ca->valuestring), strlen(p_ca->valuestring) + 1);
         }
         // Delete old entries beyond the new count
         for (int i = arr_size; i < 16; i++) {
             char tls_ca_name[20] = {0};
             snprintf(tls_ca_name, sizeof(tls_ca_name), "tls_ca%d", i);
-            tal_kv_del(tls_ca_name);
+            core_kv_del(tls_ca_name);
         }
         char ca_cnt_str[5] = {0};
         snprintf(ca_cnt_str, 5, "%u", arr_size);
-        tal_kv_set("tls_ca_cnt", (uint8_t *)ca_cnt_str, 5);
+        core_kv_set("tls_ca_cnt", (uint8_t *)ca_cnt_str, 5);
     }
 
     return;
@@ -469,26 +469,26 @@ void tuya_cert_kv_to_ram(void)
 {
     int index = 0;
     for (index = 0; index < (int)s_tuya_cert_mng.der_arr_size; index++) {
-        tal_free(s_tuya_cert_mng.p_der_arr[index].p_der);
+        core_free(s_tuya_cert_mng.p_der_arr[index].p_der);
     }
-    tal_free(s_tuya_cert_mng.p_der_arr);
+    core_free(s_tuya_cert_mng.p_der_arr);
     s_tuya_cert_mng.p_der_arr    = NULL;
     s_tuya_cert_mng.der_arr_size = 0;
 
     uint8_t *p_ca_cnt_str   = NULL;
     size_t   ca_cnt_str_len = 0;
-    int rt = tal_kv_get("tls_ca_cnt", &p_ca_cnt_str, &ca_cnt_str_len);
+    int rt = core_kv_get("tls_ca_cnt", &p_ca_cnt_str, &ca_cnt_str_len);
     if (OPRT_OK != rt || NULL == p_ca_cnt_str) {
         PR_DEBUG("load tls_ca_cnt fail. no ca in local db");
         return;
     }
     int ca_cnt = atoi((char *)p_ca_cnt_str);
     PR_DEBUG("tls_ca_cnt:%s and parse:%d", (char *)p_ca_cnt_str, ca_cnt);
-    tal_free(p_ca_cnt_str);
+    core_free(p_ca_cnt_str);
     if (ca_cnt == 0) {
         return;
     }
-    s_tuya_cert_mng.p_der_arr = tal_malloc(sizeof(ty_tls_der_t) * ca_cnt);
+    s_tuya_cert_mng.p_der_arr = core_malloc(sizeof(ty_tls_der_t) * ca_cnt);
     if (NULL == s_tuya_cert_mng.p_der_arr) {
         PR_ERR("malloc der array fail. %d", ca_cnt);
         return;
@@ -500,19 +500,19 @@ void tuya_cert_kv_to_ram(void)
         snprintf(tls_ca_name, sizeof(tls_ca_name), "tls_ca%d", index);
         uint8_t *p_ca_str = NULL;
         size_t   ca_len   = 0;
-        rt = tal_kv_get(tls_ca_name, &p_ca_str, &ca_len);
+        rt = core_kv_get(tls_ca_name, &p_ca_str, &ca_len);
         if (OPRT_OK != rt || NULL == p_ca_str) {
             PR_ERR("read %s fail.", tls_ca_name);
             return;
         }
-        s_tuya_cert_mng.p_der_arr[index].p_der = tal_malloc(ca_len);
+        s_tuya_cert_mng.p_der_arr[index].p_der = core_malloc(ca_len);
         if (NULL == s_tuya_cert_mng.p_der_arr[index].p_der) {
             PR_ERR("malloc der fail. %d", (int)ca_len);
-            tal_free(p_ca_str);
+            core_free(p_ca_str);
             return;
         }
         s_tuya_cert_mng.p_der_arr[index].der_len = tuya_base64_decode((char *)p_ca_str, s_tuya_cert_mng.p_der_arr[index].p_der);
-        tal_free(p_ca_str);
+        core_free(p_ca_str);
         PR_DEBUG("Parse DER %s:%d success", tls_ca_name, s_tuya_cert_mng.p_der_arr[index].der_len);
     }
     s_tuya_cert_mng.der_arr_size = ca_cnt;
@@ -559,7 +559,7 @@ OPERATE_RET http_iot_dns_get_root_ca(void)
         PR_ERR("get root ca err:%d", op_ret);
     }
 
-    tal_free(p_buffer);
+    core_free(p_buffer);
     return op_ret;
 }
 
@@ -579,7 +579,7 @@ static void __ty_tls_event_cb(tuya_tls_event_t event, void *p_args)
                 PR_DEBUG("get root ca err,rt:%d", rt);
             }
         } else if (__ty_is_tuya_public_url(p_url)) {
-            tal_workq_start_delayed(s_tuya_cert_mng.tm_update_tls_url, 100, LOOP_ONCE);
+            core_workq_start_delayed(s_tuya_cert_mng.tm_update_tls_url, 100, LOOP_ONCE);
         } else {
             tuya_iot_get_third_cloud_ca((char *)p_url);
         }
@@ -595,11 +595,11 @@ static void __update_endpoint_work(void *data)
 static void __update_tls_url_cb(void *data)
 {
     if (!tuya_iot_is_connected()) {
-        tal_workq_start_delayed(s_tuya_cert_mng.tm_update_tls_url, 1000, LOOP_ONCE);
+        core_workq_start_delayed(s_tuya_cert_mng.tm_update_tls_url, 1000, LOOP_ONCE);
         return;
     }
     PR_NOTICE("local cert expired. require New CA");
-    tal_workq_schedule(WORKQ_SYSTEM, __update_endpoint_work, NULL);
+    core_workq_schedule(WORKQ_SYSTEM, __update_endpoint_work, NULL);
 }
 
 tuya_tls_event_cb tuya_cert_get_tls_event_cb(void)
@@ -673,7 +673,7 @@ static void __cert_query_tm_cb(TIMER_ID timerID, void *pTimerArg)
         PR_ERR("cert verify/refresh err:%d", op_ret);
     }
 
-    tal_free(p_buffer);
+    core_free(p_buffer);
     return;
 }
 #endif
@@ -687,9 +687,9 @@ static void __tuya_calc_psk_id(char version)
     }
 
     uint8_t sha256_psk_id[32] = {0};
-    tal_sha256_ret((const unsigned char *)(client->config.uuid), strlen(client->config.uuid), sha256_psk_id, 0);
+    core_sha256_ret((const unsigned char *)(client->config.uuid), strlen(client->config.uuid), sha256_psk_id, 0);
 
-    char *psk_id_arr = tal_malloc(70);
+    char *psk_id_arr = core_malloc(70);
     if (NULL == psk_id_arr) {
         PR_ERR("psk_id_arr null");
         return;
@@ -776,26 +776,26 @@ static int __tuya_update_client_key(void *data)
 void tuya_cert_manager_deinit(void)
 {
     if (s_tuya_cert_mng.cert_query) {
-        tal_sw_timer_delete(s_tuya_cert_mng.cert_query);
+        core_sw_timer_delete(s_tuya_cert_mng.cert_query);
     }
     if (s_tuya_cert_mng.client_cert_info.cert) {
-        tal_free(s_tuya_cert_mng.client_cert_info.cert);
+        core_free(s_tuya_cert_mng.client_cert_info.cert);
     }
     if (s_tuya_cert_mng.client_cert_info.private_key) {
-        tal_free(s_tuya_cert_mng.client_cert_info.private_key);
+        core_free(s_tuya_cert_mng.client_cert_info.private_key);
     }
 
     int index = 0;
     for (index = 0; index < (int)s_tuya_cert_mng.der_arr_size; index++) {
         if (s_tuya_cert_mng.p_der_arr[index].p_der) {
-            tal_free(s_tuya_cert_mng.p_der_arr[index].p_der);
+            core_free(s_tuya_cert_mng.p_der_arr[index].p_der);
         }
     }
     if (s_tuya_cert_mng.p_der_arr) {
-        tal_free(s_tuya_cert_mng.p_der_arr);
+        core_free(s_tuya_cert_mng.p_der_arr);
     }
 
-    tal_event_unsubscribe(EVENT_RSC_UPDATE, "cert_man", __tuya_update_client_key);
+    core_event_unsubscribe(EVENT_RSC_UPDATE, "cert_man", __tuya_update_client_key);
 
     memset(&s_tuya_cert_mng, 0, sizeof(ca_cert_manager_t));
     PR_DEBUG("cert manager deinit");
@@ -806,12 +806,12 @@ OPERATE_RET tuya_cert_manager_init(void)
 {
     OPERATE_RET rt = OPRT_OK;
 #if (TUYA_SECURITY_LEVEL >= TUYA_SL_1)
-    rt = tal_sw_timer_create(__cert_query_tm_cb, NULL, &s_tuya_cert_mng.cert_query);
+    rt = core_sw_timer_create(__cert_query_tm_cb, NULL, &s_tuya_cert_mng.cert_query);
     if (OPRT_OK != rt) {
         PR_ERR("cert_query timer create err");
         goto EXIT;
     } else {
-        tal_sw_timer_start(s_tuya_cert_mng.cert_query, CERT_QUERY_INTERVAL, TAL_TIMER_CYCLE);
+        core_sw_timer_start(s_tuya_cert_mng.cert_query, CERT_QUERY_INTERVAL, CORE_TIMER_CYCLE);
     }
 #endif
 
@@ -819,23 +819,23 @@ OPERATE_RET tuya_cert_manager_init(void)
     /* Cloud layer registers CA certificate loading with the connection layer
      * (the connection layer does not depend on the cloud layer) */
     tuya_tls_set_cert_load_cb(tuya_cert_manager_load);
-    tal_workq_init_delayed(WORKQ_HIGHTPRI, __update_tls_url_cb, NULL, &s_tuya_cert_mng.tm_update_tls_url);
+    core_workq_init_delayed(WORKQ_HIGHTPRI, __update_tls_url_cb, NULL, &s_tuya_cert_mng.tm_update_tls_url);
     tuya_cert_kv_to_ram();
 
 #if (TUYA_SECURITY_LEVEL >= TUYA_SL_2)
     {
         size_t cert_len = 0;
-        rt = tal_kv_get(CLT_CERT_MF, &s_tuya_cert_mng.client_cert_info.cert, &cert_len);
+        rt = core_kv_get(CLT_CERT_MF, &s_tuya_cert_mng.client_cert_info.cert, &cert_len);
         if (OPRT_OK != rt) {
-            PR_ERR("tal_kv_get fails %s %d", CLT_CERT_MF, rt);
+            PR_ERR("core_kv_get fails %s %d", CLT_CERT_MF, rt);
             goto EXIT;
         }
         s_tuya_cert_mng.client_cert_info.cert_len = (uint32_t)cert_len;
 
         size_t key_len = 0;
-        rt = tal_kv_get(CLT_PVT_KEY_MF, &s_tuya_cert_mng.client_cert_info.private_key, &key_len);
+        rt = core_kv_get(CLT_PVT_KEY_MF, &s_tuya_cert_mng.client_cert_info.private_key, &key_len);
         if (OPRT_OK != rt) {
-            PR_ERR("tal_kv_get fails %s %d", CLT_PVT_KEY_MF, rt);
+            PR_ERR("core_kv_get fails %s %d", CLT_PVT_KEY_MF, rt);
             goto EXIT;
         }
         s_tuya_cert_mng.client_cert_info.private_key_len = (uint32_t)key_len;
@@ -848,7 +848,7 @@ OPERATE_RET tuya_cert_manager_init(void)
         goto EXIT;
     }
 
-    tal_event_subscribe(EVENT_RSC_UPDATE, "cert_man", __tuya_update_client_key, SUBSCRIBE_TYPE_NORMAL);
+    core_event_subscribe(EVENT_RSC_UPDATE, "cert_man", __tuya_update_client_key, SUBSCRIBE_TYPE_NORMAL);
 
     PR_DEBUG("cert manager init");
 

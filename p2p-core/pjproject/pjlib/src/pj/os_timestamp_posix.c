@@ -274,9 +274,9 @@ PJ_DEF(pj_status_t) pj_get_timestamp_freq(pj_timestamp *freq)
 #elif defined(PJ_TUYAOS) && PJ_TUYAOS != 0 && !defined(__linux__)
 /*
  * MCU / lwIP builds: do not depend on clock_gettime / gettimeofday.
- * Align with tuya_misc.c — TAL millisecond tick as monotonic base.
+ * Align with tuya_misc.c — CORE millisecond tick as monotonic base.
  */
-#include "tal_system.h"
+#include "core_system.h"
 
 #define USEC_PER_SEC 1000000ULL
 
@@ -286,7 +286,7 @@ PJ_DEF(pj_status_t) pj_get_timestamp(pj_timestamp *ts)
         return PJ_EINVAL;
     }
     /* Store microseconds so freq=1e6 yields correct pj_gettickcount msec. */
-    ts->u64 = (pj_uint64_t)tal_system_get_millisecond() * 1000ULL;
+    ts->u64 = (pj_uint64_t)core_system_get_millisecond() * 1000ULL;
     return PJ_SUCCESS;
 }
 

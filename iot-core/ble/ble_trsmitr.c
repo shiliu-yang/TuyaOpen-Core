@@ -9,7 +9,7 @@
  *
  */
 
-#include "tal_api.h"
+#include "core_api.h"
 #include "ble_trsmitr.h"
 #include "ble_mgr.h"
 #include "ble_dp.h"
@@ -41,16 +41,16 @@ static uint16_t s_ble_frame_packet_len = 1024;
  */
 ble_frame_trsmitr_t *ble_frame_trsmitr_create(void)
 {
-    ble_frame_trsmitr_t *trsmitr = (ble_frame_trsmitr_t *)tal_malloc(sizeof(ble_frame_trsmitr_t));
+    ble_frame_trsmitr_t *trsmitr = (ble_frame_trsmitr_t *)core_malloc(sizeof(ble_frame_trsmitr_t));
     if (NULL == trsmitr) {
         PR_DEBUG("malloc err");
         return NULL;
     }
     memset(trsmitr, 0, sizeof(ble_frame_trsmitr_t));
-    trsmitr->subpkg = (uint8_t *)tal_malloc(ble_frame_packet_len_get());
+    trsmitr->subpkg = (uint8_t *)core_malloc(ble_frame_packet_len_get());
     if (trsmitr->subpkg == NULL) {
         PR_ERR("malloc err:%d", ble_frame_packet_len_get());
-        tal_free(trsmitr);
+        core_free(trsmitr);
         return NULL;
     }
     memset(trsmitr->subpkg, 0, ble_frame_packet_len_get());
@@ -68,8 +68,8 @@ ble_frame_trsmitr_t *ble_frame_trsmitr_create(void)
  */
 void ble_frame_trsmitr_delete(ble_frame_trsmitr_t *trsmitr)
 {
-    tal_free(trsmitr->subpkg);
-    tal_free(trsmitr);
+    core_free(trsmitr->subpkg);
+    core_free(trsmitr);
 }
 
 /**

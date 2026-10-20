@@ -27,11 +27,11 @@ extern "C" {
 #include "atop_service.h"
 #include "matop_service.h"
 #include "cJSON.h"
-#include "tal_sw_timer.h"
+#include "core_sw_timer.h"
 #include "tuya_protocol.h"
 #include "dp_schema.h"
 #include "tuya_ota.h"
-#include "tal_api.h"
+#include "core_api.h"
 
 /**
  * @brief SDK Version info

@@ -9,7 +9,7 @@
  */
 
 #include "ble_cryption.h"
-#include "tal_api.h"
+#include "core_api.h"
 #include "mix_method.h"
 #include "tuya_iot.h"
 
@@ -78,7 +78,7 @@ static bool ble_key_generate(ble_crypto_param_t *p, uint8_t mode, uint8_t *key_o
         memcpy(key_in_buffer + len, p->auth_key, AUTH_KEY_LEN);
         len += AUTH_KEY_LEN;
         // md5(uuid)
-        tal_md5_ret(p->uuid, 16, uuid_key);
+        core_md5_ret(p->uuid, 16, uuid_key);
         memcpy(key_in_buffer + len, uuid_key, 16);
         len += 16;
         memcpy(key_in_buffer + len, service_rand, 16);
@@ -94,7 +94,7 @@ static bool ble_key_generate(ble_crypto_param_t *p, uint8_t mode, uint8_t *key_o
     }
 
     memset(key_out_hex, 0, sizeof(key_out_hex));
-    tal_md5_ret(key_in_buffer, len, key_out_hex);
+    core_md5_ret(key_in_buffer, len, key_out_hex);
     memcpy(key_out, key_out_hex, 16);
 
     if (ENCRYPTION_MODE_KEY_11 == mode) {
@@ -137,7 +137,7 @@ bool tuya_ble_register_key_generate(uint8_t *output, uint8_t *auth_key)
 {
     int rt = OPRT_OK;
 
-    rt = tal_aes128_ecb_encode_raw(service_rand, 16, output, auth_key);
+    rt = core_aes128_ecb_encode_raw(service_rand, 16, output, auth_key);
 
     return rt == OPRT_OK ? true : false;
 }
@@ -174,22 +174,22 @@ int tuya_ble_adv_id_encrypt(uint8_t *key, uint8_t *in_buf, uint8_t in_len, uint8
     if (in_len * 2 + 1 > (bufsize - 16)) {
         return OPRT_INVALID_PARM;
     }
-    uint8_t *aes_buf = tal_malloc(bufsize * 2);
+    uint8_t *aes_buf = core_malloc(bufsize * 2);
     if (NULL == aes_buf) {
         return OPRT_MALLOC_FAILED;
     }
-    tal_md5_ret(key, MAX_LENGTH_SECKEY, aes_key);
+    core_md5_ret(key, MAX_LENGTH_SECKEY, aes_key);
     hex2str(aes_buf, in_buf, in_len);
     pkcslen = ble_add_pkcs(aes_buf, in_len * 2 + 1);
     if (pkcslen > bufsize * 2) {
-        tal_free(aes_buf);
+        core_free(aes_buf);
         return OPRT_COM_ERROR;
     }
-    int rt = tal_aes128_ecb_encode_raw(aes_buf, pkcslen, &aes_buf[bufsize], aes_key);
+    int rt = core_aes128_ecb_encode_raw(aes_buf, pkcslen, &aes_buf[bufsize], aes_key);
     if (OPRT_OK == rt) {
         memcpy(out_buf, &aes_buf[bufsize], MAX_LENGTH_SECKEY);
     }
-    tal_free(aes_buf);
+    core_free(aes_buf);
 
     return rt;
 }
@@ -216,10 +216,10 @@ int tuya_ble_rsp_id_encrypt(uint8_t *key, uint8_t key_len, uint8_t *in_buf, uint
     uint8_t aes_key[16];
     uint8_t aes_iv[16];
 
-    tal_md5_ret(key, key_len, aes_key);
+    core_md5_ret(key, key_len, aes_key);
     memcpy(aes_iv, aes_key, 16);
 
-    return tal_aes128_cbc_encode_raw(in_buf, in_len, aes_key, aes_iv, out_buf);
+    return core_aes128_cbc_encode_raw(in_buf, in_len, aes_key, aes_iv, out_buf);
 }
 
 /**
@@ -260,7 +260,7 @@ uint8_t tuya_ble_encryption(ble_crypto_param_t *p, uint8_t encryption_mode, uint
     memset(key, 0, sizeof(key));
     if (ble_key_generate(p, encryption_mode, key)) {
         *out_len = len;
-        int rt = tal_aes128_cbc_encode_raw(in_buf, len, key, iv, out_buf);
+        int rt = core_aes128_cbc_encode_raw(in_buf, len, key, iv, out_buf);
         return rt == OPRT_OK ? 0 : 3;
     }
 
@@ -322,7 +322,7 @@ uint8_t tuya_ble_decryption(ble_crypto_param_t *p, uint8_t *in_buf, uint32_t in_
     if (ble_key_generate(p, mode, key)) {
         memcpy(IV, in_buf + 1, 16);
         *out_len = len;
-        int rt = tal_aes128_cbc_decode_raw((uint8_t *)(in_buf + 17), len, key, IV, out_buf);
+        int rt = core_aes128_cbc_decode_raw((uint8_t *)(in_buf + 17), len, key, IV, out_buf);
         return rt == OPRT_OK ? 0 : 3;
     }
 

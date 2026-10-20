@@ -28,7 +28,7 @@
 #if defined(PJ_TUYAOS) && PJ_TUYAOS != 0
 #include <errno.h>
 #include <stdio.h>
-#include "tal_local_ip.h"
+#include "core_local_ip.h"
 #endif
 
 #define THIS_FILE "sock_bsd.c"
@@ -668,7 +668,7 @@ PJ_DEF(pj_status_t) pj_sock_getsockname(pj_sock_t sock, pj_sockaddr_t *addr, int
                 pj_uint32_t host = pj_ntohl(a->ipv4.sin_addr.s_addr);
                 if (host == 0 || (host >> 24) == 127) {
                     unsigned int nbo;
-                    if (tal_compat_get_sta_ipv4_nbo(&nbo) == 0) {
+                    if (core_compat_get_sta_ipv4_nbo(&nbo) == 0) {
                         a->ipv4.sin_addr.s_addr = nbo;
                     }
                 }

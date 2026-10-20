@@ -20,11 +20,11 @@
 #include <string.h>
 #include <stdio.h>
 #include "uni_log.h"
-#include "tal_memory.h"
+#include "core_memory.h"
 #include "tuya_ai_client.h"
-#include "tal_semaphore.h"
+#include "core_semaphore.h"
 #include "tuya_error_code.h"
-#include "tal_time_service.h"
+#include "core_time_service.h"
 #include "mqc_app.h"
 #include "tuya_devos_utils.h"
 #include "tuya_ai_private.h"
@@ -70,7 +70,7 @@ STATIC OPERATE_RET __ai_mq_do_interrupt(ty_cJSON *root)
         BYTE_T *out = NULL;
         UINT_T out_len = 0;
         tuya_pack_user_attrs(attr, CNTSOF(attr), &out, &out_len);
-        tal_free(tmp);
+        core_free(tmp);
         AI_EVENT_ATTR_T event;
         memset(&event, 0, SIZEOF(AI_EVENT_ATTR_T));
         strncpy(event.event_id, eventId->valuestring, AI_UUID_V4_LEN);
@@ -79,7 +79,7 @@ STATIC OPERATE_RET __ai_mq_do_interrupt(ty_cJSON *root)
         AI_EVENT_HEAD_T head = {0};
         head.type = AI_EVENT_CHAT_BREAK;
         rt = cfg->event_cb(&event, &head, NULL);
-        tal_free(out);
+        core_free(out);
 #else
         ty_cJSON *root = ty_cJSON_CreateObject();
         if (NULL == root) {
@@ -101,7 +101,7 @@ STATIC OPERATE_RET __ai_mq_do_interrupt(ty_cJSON *root)
             AI_EVENT_HEAD_T head = {0};
             head.type = AI_EVENT_CHAT_BREAK;
             rt = cfg->event_cb(&event, &head, NULL);
-            tal_free(out);
+            core_free(out);
         } else {
             PR_ERR("creat cjson obj error");
             return OPRT_COM_ERROR;
@@ -141,7 +141,7 @@ OPERATE_RET tuya_ai_mq_ser_cfg_req(VOID)
     }
     memset(ai_mqtt_ctx->biz_id, 0, SIZEOF(ai_mqtt_ctx->biz_id));
     memcpy(ai_mqtt_ctx->biz_id, biz_id, AI_UUID_V4_LEN);
-    rt = tal_semaphore_wait(ai_mqtt_ctx->sem, AI_SEM_ACK_TIMEOUT);
+    rt = core_semaphore_wait(ai_mqtt_ctx->sem, AI_SEM_ACK_TIMEOUT);
     if (rt != OPRT_OK) {
         PR_ERR("mq ser cfg ack timeout %d", rt);
     } else {
@@ -184,7 +184,7 @@ OPERATE_RET tuya_ai_mq_token_req(CHAR_T *solution_code, AI_AGENT_TOKEN_INFO_T *a
     }
     memset(ai_mqtt_ctx->biz_id, 0, SIZEOF(ai_mqtt_ctx->biz_id));
     memcpy(ai_mqtt_ctx->biz_id, biz_id, AI_UUID_V4_LEN);
-    rt = tal_semaphore_wait(ai_mqtt_ctx->sem, AI_SEM_ACK_TIMEOUT);
+    rt = core_semaphore_wait(ai_mqtt_ctx->sem, AI_SEM_ACK_TIMEOUT);
     if (rt != OPRT_OK) {
         PR_ERR("mq token ack timeout %d", rt);
     } else {
@@ -381,7 +381,7 @@ STATIC OPERATE_RET __ai_mq_do_ser_cfg(ty_cJSON *root)
     }
 
     rt = __ai_mq_parse_ser_cfg(data);
-    tal_semaphore_post(ai_mqtt_ctx->sem);
+    core_semaphore_post(ai_mqtt_ctx->sem);
     return rt;
 }
 
@@ -482,11 +482,11 @@ STATIC OPERATE_RET __ai_mq_do_agent_token(ty_cJSON *root)
             memset(ai_mqtt_ctx->agent.tts_url, 0, AI_TTS_URL_LEN);
             memcpy(ai_mqtt_ctx->agent.tts_url, tts_url->valuestring, strlen(tts_url->valuestring));
         }
-        tal_semaphore_post(ai_mqtt_ctx->sem);
+        core_semaphore_post(ai_mqtt_ctx->sem);
         return rt;
     }
     rt = __ai_mq_parse_agent_token(data);
-    tal_semaphore_post(ai_mqtt_ctx->sem);
+    core_semaphore_post(ai_mqtt_ctx->sem);
     return rt;
 }
 
@@ -544,7 +544,7 @@ VOID tuya_ai_mq_deinit(VOID)
         mqc_app_unregister_cb(AI_MQ_PROTO_NUM, __ai_mq_handle);
         __ai_mq_ser_cfg_free();
         if (ai_mqtt_ctx->sem) {
-            tal_semaphore_release(ai_mqtt_ctx->sem);
+            core_semaphore_release(ai_mqtt_ctx->sem);
         }
         OS_FREE(ai_mqtt_ctx);
         ai_mqtt_ctx = NULL;
@@ -559,7 +559,7 @@ OPERATE_RET tuya_ai_mq_init(AI_MQTT_RECV_CB cb)
     TUYA_CHECK_NULL_RETURN(ai_mqtt_ctx, OPRT_MALLOC_FAILED);
     memset(ai_mqtt_ctx, 0, SIZEOF(AI_MQTT_CTX_T));
     mqc_app_register_cb(AI_MQ_PROTO_NUM, __ai_mq_handle);
-    TUYA_CALL_ERR_GOTO(tal_semaphore_create_init(&(ai_mqtt_ctx->sem), 0, 1), EXIT);
+    TUYA_CALL_ERR_GOTO(core_semaphore_create_init(&(ai_mqtt_ctx->sem), 0, 1), EXIT);
     ai_mqtt_ctx->recv_cb = cb;
     return rt;
 

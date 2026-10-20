@@ -2,10 +2,10 @@
 # so the target is defined here rather than in per-module subdirectories.
 
 # Base libraries of this group: tuya_utilities (common tools, no internal deps),
-# tal_system (system abstraction) and tuya_transport (connection service layer,
-# which includes tal_network / tal_security / libtls / http&mqtt wrappers).
+# core_system (system abstraction) and tuya_transport (connection service layer,
+# which includes core_network / core_security / libtls / http&mqtt wrappers).
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/utilities)
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tal_system)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/core_system)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tuya_transport)
 file(GLOB_RECURSE _cloud_srcs CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/lan/*.c"
@@ -68,10 +68,10 @@ set(_cloud_deps
     backoff_algorithm
     mbedtls
     libcjson
-    tal_system
+    core_system
 )
 target_link_libraries(tuya_cloud_service
-    PUBLIC tuya_transport libcjson tal_system corehttp coremqtt backoff_algorithm mbedtls
+    PUBLIC tuya_transport libcjson core_system corehttp coremqtt backoff_algorithm mbedtls
     PRIVATE ${_cloud_deps}
 )
 unset(_cloud_srcs)

@@ -23,13 +23,13 @@
 #include <inttypes.h>
 #include "atop_base.h"
 #include "tuya_config_defaults.h"
-#include "tal_log.h"
+#include "core_log.h"
 #include "tuya_endpoint.h"
 #include "http_client_interface.h"
 #include "cJSON.h"
-#include "tal_security.h"
+#include "core_security.h"
 #include "mbedtls/base64.h"
-#include "tal_memory.h"
+#include "core_memory.h"
 #include "cipher_wrapper.h"
 #include "uni_random.h"
 
@@ -52,27 +52,27 @@ static int atop_url_params_sign(const char *key, url_param_t *params, int param_
     int i = 0;
     uint8_t digest[MD5SUM_LENGTH];
 
-    char *buffer = tal_malloc(512);
+    char *buffer = core_malloc(512);
     TUYA_CHECK_NULL_RETURN(buffer, OPRT_MALLOC_FAILED);
 
     for (i = 0; i < param_num; ++i) {
         int ret = snprintf(buffer + printlen, 512 - printlen, "%s=%s||", params[i].key, params[i].value);
         if (ret < 0 || (size_t)ret >= 512 - printlen) {
-            tal_free(buffer);
+            core_free(buffer);
             return OPRT_BUFFER_NOT_ENOUGH;
         }
         printlen += (size_t)ret;
     }
     int ret = snprintf(buffer + printlen, 512 - printlen, "%s", (char *)key);
     if (ret < 0 || (size_t)ret >= 512 - printlen) {
-        tal_free(buffer);
+        core_free(buffer);
         return OPRT_BUFFER_NOT_ENOUGH;
     }
     printlen += (size_t)ret;
 
     // make md5 digest bin
-    tal_md5_ret((const uint8_t *)buffer, printlen, digest);
-    tal_free(buffer);
+    core_md5_ret((const uint8_t *)buffer, printlen, digest);
+    core_free(buffer);
 
     // make digest hex
     char sign_buf[MD5SUM_LENGTH * 2 + 1] = {0};
@@ -142,7 +142,7 @@ static int atop_request_data_encode(const char *key, const uint8_t *input, int i
     /* Encode buffer */
     size_t encrypt_olen = 0;
     size_t buflen = AES_GCM128_NONCE_LEN + ilen + AES_GCM128_TAG_LEN;
-    uint8_t *encrypted_buffer = tal_malloc(buflen);
+    uint8_t *encrypted_buffer = core_malloc(buflen);
     if (encrypted_buffer == NULL) {
         return OPRT_MALLOC_FAILED;
     }
@@ -170,7 +170,7 @@ static int atop_request_data_encode(const char *key, const uint8_t *input, int i
     // output the hex data
     int write_len = snprintf((char *)output + printlen, output_len - printlen, "%s", "data=");
     if (write_len < 0 || (size_t)write_len >= output_len - printlen) {
-        tal_free(encrypted_buffer);
+        core_free(encrypted_buffer);
         return OPRT_BUFFER_NOT_ENOUGH;
     }
     printlen += (size_t)write_len;
@@ -178,13 +178,13 @@ static int atop_request_data_encode(const char *key, const uint8_t *input, int i
         write_len =
             snprintf((char *)output + printlen, output_len - printlen, "%02X", (uint8_t)(encrypted_buffer[i]));
         if (write_len < 0 || (size_t)write_len >= output_len - printlen) {
-            tal_free(encrypted_buffer);
+            core_free(encrypted_buffer);
             return OPRT_BUFFER_NOT_ENOUGH;
         }
         printlen += (size_t)write_len;
     }
 
-    tal_free(encrypted_buffer);
+    core_free(encrypted_buffer);
     if (printlen >= output_len) {
         return OPRT_BUFFER_NOT_ENOUGH;
     }
@@ -245,21 +245,21 @@ static int atop_response_data_decode(const char *key, const uint8_t *input, size
 
     // base64 decode buffer
     size_t b64buffer_len = value_length * 3 / 4;
-    uint8_t *b64buffer = tal_malloc(b64buffer_len);
+    uint8_t *b64buffer = core_malloc(b64buffer_len);
     size_t b64buffer_olen = 0;
 
     // base64 decode
     rt = mbedtls_base64_decode(b64buffer, b64buffer_len, &b64buffer_olen, (const uint8_t *)value, value_length);
     if (rt != OPRT_OK) {
         PR_ERR("base64 decode error:%d", rt);
-        tal_free(b64buffer);
+        core_free(b64buffer);
         cJSON_Delete(root);
         return rt;
     }
 
     rt = atop_response_result_decrpyt(key, (const uint8_t *)b64buffer, b64buffer_olen, output, olen);
     cJSON_Delete(root);
-    tal_free(b64buffer);
+    core_free(b64buffer);
     if (rt != OPRT_OK) {
         PR_ERR("atop_data_decrpyt error: %d", rt);
         return rt;
@@ -400,7 +400,7 @@ int atop_base_request(const atop_base_request_t *request, atop_base_response_t *
     }
 
     /* url param buffer make */
-    char *path_buffer = tal_malloc(MAX_URL_LENGTH);
+    char *path_buffer = core_malloc(MAX_URL_LENGTH);
     if (NULL == path_buffer) {
         PR_ERR("path_buffer malloc fail");
         return OPRT_MALLOC_FAILED;
@@ -410,7 +410,7 @@ int atop_base_request(const atop_base_request_t *request, atop_base_response_t *
     int path_buffer_len = snprintf(path_buffer, MAX_URL_LENGTH, "%s?", (char *)request->path);
     if (path_buffer_len < 0 || path_buffer_len >= MAX_URL_LENGTH) {
         PR_ERR("path_buffer snprintf fail");
-        tal_free(path_buffer);
+        core_free(path_buffer);
         return OPRT_BUFFER_NOT_ENOUGH;
     }
     
@@ -420,14 +420,14 @@ int atop_base_request(const atop_base_request_t *request, atop_base_response_t *
     size_t encode_len = 0;
     size_t path_buffer_remain = (path_buffer_len < MAX_URL_LENGTH) ? (MAX_URL_LENGTH - path_buffer_len) : 0;
     if (path_buffer_remain == 0) {
-        tal_free(path_buffer);
+        core_free(path_buffer);
         return OPRT_BUFFER_NOT_ENOUGH;
     }
     rt = atop_url_params_encode((char *)request->key, params, idx, path_buffer + path_buffer_len, path_buffer_remain,
                                 &encode_len);
     if (rt != OPRT_OK) {
         PR_ERR("url param encode error:%d", rt);
-        tal_free(path_buffer);
+        core_free(path_buffer);
         return rt;
     }
     path_buffer_len += encode_len;
@@ -437,10 +437,10 @@ int atop_base_request(const atop_base_request_t *request, atop_base_response_t *
     size_t body_length = 0;
     size_t body_buffer_len =
         POST_DATA_PREFIX + (request->datalen + AES_GCM128_NONCE_LEN + AES_GCM128_TAG_LEN) * 2 + 1;
-    uint8_t *body_buffer = tal_malloc(body_buffer_len);
+    uint8_t *body_buffer = core_malloc(body_buffer_len);
     if (NULL == body_buffer) {
         PR_ERR("body_buffer malloc fail");
-        tal_free(path_buffer);
+        core_free(path_buffer);
         return OPRT_MALLOC_FAILED;
     }
 
@@ -450,8 +450,8 @@ int atop_base_request(const atop_base_request_t *request, atop_base_response_t *
                                   &body_length);
     if (rt != OPRT_OK) {
         PR_ERR("atop_post_data_encrypt error:%d", rt);
-        tal_free(path_buffer);
-        tal_free(body_buffer);
+        core_free(path_buffer);
+        core_free(body_buffer);
         return rt;
     }
     PR_DEBUG("out post data len:%d, data:%s", body_length, body_buffer);
@@ -482,8 +482,8 @@ int atop_base_request(const atop_base_request_t *request, atop_base_response_t *
                                       &http_response);
 
     /* Release http buffer */
-    tal_free(path_buffer);
-    tal_free(body_buffer);
+    core_free(path_buffer);
+    core_free(body_buffer);
 
     if (HTTP_CLIENT_SUCCESS != http_status) {
         PR_ERR("http_request_send error:%d", http_status);
@@ -491,7 +491,7 @@ int atop_base_request(const atop_base_request_t *request, atop_base_response_t *
     }
 
     size_t result_buffer_length = 0;
-    uint8_t *result_buffer = tal_calloc(1, http_response.body_length);
+    uint8_t *result_buffer = core_calloc(1, http_response.body_length);
     if (NULL == result_buffer) {
         PR_ERR("result_buffer malloc fail");
         http_client_free(&http_response);
@@ -510,7 +510,7 @@ int atop_base_request(const atop_base_request_t *request, atop_base_response_t *
     }
 
     http_client_free(&http_response);
-    tal_free(result_buffer);
+    core_free(result_buffer);
 
     return rt;
 }

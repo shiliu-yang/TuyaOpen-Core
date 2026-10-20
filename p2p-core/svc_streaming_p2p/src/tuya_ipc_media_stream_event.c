@@ -6,8 +6,8 @@
  * @copyright Copyright (c) Tuya Inc.
  */
 #include "tuya_ipc_media_stream_event.h"
-#include "tal_mutex.h"
-#include "tal_log.h"
+#include "core_mutex.h"
+#include "core_log.h"
 #include <string.h>
 
 /* ---------------------------------------------------------------------------
@@ -25,7 +25,7 @@ static OPERATE_RET __event_lock_init(void)
     if (s_event_lock != NULL) {
         return OPRT_OK;
     }
-    return tal_mutex_create_init(&s_event_lock);
+    return core_mutex_create_init(&s_event_lock);
 }
 
 /**
@@ -39,9 +39,9 @@ OPERATE_RET tuya_ipc_media_stream_register_event_cb(MEDIA_STREAM_EVENT_CB event_
     if (rt != OPRT_OK) {
         return rt;
     }
-    tal_mutex_lock(s_event_lock);
+    core_mutex_lock(s_event_lock);
     s_event_cb = event_cb;
-    tal_mutex_unlock(s_event_lock);
+    core_mutex_unlock(s_event_lock);
     PR_NOTICE("media_stream event_cb %s", event_cb ? "registered" : "cleared");
     return OPRT_OK;
 }
@@ -63,9 +63,9 @@ OPERATE_RET tuya_ipc_media_stream_event_call(int device, int channel, MEDIA_STRE
     if (rt != OPRT_OK) {
         return rt;
     }
-    tal_mutex_lock(s_event_lock);
+    core_mutex_lock(s_event_lock);
     cb = s_event_cb;
-    tal_mutex_unlock(s_event_lock);
+    core_mutex_unlock(s_event_lock);
 
     if (cb == NULL) {
         return OPRT_OK;

@@ -19,7 +19,7 @@
 #include <string.h>
 #include <inttypes.h> /* PRIu32: uint32_t is unsigned int or long unsigned on different platforms */
 
-#include "tal_api.h"
+#include "core_api.h"
 #include "tuya_transporter.h"
 #include "transport_interface.h"
 #include "tuya_tls.h"

@@ -23,7 +23,7 @@ extern "C" {
 
 #include "tuya_cloud_types.h"
 #include "cJSON.h"
-#include "tal_mutex.h"
+#include "core_mutex.h"
 
 #define DEV_ID_LEN 25
 

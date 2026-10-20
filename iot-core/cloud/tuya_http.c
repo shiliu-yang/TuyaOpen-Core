@@ -14,9 +14,9 @@
 #include "iotdns.h"
 #include "http_session.h"
 #include "http_client_interface.h"
-#include "tal_time_service.h"
-#include "tal_log.h"
-#include "tal_memory.h"
+#include "core_time_service.h"
+#include "core_log.h"
+#include "core_memory.h"
 
 #ifndef MAX_HTTP_CERT_NUM
 #define MAX_HTTP_CERT_NUM 3
@@ -78,17 +78,17 @@ int tuya_http_cert_save(char *host, uint16_t port, uint8_t *cacert, uint16_t cac
         }
     }
     if (cache->host) {
-        tal_free(cache->host);
+        core_free(cache->host);
         cache->host = NULL;
     }
     if (cache->cacert && cache->cacert_len) {
-        tal_free(cache->cacert);
+        core_free(cache->cacert);
         cache->cacert = NULL;
         cache->cacert_len = 0;
     }
 
     size_t host_len = strlen(host);
-    char *host_copy = tal_malloc(host_len + 1);
+    char *host_copy = core_malloc(host_len + 1);
     if (NULL == host_copy) {
         return OPRT_MALLOC_FAILED;
     }
@@ -99,7 +99,7 @@ int tuya_http_cert_save(char *host, uint16_t port, uint8_t *cacert, uint16_t cac
     cache->port = port;
     cache->cacert = cacert;
     cache->cacert_len = cacert_len;
-    cache->timeposix = tal_time_get_posix();
+    cache->timeposix = core_time_get_posix();
 
     return OPRT_OK;
 }
@@ -165,7 +165,7 @@ int tuya_http_cert_load(char *host, uint16_t port, uint8_t **cacert, uint16_t *c
     rt = tuya_iotdns_query_host_certs(host, port, cacert, cacert_len);
     if (OPRT_OK != rt || *cacert == NULL || *cacert_len == 0) {
         if (*cacert) {
-            tal_free(*cacert);
+            core_free(*cacert);
             *cacert = NULL;
         }
         *cacert_len = 0;
@@ -174,7 +174,7 @@ int tuya_http_cert_load(char *host, uint16_t port, uint8_t **cacert, uint16_t *c
 
     rt = tuya_http_cert_save(host, port, *cacert, *cacert_len);
     if (OPRT_OK != rt) {
-        tal_free(*cacert);
+        core_free(*cacert);
         *cacert = NULL;
         *cacert_len = 0;
     }
@@ -220,8 +220,8 @@ int tuya_http_client_post_simple(char *url, char *body, http_client_header_t *he
     request.method = "POST";
     request.headers = headers;
     request.headers_count = headers_count;
-    request.host = tal_calloc(1, parts.host_len + 1);
-    request.path = tal_calloc(1, parts.path_len + 1);
+    request.host = core_calloc(1, parts.host_len + 1);
+    request.path = core_calloc(1, parts.path_len + 1);
     if (NULL == request.host || NULL == request.path) {
         rt = OPRT_MALLOC_FAILED;
         goto __exit;
@@ -244,10 +244,10 @@ int tuya_http_client_post_simple(char *url, char *body, http_client_header_t *he
 
 __exit:
     if (request.host) {
-        tal_free((void *)request.host);
+        core_free((void *)request.host);
     }
     if (request.path) {
-        tal_free((void *)request.path);
+        core_free((void *)request.path);
     }
 
     return rt;

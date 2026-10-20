@@ -1,8 +1,8 @@
 /**
  * @file sock_tal.c
- * @brief pj socket backend on TuyaOpen TAL — replaces sock_bsd.c
+ * @brief pj socket backend on TuyaOpen CORE — replaces sock_bsd.c
  *
- * One code path for every target: TAL dispatches to the POSIX backend on
+ * One code path for every target: CORE dispatches to the POSIX backend on
  * LINUX and to TKL (lwIP) on MCU, so pjlib needs no BSD socket headers and
  * no chip tree include paths.
  *
@@ -10,8 +10,8 @@
  * PJ_EIPV6NOTSUP rather than asserting.
  *
  * Address convention: pj_sockaddr keeps network byte order (sin_addr,
- * sin_port), TAL takes and returns host byte order. Every crossing goes
- * through pj_sockaddr_to_tal() / tal_to_pj_sockaddr().
+ * sin_port), CORE takes and returns host byte order. Every crossing goes
+ * through pj_sockaddr_to_tal() / core_to_pj_sockaddr().
  *
  * @copyright Copyright (c) Tuya Inc.
  */
@@ -25,10 +25,10 @@
 #include <pj/os.h>
 #include <pj/string.h>
 
-#include "tal_api.h"
-#include "tal_network.h"
-#include "tal_ip_addr.h"
-#include "tal_local_ip.h"
+#include "core_api.h"
+#include "core_network.h"
+#include "core_ip_addr.h"
+#include "core_local_ip.h"
 
 #define THIS_FILE "sock_tal.c"
 
@@ -82,12 +82,12 @@ const pj_uint16_t PJ_IP_DROP_MEMBERSHIP = 14;
  * Byte order helpers. sock_bsd.c forwarded these to the C library; without
  * the socket headers pjlib provides them from its own endian configuration.
  */
-static pj_uint16_t tal_swap16(pj_uint16_t v)
+static pj_uint16_t core_swap16(pj_uint16_t v)
 {
     return (pj_uint16_t)(((v & 0x00FFu) << 8) | ((v & 0xFF00u) >> 8));
 }
 
-static pj_uint32_t tal_swap32(pj_uint32_t v)
+static pj_uint32_t core_swap32(pj_uint32_t v)
 {
     return ((v & 0x000000FFu) << 24) | ((v & 0x0000FF00u) << 8) | ((v & 0x00FF0000u) >> 8) |
            ((v & 0xFF000000u) >> 24);
@@ -96,7 +96,7 @@ static pj_uint32_t tal_swap32(pj_uint32_t v)
 PJ_DEF(pj_uint16_t) pj_ntohs(pj_uint16_t netshort)
 {
 #if defined(PJ_IS_LITTLE_ENDIAN) && PJ_IS_LITTLE_ENDIAN != 0
-    return tal_swap16(netshort);
+    return core_swap16(netshort);
 #else
     return netshort;
 #endif
@@ -110,7 +110,7 @@ PJ_DEF(pj_uint16_t) pj_htons(pj_uint16_t hostshort)
 PJ_DEF(pj_uint32_t) pj_ntohl(pj_uint32_t netlong)
 {
 #if defined(PJ_IS_LITTLE_ENDIAN) && PJ_IS_LITTLE_ENDIAN != 0
-    return tal_swap32(netlong);
+    return core_swap32(netlong);
 #else
     return netlong;
 #endif
@@ -122,11 +122,11 @@ PJ_DEF(pj_uint32_t) pj_htonl(pj_uint32_t hostlong)
 }
 
 /*
- * Address text conversion. TAL offers str2addr()/addr2str(), but addr2str()
+ * Address text conversion. CORE offers str2addr()/addr2str(), but addr2str()
  * hands back a shared static buffer on some backends, so pjlib formats and
  * parses IPv4 itself. Both are pure and stack-only.
  */
-static pj_bool_t tal_parse_ipv4(const char *s, pj_uint32_t *out_hbo)
+static pj_bool_t core_parse_ipv4(const char *s, pj_uint32_t *out_hbo)
 {
     pj_uint32_t addr = 0;
     int octet = 0;
@@ -189,7 +189,7 @@ PJ_DEF(int) pj_inet_aton(const pj_str_t *cp, pj_in_addr *inp)
     pj_memcpy(tempaddr, cp->ptr, cp->slen);
     tempaddr[cp->slen] = '\0';
 
-    if (!tal_parse_ipv4(tempaddr, &hbo))
+    if (!core_parse_ipv4(tempaddr, &hbo))
         return 0;
 
     inp->s_addr = pj_htonl(hbo);
@@ -215,7 +215,7 @@ PJ_DEF(pj_status_t) pj_inet_pton(int af, const pj_str_t *src, void *dst)
     pj_memcpy(tempaddr, src->ptr, src->slen);
     tempaddr[src->slen] = '\0';
 
-    if (!tal_parse_ipv4(tempaddr, &hbo))
+    if (!core_parse_ipv4(tempaddr, &hbo))
         return PJ_EINVAL;
 
     ((pj_in_addr *)dst)->s_addr = pj_htonl(hbo);
@@ -266,7 +266,7 @@ PJ_DEF(const pj_str_t *) pj_gethostname(void)
 }
 
 /*
- * pj_sockaddr <-> TAL address conversion.
+ * pj_sockaddr <-> CORE address conversion.
  */
 static pj_status_t pj_sockaddr_to_tal(const pj_sockaddr_t *addr, int len, TUYA_IP_ADDR_T *out_addr,
                                       pj_uint16_t *out_port)
@@ -284,7 +284,7 @@ static pj_status_t pj_sockaddr_to_tal(const pj_sockaddr_t *addr, int len, TUYA_I
     return PJ_SUCCESS;
 }
 
-static void tal_to_pj_sockaddr(TUYA_IP_ADDR_T addr, pj_uint16_t port, pj_sockaddr *out)
+static void core_to_pj_sockaddr(TUYA_IP_ADDR_T addr, pj_uint16_t port, pj_sockaddr *out)
 {
     pj_bzero(out, sizeof(*out));
     out->addr.sa_family = PJ_AF_INET;
@@ -316,7 +316,7 @@ static pj_status_t store_sockaddr(const pj_sockaddr *src, pj_sockaddr_t *dst, in
  * a stale value for pj_get_native_netos_error(). pjnath decides retry vs drop
  * from that code, so clear it first and fall back to the expected one.
  */
-static pj_status_t tal_xfer_error(int fallback)
+static pj_status_t core_xfer_error(int fallback)
 {
     int e = errno;
 
@@ -332,7 +332,7 @@ static pj_status_t tal_xfer_error(int fallback)
  */
 PJ_DEF(pj_status_t) pj_sock_socket(int af, int type, int proto, pj_sock_t *sock)
 {
-    TUYA_PROTOCOL_TYPE_E tal_type;
+    TUYA_PROTOCOL_TYPE_E core_type;
     int fd;
 
     PJ_CHECK_STACK();
@@ -346,15 +346,15 @@ PJ_DEF(pj_status_t) pj_sock_socket(int af, int type, int proto, pj_sock_t *sock)
         return PJ_EAFNOTSUP;
 
     if (type == PJ_SOCK_DGRAM)
-        tal_type = PROTOCOL_UDP;
+        core_type = PROTOCOL_UDP;
     else if (type == PJ_SOCK_STREAM)
-        tal_type = PROTOCOL_TCP;
+        core_type = PROTOCOL_TCP;
     else if (type == PJ_SOCK_RAW)
-        tal_type = PROTOCOL_RAW;
+        core_type = PROTOCOL_RAW;
     else
         return PJ_EINVAL;
 
-    fd = tal_net_socket_create(tal_type);
+    fd = core_net_socket_create(core_type);
     if (fd < 0)
         return PJ_RETURN_OS_ERROR(pj_get_native_netos_error());
 
@@ -364,17 +364,17 @@ PJ_DEF(pj_status_t) pj_sock_socket(int af, int type, int proto, pj_sock_t *sock)
 
 PJ_DEF(pj_status_t) pj_sock_bind(pj_sock_t sock, const pj_sockaddr_t *addr, int len)
 {
-    TUYA_IP_ADDR_T tal_addr;
+    TUYA_IP_ADDR_T core_addr;
     pj_uint16_t port;
     pj_status_t status;
 
     PJ_CHECK_STACK();
 
-    status = pj_sockaddr_to_tal(addr, len, &tal_addr, &port);
+    status = pj_sockaddr_to_tal(addr, len, &core_addr, &port);
     if (status != PJ_SUCCESS)
         return status;
 
-    if (tal_net_bind((int)sock, tal_addr, port) != 0)
+    if (core_net_bind((int)sock, core_addr, port) != 0)
         return PJ_RETURN_OS_ERROR(pj_get_native_netos_error());
 
     return PJ_SUCCESS;
@@ -398,7 +398,7 @@ PJ_DEF(pj_status_t) pj_sock_close(pj_sock_t sock)
 {
     PJ_CHECK_STACK();
 
-    if (tal_net_close((int)sock) != 0)
+    if (core_net_close((int)sock) != 0)
         return PJ_RETURN_OS_ERROR(pj_get_native_netos_error());
 
     return PJ_SUCCESS;
@@ -408,7 +408,7 @@ PJ_DEF(pj_status_t) pj_sock_shutdown(pj_sock_t sock, int how)
 {
     PJ_CHECK_STACK();
 
-    if (tal_net_shutdown((int)sock, how) != 0)
+    if (core_net_shutdown((int)sock, how) != 0)
         return PJ_RETURN_OS_ERROR(pj_get_native_netos_error());
 
     return PJ_SUCCESS;
@@ -418,7 +418,7 @@ PJ_DEF(pj_status_t) pj_sock_listen(pj_sock_t sock, int backlog)
 {
     PJ_CHECK_STACK();
 
-    if (tal_net_listen((int)sock, backlog) != 0)
+    if (core_net_listen((int)sock, backlog) != 0)
         return PJ_RETURN_OS_ERROR(pj_get_native_netos_error());
 
     return PJ_SUCCESS;
@@ -426,16 +426,16 @@ PJ_DEF(pj_status_t) pj_sock_listen(pj_sock_t sock, int backlog)
 
 PJ_DEF(pj_status_t) pj_sock_accept(pj_sock_t serverfd, pj_sock_t *newsock, pj_sockaddr_t *addr, int *addrlen)
 {
-    TUYA_IP_ADDR_T tal_addr;
+    TUYA_IP_ADDR_T core_addr;
     uint16_t port = 0;
     int fd;
 
     PJ_CHECK_STACK();
     PJ_ASSERT_RETURN(newsock != NULL, PJ_EINVAL);
 
-    pj_bzero(&tal_addr, sizeof(tal_addr));
+    pj_bzero(&core_addr, sizeof(core_addr));
 
-    fd = tal_net_accept((int)serverfd, &tal_addr, &port);
+    fd = core_net_accept((int)serverfd, &core_addr, &port);
     if (fd < 0)
         return PJ_RETURN_OS_ERROR(pj_get_native_netos_error());
 
@@ -444,7 +444,7 @@ PJ_DEF(pj_status_t) pj_sock_accept(pj_sock_t serverfd, pj_sock_t *newsock, pj_so
     if (addr && addrlen) {
         pj_sockaddr sa;
 
-        tal_to_pj_sockaddr(tal_addr, port, &sa);
+        core_to_pj_sockaddr(core_addr, port, &sa);
         return store_sockaddr(&sa, addr, addrlen);
     }
 
@@ -453,17 +453,17 @@ PJ_DEF(pj_status_t) pj_sock_accept(pj_sock_t serverfd, pj_sock_t *newsock, pj_so
 
 PJ_DEF(pj_status_t) pj_sock_connect(pj_sock_t sock, const pj_sockaddr_t *addr, int namelen)
 {
-    TUYA_IP_ADDR_T tal_addr;
+    TUYA_IP_ADDR_T core_addr;
     pj_uint16_t port;
     pj_status_t status;
 
     PJ_CHECK_STACK();
 
-    status = pj_sockaddr_to_tal(addr, namelen, &tal_addr, &port);
+    status = pj_sockaddr_to_tal(addr, namelen, &core_addr, &port);
     if (status != PJ_SUCCESS)
         return status;
 
-    if (tal_net_connect((int)sock, tal_addr, port) != 0)
+    if (core_net_connect((int)sock, core_addr, port) != 0)
         return PJ_RETURN_OS_ERROR(pj_get_native_netos_error());
 
     return PJ_SUCCESS;
@@ -471,19 +471,19 @@ PJ_DEF(pj_status_t) pj_sock_connect(pj_sock_t sock, const pj_sockaddr_t *addr, i
 
 PJ_DEF(pj_status_t) pj_sock_getsockname(pj_sock_t sock, pj_sockaddr_t *addr, int *namelen)
 {
-    TUYA_IP_ADDR_T tal_addr;
+    TUYA_IP_ADDR_T core_addr;
     uint16_t port = 0;
     pj_sockaddr sa;
     pj_uint32_t host;
 
     PJ_CHECK_STACK();
 
-    pj_bzero(&tal_addr, sizeof(tal_addr));
+    pj_bzero(&core_addr, sizeof(core_addr));
 
-    if (tal_net_getsockname((int)sock, &tal_addr, &port) != OPRT_OK)
+    if (core_net_getsockname((int)sock, &core_addr, &port) != OPRT_OK)
         return PJ_RETURN_OS_ERROR(pj_get_native_netos_error());
 
-    host = (pj_uint32_t)TUYA_IP_ADDR_GET_IP4(tal_addr);
+    host = (pj_uint32_t)TUYA_IP_ADDR_GET_IP4(core_addr);
 
     /*
      * A socket bound to INADDR_ANY reports 0.0.0.0 (lwIP sometimes 127.0.0.1).
@@ -493,29 +493,29 @@ PJ_DEF(pj_status_t) pj_sock_getsockname(pj_sock_t sock, pj_sockaddr_t *addr, int
     if (host == 0 || (host >> 24) == 127) {
         unsigned int nbo;
 
-        if (tal_compat_get_sta_ipv4_nbo(&nbo) == 0)
+        if (core_compat_get_sta_ipv4_nbo(&nbo) == 0)
             host = pj_ntohl((pj_uint32_t)nbo);
     }
 
-    tal_to_pj_sockaddr(TUYA_IP_ADDR_MAKE_IP4(host), port, &sa);
+    core_to_pj_sockaddr(TUYA_IP_ADDR_MAKE_IP4(host), port, &sa);
 
     return store_sockaddr(&sa, addr, namelen);
 }
 
 PJ_DEF(pj_status_t) pj_sock_getpeername(pj_sock_t sock, pj_sockaddr_t *addr, int *namelen)
 {
-    TUYA_IP_ADDR_T tal_addr;
+    TUYA_IP_ADDR_T core_addr;
     uint16_t port = 0;
     pj_sockaddr sa;
 
     PJ_CHECK_STACK();
 
-    pj_bzero(&tal_addr, sizeof(tal_addr));
+    pj_bzero(&core_addr, sizeof(core_addr));
 
-    if (tal_net_getpeername((int)sock, &tal_addr, &port) != OPRT_OK)
+    if (core_net_getpeername((int)sock, &core_addr, &port) != OPRT_OK)
         return PJ_RETURN_OS_ERROR(pj_get_native_netos_error());
 
-    tal_to_pj_sockaddr(tal_addr, port, &sa);
+    core_to_pj_sockaddr(core_addr, port, &sa);
 
     return store_sockaddr(&sa, addr, namelen);
 }
@@ -527,14 +527,14 @@ PJ_DEF(pj_status_t) pj_sock_send(pj_sock_t sock, const void *buf, pj_ssize_t *le
     PJ_CHECK_STACK();
     PJ_ASSERT_RETURN(buf && len && *len >= 0, PJ_EINVAL);
 
-    /* TAL has no flags argument; pj only passes ioqueue bookkeeping bits. */
+    /* CORE has no flags argument; pj only passes ioqueue bookkeeping bits. */
     PJ_UNUSED_ARG(flags);
 
     errno = 0;
-    sent = tal_net_send((int)sock, buf, (uint32_t)(*len));
+    sent = core_net_send((int)sock, buf, (uint32_t)(*len));
     if (sent < 0) {
         *len = -1;
-        return tal_xfer_error(ENOBUFS);
+        return core_xfer_error(ENOBUFS);
     }
 
     *len = sent;
@@ -544,7 +544,7 @@ PJ_DEF(pj_status_t) pj_sock_send(pj_sock_t sock, const void *buf, pj_ssize_t *le
 PJ_DEF(pj_status_t)
 pj_sock_sendto(pj_sock_t sock, const void *buf, pj_ssize_t *len, unsigned flags, const pj_sockaddr_t *to, int tolen)
 {
-    TUYA_IP_ADDR_T tal_addr;
+    TUYA_IP_ADDR_T core_addr;
     pj_uint16_t port;
     pj_status_t status;
     int sent;
@@ -553,12 +553,12 @@ pj_sock_sendto(pj_sock_t sock, const void *buf, pj_ssize_t *len, unsigned flags,
     PJ_ASSERT_RETURN(buf && len && *len >= 0, PJ_EINVAL);
     PJ_UNUSED_ARG(flags);
 
-    status = pj_sockaddr_to_tal(to, tolen, &tal_addr, &port);
+    status = pj_sockaddr_to_tal(to, tolen, &core_addr, &port);
     if (status != PJ_SUCCESS)
         return status;
 
     errno = 0;
-    sent = tal_net_send_to((int)sock, buf, (uint32_t)(*len), tal_addr, port);
+    sent = core_net_send_to((int)sock, buf, (uint32_t)(*len), core_addr, port);
     if (sent < 0) {
         static unsigned s_sendto_fail_cnt;
 
@@ -571,7 +571,7 @@ pj_sock_sendto(pj_sock_t sock, const void *buf, pj_ssize_t *len, unsigned flags,
             PJ_LOG(2, (THIS_FILE, "udp sendto fail n=%u errno=%d pkt=%d", s_sendto_fail_cnt, errno, (int)(*len)));
         }
         *len = -1;
-        return tal_xfer_error(ENOBUFS);
+        return core_xfer_error(ENOBUFS);
     }
 
     *len = sent;
@@ -587,10 +587,10 @@ PJ_DEF(pj_status_t) pj_sock_recv(pj_sock_t sock, void *buf, pj_ssize_t *len, uns
     PJ_UNUSED_ARG(flags);
 
     errno = 0;
-    recvd = tal_net_recv((int)sock, buf, (uint32_t)(*len));
+    recvd = core_net_recv((int)sock, buf, (uint32_t)(*len));
     if (recvd < 0) {
         *len = -1;
-        return tal_xfer_error(EAGAIN);
+        return core_xfer_error(EAGAIN);
     }
 
     *len = recvd;
@@ -600,7 +600,7 @@ PJ_DEF(pj_status_t) pj_sock_recv(pj_sock_t sock, void *buf, pj_ssize_t *len, uns
 PJ_DEF(pj_status_t)
 pj_sock_recvfrom(pj_sock_t sock, void *buf, pj_ssize_t *len, unsigned flags, pj_sockaddr_t *from, int *fromlen)
 {
-    TUYA_IP_ADDR_T tal_addr;
+    TUYA_IP_ADDR_T core_addr;
     uint16_t port = 0;
     int recvd;
 
@@ -608,13 +608,13 @@ pj_sock_recvfrom(pj_sock_t sock, void *buf, pj_ssize_t *len, unsigned flags, pj_
     PJ_ASSERT_RETURN(buf && len && *len >= 0, PJ_EINVAL);
     PJ_UNUSED_ARG(flags);
 
-    pj_bzero(&tal_addr, sizeof(tal_addr));
+    pj_bzero(&core_addr, sizeof(core_addr));
 
     errno = 0;
-    recvd = tal_net_recvfrom((int)sock, buf, (uint32_t)(*len), &tal_addr, &port);
+    recvd = core_net_recvfrom((int)sock, buf, (uint32_t)(*len), &core_addr, &port);
     if (recvd < 0) {
         *len = -1;
-        return tal_xfer_error(EAGAIN);
+        return core_xfer_error(EAGAIN);
     }
 
     *len = recvd;
@@ -622,7 +622,7 @@ pj_sock_recvfrom(pj_sock_t sock, void *buf, pj_ssize_t *len, unsigned flags, pj_
     if (from && fromlen) {
         pj_sockaddr sa;
 
-        tal_to_pj_sockaddr(tal_addr, port, &sa);
+        core_to_pj_sockaddr(core_addr, port, &sa);
         return store_sockaddr(&sa, from, fromlen);
     }
 
@@ -643,25 +643,25 @@ pj_sock_setsockopt(pj_sock_t sock, pj_uint16_t level, pj_uint16_t optname, const
     /* The PJ_SO_* constants are runtime consts, so this is an if ladder. */
     if (level == PJ_SOL_SOCKET) {
         if (optname == PJ_SO_RCVBUF) {
-            rt = tal_net_set_bufsize((int)sock, val, TRANS_RECV);
+            rt = core_net_set_bufsize((int)sock, val, TRANS_RECV);
         } else if (optname == PJ_SO_SNDBUF) {
-            rt = tal_net_set_bufsize((int)sock, val, TRANS_SEND);
+            rt = core_net_set_bufsize((int)sock, val, TRANS_SEND);
         } else if (optname == PJ_SO_REUSEADDR) {
-            rt = val ? tal_net_set_reuse((int)sock) : OPRT_OK;
+            rt = val ? core_net_set_reuse((int)sock) : OPRT_OK;
         } else if (optname == PJ_SO_NOSIGPIPE) {
             /* This stack does not raise SIGPIPE, so this is a no-op. */
             rt = OPRT_OK;
         }
     } else if (level == PJ_SOL_TCP && optname == PJ_TCP_NODELAY) {
-        rt = val ? tal_net_disable_nagle((int)sock) : OPRT_OK;
+        rt = val ? core_net_disable_nagle((int)sock) : OPRT_OK;
     }
 
     if (rt == OPRT_NOT_SUPPORTED) {
         /*
-         * QoS/TOS and multicast are not exposed by TAL. pjlib treats a failed
+         * QoS/TOS and multicast are not exposed by CORE. pjlib treats a failed
          * socket option as non-fatal, so report it instead of faking success.
          */
-        PJ_LOG(5, (THIS_FILE, "setsockopt level=%u opt=%u not supported by TAL", level, optname));
+        PJ_LOG(5, (THIS_FILE, "setsockopt level=%u opt=%u not supported by CORE", level, optname));
         return PJ_ENOTSUP;
     }
 
@@ -677,11 +677,11 @@ pj_sock_getsockopt(pj_sock_t sock, pj_uint16_t level, pj_uint16_t optname, void 
     PJ_ASSERT_RETURN(optval && optlen, PJ_EINVAL);
 
     /*
-     * TAL exposes setters only. The one reader pjlib needs (SO_ERROR for
+     * CORE exposes setters only. The one reader pjlib needs (SO_ERROR for
      * connect completion) is avoided by building with PJ_HAS_SO_ERROR 0,
      * which selects the portable pj_sock_getpeername() probe instead.
      */
-    PJ_LOG(5, (THIS_FILE, "getsockopt level=%u opt=%u not supported by TAL", level, optname));
+    PJ_LOG(5, (THIS_FILE, "getsockopt level=%u opt=%u not supported by CORE", level, optname));
 
     return PJ_ENOTSUP;
 }

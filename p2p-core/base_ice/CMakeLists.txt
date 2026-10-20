@@ -9,5 +9,5 @@ target_include_directories(base_ice PUBLIC
 )
 target_compile_definitions(base_ice PRIVATE NDEBUG ${_p2p_pj_defines})
 target_compile_options(base_ice PRIVATE ${_p2p_warn_opts})
-target_link_libraries(base_ice PRIVATE tuyaopen-headers libcjson tal_system pjproject)
+target_link_libraries(base_ice PRIVATE tuyaopen-headers libcjson core_system pjproject)
 unset(_base_ice_srcs)

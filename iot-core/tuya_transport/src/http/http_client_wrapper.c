@@ -15,7 +15,7 @@
 #include "transport_interface.h"
 #include "core_http_client.h"
 #include "tuya_tls.h"
-#include "tal_log.h"
+#include "core_log.h"
 
 #define log_debug PR_DEBUG
 #define log_error PR_ERR
@@ -41,7 +41,7 @@ static http_client_status_t core_http_request_send(const TransportInterface_t *p
     (void)memset(&requestHeaders, 0, sizeof(requestHeaders));
     /* Set the buffer used for storing request headers. */
     requestHeaders.bufferLen = HEADER_BUFFER_LENGTH + headers_count * 32;
-    requestHeaders.pBuffer = tal_malloc(requestHeaders.bufferLen);
+    requestHeaders.pBuffer = core_malloc(requestHeaders.bufferLen);
     if (requestHeaders.pBuffer == NULL) {
         return HTTP_CLIENT_MALLOC_FAULT;
     }
@@ -56,7 +56,7 @@ static http_client_status_t core_http_request_send(const TransportInterface_t *p
 
     if (httpStatus != HTTPSuccess) {
         log_error("HTTP header error:%d", httpStatus);
-        tal_free(requestHeaders.pBuffer);
+        core_free(requestHeaders.pBuffer);
         return HTTP_CLIENT_SERIALIZE_FAULT;
     }
 
@@ -68,7 +68,7 @@ static http_client_status_t core_http_request_send(const TransportInterface_t *p
                                  response, 0);
 
     /* Release headers buffer */
-    tal_free(requestHeaders.pBuffer);
+    core_free(requestHeaders.pBuffer);
 
     if (httpStatus != HTTPSuccess) {
         log_error("Failed to send HTTP %.*s request to %.*s: Error=%s.", (int32_t)requestInfo->methodLen,
@@ -158,7 +158,7 @@ http_client_status_t http_client_request(const http_client_request_t *request, h
     /* coreHTTP v3.1.3 requires the application to provide the response buffer
      * (shared by headers and body); ownership passes to the caller via
      * response->buffer and is released by http_client_free */
-    http_response.pBuffer = tal_malloc(HTTP_CLIENT_RESPONSE_BUFFER_SIZE);
+    http_response.pBuffer = core_malloc(HTTP_CLIENT_RESPONSE_BUFFER_SIZE);
     if (NULL == http_response.pBuffer) {
         tuya_transporter_close(network);
         tuya_transporter_destroy(network);
@@ -201,7 +201,7 @@ int http_client_free(http_client_response_t *response)
 
     /* coreHTTP v3.1.3: body/headers both point into buffer; free buffer only */
     if (response->buffer) {
-        tal_free(response->buffer);
+        core_free(response->buffer);
         response->buffer = NULL;
     }
 

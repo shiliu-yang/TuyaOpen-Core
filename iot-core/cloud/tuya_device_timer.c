@@ -8,23 +8,23 @@
 #include "tuya_device_timer.h"
 
 #if defined(ENABLE_DEVICE_TIMER) && (ENABLE_DEVICE_TIMER == 1)
-#include "tal_log.h"
-#include "tal_mutex.h"
-#include "tal_sw_timer.h"
-#include "tal_time_service.h"
-#include "tal_workq_service.h"
+#include "core_log.h"
+#include "core_mutex.h"
+#include "core_sw_timer.h"
+#include "core_time_service.h"
+#include "core_workq_service.h"
 #include "tuya_mqtt_dispatch.h"
 #include "tuya_device_meta.h"
-#include "tal_api.h"
+#include "core_api.h"
 #include "tuya_iot.h"
 #include "tuya_iot_dp.h"
 #include "mqtt_service.h"
 #include "tuya_slist.h"
-#include "tal_hash.h"
+#include "core_hash.h"
 
 #include "cJSON.h"
-#include "tal_event.h"
-#include "tal_event_info.h"
+#include "core_event.h"
+#include "core_event_info.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -268,7 +268,7 @@ static void __pending_ack_list_flush(const char *error_code)
     SLIST_HEAD *n = NULL;
     pending_ack_item_t *ack_item = NULL;
 
-    tal_mutex_lock(s_ctx.pending_ack_mutex);
+    core_mutex_lock(s_ctx.pending_ack_mutex);
     SLIST_FOR_EACH_ENTRY_SAFE(ack_item, pending_ack_item_t, pos, n, &s_ctx.pending_ack_list, node) {
         s_ctx.pending_ack_list.next = n;
 
@@ -283,7 +283,7 @@ static void __pending_ack_list_flush(const char *error_code)
     }
 
     s_ctx.pending_ack_list.next = NULL;
-    tal_mutex_unlock(s_ctx.pending_ack_mutex);
+    core_mutex_unlock(s_ctx.pending_ack_mutex);
 }
 
 static void __kv_timer_cb(TIMER_ID timer_id, void *arg)
@@ -300,7 +300,7 @@ static void __kv_timer_cb(TIMER_ID timer_id, void *arg)
         return;
     }
     // PR_DEBUG("serialized_str:%s", serialized_str);
-    tal_kv_set(TIMER_TASKS_KV_KEY, (const uint8_t *)serialized_str, strlen(serialized_str));
+    core_kv_set(TIMER_TASKS_KV_KEY, (const uint8_t *)serialized_str, strlen(serialized_str));
     Free(serialized_str);
     serialized_str = NULL;
 
@@ -440,19 +440,19 @@ static int __on_timer_sync_callback(cJSON *data, void *user_data)
     if (ack_item != NULL) {
         memset(ack_item, 0, sizeof(pending_ack_item_t));
         strncpy(ack_item->req_id, req_id, REQ_ID_LEN - 1);
-        tal_mutex_lock(s_ctx.pending_ack_mutex);
+        core_mutex_lock(s_ctx.pending_ack_mutex);
         if (__pending_ack_list_has(req_id)) {
             Free(ack_item);
         } else {
             tuya_slist_add_tail(&s_ctx.pending_ack_list, &ack_item->node);
         }
-        tal_mutex_unlock(s_ctx.pending_ack_mutex);
+        core_mutex_unlock(s_ctx.pending_ack_mutex);
     }
     if (s_ctx.kv_timer_id == NULL) {
-        tal_sw_timer_create(__kv_timer_cb, NULL, &s_ctx.kv_timer_id);
+        core_sw_timer_create(__kv_timer_cb, NULL, &s_ctx.kv_timer_id);
     }
-    if (!tal_sw_timer_is_running(s_ctx.kv_timer_id)) {
-        tal_sw_timer_start(s_ctx.kv_timer_id, KV_WRITE_DELAY_MS, TAL_TIMER_ONCE);
+    if (!core_sw_timer_is_running(s_ctx.kv_timer_id)) {
+        core_sw_timer_start(s_ctx.kv_timer_id, KV_WRITE_DELAY_MS, CORE_TIMER_ONCE);
     }
 
     if (s_ctx.full_sync_in_progress && operateType != TIMER_OPERATE_TYPE_FULL) {
@@ -466,13 +466,13 @@ static int __on_timer_sync_callback(cJSON *data, void *user_data)
     }
 
     /* apply timer updates under mutex */
-    tal_mutex_lock(s_ctx.timer_task_list.mutex);
+    core_mutex_lock(s_ctx.timer_task_list.mutex);
     rt = __apply_timer_updates(inner_data);
-    tal_mutex_unlock(s_ctx.timer_task_list.mutex);
+    core_mutex_unlock(s_ctx.timer_task_list.mutex);
 
     /* error recovery: stop kv timer, flush pending ACKs with error, request full sync (all outside mutex) */
     if (rt != OPRT_OK) {
-        tal_sw_timer_stop(s_ctx.kv_timer_id);
+        core_sw_timer_stop(s_ctx.kv_timer_id);
         __pending_ack_list_flush(ERR_OTHER);
         s_ctx.full_sync_in_progress = 0;
         s_ctx.full_sync_received_count = 0;
@@ -488,7 +488,7 @@ static int __on_timer_sync_callback(cJSON *data, void *user_data)
         s_ctx.full_sync_received_count = 0;
         s_ctx.full_sync_total = 0;
         if (s_ctx.full_sync_timer_id != NULL) {
-            tal_sw_timer_stop(s_ctx.full_sync_timer_id);
+            core_sw_timer_stop(s_ctx.full_sync_timer_id);
         }
     }
 
@@ -559,7 +559,7 @@ static void __timer_check_timer_cb(TIMER_ID timer_id, void *arg)
         return;
     }
 
-    if (tal_time_check_time_sync() != OPRT_OK) {
+    if (core_time_check_time_sync() != OPRT_OK) {
         PR_ERR("time sync failed");
         return;
     }
@@ -569,13 +569,13 @@ static void __timer_check_timer_cb(TIMER_ID timer_id, void *arg)
     }
 
     POSIX_TM_S current_time = {0};
-    rt = tal_time_get(&current_time);
+    rt = core_time_get(&current_time);
     if (rt != OPRT_OK) {
-        PR_ERR("tal_time_get failed");
+        PR_ERR("core_time_get failed");
         return;
     }
 
-    tal_mutex_lock(s_ctx.timer_task_list.mutex);
+    core_mutex_lock(s_ctx.timer_task_list.mutex);
 
     SLIST_HEAD *pos = NULL;
     tuya_timer_item_t *item = NULL;
@@ -628,7 +628,7 @@ static void __timer_check_timer_cb(TIMER_ID timer_id, void *arg)
 
         if (item->is_executed && item->is_deleted == 0) {
             POSIX_TM_S posix_tm = {0};
-            rt = tal_time_get(&posix_tm);
+            rt = core_time_get(&posix_tm);
             if (rt != OPRT_OK) {
                 continue;
             }
@@ -642,7 +642,7 @@ static void __timer_check_timer_cb(TIMER_ID timer_id, void *arg)
         }
     }
 
-    tal_mutex_unlock(s_ctx.timer_task_list.mutex);
+    core_mutex_unlock(s_ctx.timer_task_list.mutex);
 }
 
 static int __device_timer_task_event_cb(void *data)
@@ -654,9 +654,9 @@ static int __device_timer_task_event_cb(void *data)
     }
 
     if (s_ctx.timer_check_timer_id == NULL) {
-        tal_sw_timer_create(__timer_check_timer_cb, NULL, &s_ctx.timer_check_timer_id);
+        core_sw_timer_create(__timer_check_timer_cb, NULL, &s_ctx.timer_check_timer_id);
     }
-    tal_sw_timer_start(s_ctx.timer_check_timer_id, TIMER_CHECK_TIMER_MS, TAL_TIMER_CYCLE);
+    core_sw_timer_start(s_ctx.timer_check_timer_id, TIMER_CHECK_TIMER_MS, CORE_TIMER_CYCLE);
 
     return 0;
 }
@@ -875,9 +875,9 @@ static OPERATE_RET __timer_item_from_json(const cJSON *obj, tuya_timer_item_t **
 static OPERATE_RET __sha256_hex(const char *data_str, char hex_out[65])
 {
     uint8_t digest[32];
-    OPERATE_RET rt = tal_sha256_ret((const uint8_t *)data_str, strlen(data_str), digest, 0);
+    OPERATE_RET rt = core_sha256_ret((const uint8_t *)data_str, strlen(data_str), digest, 0);
     if (rt != OPRT_OK) {
-        PR_ERR("tal_sha256_ret failed: %d", rt);
+        PR_ERR("core_sha256_ret failed: %d", rt);
         return rt;
     }
     for (int i = 0; i < 32; i++) {
@@ -1101,16 +1101,16 @@ int tuya_device_timer_init(void)
 
     s_ctx.full_sync_timer_id = NULL;
 
-    rt = tal_mutex_create_init(&s_ctx.timer_task_list.mutex);
+    rt = core_mutex_create_init(&s_ctx.timer_task_list.mutex);
     if (rt != OPRT_OK) {
         PR_ERR("timer mutex create failed: %d", rt);
         return rt;
     }
 
-    rt = tal_mutex_create_init(&s_ctx.pending_ack_mutex);
+    rt = core_mutex_create_init(&s_ctx.pending_ack_mutex);
     if (rt != OPRT_OK) {
         PR_ERR("pending ack mutex create failed: %d", rt);
-        tal_mutex_release(s_ctx.timer_task_list.mutex);
+        core_mutex_release(s_ctx.timer_task_list.mutex);
         s_ctx.timer_task_list.mutex = NULL;
         return rt;
     }
@@ -1126,17 +1126,17 @@ int tuya_device_timer_init(void)
         PR_ERR("add timerCapability failed:%d", rt);
     }
 
-    tal_event_subscribe(EVENT_DEVICE_META_REPORT, "tuya_device_timer", __device_timer_task_event_cb, SUBSCRIBE_TYPE_ONETIME);
-    tal_event_subscribe(EVENT_RESET, "tuya_device_timer", __device_timer_reset_event_cb, SUBSCRIBE_TYPE_ONETIME);
+    core_event_subscribe(EVENT_DEVICE_META_REPORT, "tuya_device_timer", __device_timer_task_event_cb, SUBSCRIBE_TYPE_ONETIME);
+    core_event_subscribe(EVENT_RESET, "tuya_device_timer", __device_timer_reset_event_cb, SUBSCRIBE_TYPE_ONETIME);
 
     // Load from kv
     char *kv_str = NULL;
     size_t len = 0;
-    rt = tal_kv_get(TIMER_TASKS_KV_KEY, (uint8_t **)&kv_str, &len);
+    rt = core_kv_get(TIMER_TASKS_KV_KEY, (uint8_t **)&kv_str, &len);
     if (rt == OPRT_OK) {
-        tal_mutex_lock(s_ctx.timer_task_list.mutex);
+        core_mutex_lock(s_ctx.timer_task_list.mutex);
         rt = __timer_list_deserialize(kv_str, &s_ctx.timer_task_list);
-        tal_mutex_unlock(s_ctx.timer_task_list.mutex);
+        core_mutex_unlock(s_ctx.timer_task_list.mutex);
         Free(kv_str);
         kv_str = NULL;
         s_ctx.need_full_sync = 1;
@@ -1157,23 +1157,23 @@ void tuya_device_timer_deinit(void)
         return;
     }
 
-    tal_event_unsubscribe(EVENT_MQTT_CONNECTED, "tuya_device_timer", __device_timer_task_event_cb);
+    core_event_unsubscribe(EVENT_MQTT_CONNECTED, "tuya_device_timer", __device_timer_task_event_cb);
 
     if (s_ctx.timer_check_timer_id != NULL) {
-        tal_sw_timer_stop(s_ctx.timer_check_timer_id);
-        tal_sw_timer_delete(s_ctx.timer_check_timer_id);
+        core_sw_timer_stop(s_ctx.timer_check_timer_id);
+        core_sw_timer_delete(s_ctx.timer_check_timer_id);
         s_ctx.timer_check_timer_id = NULL;
     }
 
-    tal_mutex_lock(s_ctx.timer_task_list.mutex);
+    core_mutex_lock(s_ctx.timer_task_list.mutex);
     __timer_list_clear();
-    tal_kv_del(TIMER_TASKS_KV_KEY);
-    tal_mutex_unlock(s_ctx.timer_task_list.mutex);
+    core_kv_del(TIMER_TASKS_KV_KEY);
+    core_mutex_unlock(s_ctx.timer_task_list.mutex);
 
-    tal_mutex_release(s_ctx.timer_task_list.mutex);
+    core_mutex_release(s_ctx.timer_task_list.mutex);
     s_ctx.timer_task_list.mutex = NULL;
 
-    tal_mutex_release(s_ctx.pending_ack_mutex);
+    core_mutex_release(s_ctx.pending_ack_mutex);
     s_ctx.pending_ack_mutex = NULL;
 
     s_ctx.inited = false;
@@ -1186,7 +1186,7 @@ void tuya_device_timer_dump(void)
         return;
     }
 
-    tal_mutex_lock(s_ctx.timer_task_list.mutex);
+    core_mutex_lock(s_ctx.timer_task_list.mutex);
 
     uint16_t total = s_ctx.timer_task_list.timer_items_count;
 
@@ -1197,7 +1197,7 @@ void tuya_device_timer_dump(void)
     PR_NOTICE("  full_sync: %s", s_ctx.full_sync_in_progress ? "in progress" : "idle");
 
     POSIX_TM_S now = {0};
-    if (tal_time_get(&now) == OPRT_OK) {
+    if (core_time_get(&now) == OPRT_OK) {
         PR_NOTICE("  current_time: %04d-%02d-%02d %02d:%02d:%02d",
                   now.tm_year + 1900, now.tm_mon + 1, now.tm_mday,
                   now.tm_hour, now.tm_min, now.tm_sec);
@@ -1208,7 +1208,7 @@ void tuya_device_timer_dump(void)
     if (total == 0) {
         PR_NOTICE("  (no timers)");
         PR_NOTICE("========================================================");
-        tal_mutex_unlock(s_ctx.timer_task_list.mutex);
+        core_mutex_unlock(s_ctx.timer_task_list.mutex);
         return;
     }
 
@@ -1250,7 +1250,7 @@ void tuya_device_timer_dump(void)
 
     PR_NOTICE("========================================================");
 
-    tal_mutex_unlock(s_ctx.timer_task_list.mutex);
+    core_mutex_unlock(s_ctx.timer_task_list.mutex);
 }
 
 static void __full_sync_timer_cb(TIMER_ID timer_id, void *arg)
@@ -1266,8 +1266,8 @@ static void __full_sync_timer_cb(TIMER_ID timer_id, void *arg)
     s_ctx.full_sync_total = 0;
 
     /* stop kv timer, flush all pending ACKs with error */
-    if (s_ctx.kv_timer_id != NULL && tal_sw_timer_is_running(s_ctx.kv_timer_id)) {
-        tal_sw_timer_stop(s_ctx.kv_timer_id);
+    if (s_ctx.kv_timer_id != NULL && core_sw_timer_is_running(s_ctx.kv_timer_id)) {
+        core_sw_timer_stop(s_ctx.kv_timer_id);
     }
     __pending_ack_list_flush(ERR_OTHER);
 
@@ -1296,14 +1296,14 @@ void tuya_device_timer_full_sync_req(void)
         s_ctx.full_sync_received_count = 0;
         s_ctx.full_sync_total = 0;
         if (s_ctx.full_sync_timer_id == NULL) {
-            tal_sw_timer_create(__full_sync_timer_cb, NULL, &s_ctx.full_sync_timer_id);
+            core_sw_timer_create(__full_sync_timer_cb, NULL, &s_ctx.full_sync_timer_id);
         }
-        tal_sw_timer_start(s_ctx.full_sync_timer_id, FULL_SYNC_CHECK_TIMER_MS, TAL_TIMER_ONCE);
+        core_sw_timer_start(s_ctx.full_sync_timer_id, FULL_SYNC_CHECK_TIMER_MS, CORE_TIMER_ONCE);
 
         // Clear all timer items
-        tal_mutex_lock(s_ctx.timer_task_list.mutex);
+        core_mutex_lock(s_ctx.timer_task_list.mutex);
         __timer_list_clear();
-        tal_mutex_unlock(s_ctx.timer_task_list.mutex);
+        core_mutex_unlock(s_ctx.timer_task_list.mutex);
     }
 }
 
@@ -1313,10 +1313,10 @@ OPERATE_RET tuya_device_timer_kv_delete(void)
         return OPRT_COM_ERROR;
     }
 
-    tal_mutex_lock(s_ctx.timer_task_list.mutex);
+    core_mutex_lock(s_ctx.timer_task_list.mutex);
     __timer_list_clear();
-    OPERATE_RET rt = tal_kv_del(TIMER_TASKS_KV_KEY);
-    tal_mutex_unlock(s_ctx.timer_task_list.mutex);
+    OPERATE_RET rt = core_kv_del(TIMER_TASKS_KV_KEY);
+    core_mutex_unlock(s_ctx.timer_task_list.mutex);
 
     return rt;
 }

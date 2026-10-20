@@ -15,17 +15,17 @@
  *
  * The same file defines the linkage used by netmgr consumers: g_linkage is a
  * LINKAGE_TYPE_WIFI descriptor whose get callback answers only LINKAGE_CFG_IP
- * (through tal_netif_get_ip); other configurations return OPRT_NOT_SUPPORTED.
+ * (through core_netif_get_ip); other configurations return OPRT_NOT_SUPPORTED.
  * __ai_port_linkage_get() and mqc_get_connection_linkage() expose it.
  */
 
 #include "mqc_app.h"
 
-#include "tal_log.h"
+#include "core_log.h"
 
 #include "tuya_iot.h"
 #include "mqtt_service.h"
-#include "tal_netif.h"
+#include "core_netif.h"
 
 /***********************************************************
 ************************macro define************************
@@ -127,7 +127,7 @@ OPERATE_RET __linkage_get(IN LINKAGE_CFG_E cfg, OUT VOID *data)
     OPERATE_RET rt = OPRT_OK;
 
     if (LINKAGE_CFG_IP == cfg) {
-        rt = tal_netif_get_ip((NW_IP_S *)data);
+        rt = core_netif_get_ip((NW_IP_S *)data);
     } else {
         PR_ERR("linkage get not supported for cfg:%d", cfg);
         return OPRT_NOT_SUPPORTED;

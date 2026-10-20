@@ -6,9 +6,9 @@
  * @copyright Copyright (c) Tuya Inc.
  */
 #include "tuya_ring_buffer.h"
-#include "tal_mutex.h"
-#include "tal_memory.h"
-#include "tal_log.h"
+#include "core_mutex.h"
+#include "core_memory.h"
+#include "core_log.h"
 #include <string.h>
 
 /* ---------------------------------------------------------------------------
@@ -25,11 +25,11 @@
 #define RBUF_STREAM_MAX ((int)E_IPC_STREAM_MAX)
 
 #if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
-#define RBUF_MALLOC(s) tal_ex_ram_malloc(s)
-#define RBUF_FREE(p) tal_ex_ram_free(p)
+#define RBUF_MALLOC(s) core_ex_ram_malloc(s)
+#define RBUF_FREE(p) core_ex_ram_free(p)
 #else
-#define RBUF_MALLOC(s) tal_malloc(s)
-#define RBUF_FREE(p) tal_free(p)
+#define RBUF_MALLOC(s) core_malloc(s)
+#define RBUF_FREE(p) core_free(p)
 #endif
 
 /* ---------------------------------------------------------------------------
@@ -137,7 +137,7 @@ OPERATE_RET tuya_ipc_ring_buffer_init(int device, int channel, IPC_STREAM_E stre
         st->max_frame_size = MAX_MEDIA_FRAME_SIZE;
     }
 
-    rt = tal_mutex_create_init(&st->lock);
+    rt = core_mutex_create_init(&st->lock);
     if (rt != OPRT_OK) {
         return rt;
     }
@@ -149,7 +149,7 @@ OPERATE_RET tuya_ipc_ring_buffer_init(int device, int channel, IPC_STREAM_E stre
                 RBUF_FREE(st->nodes[j].raw_data);
                 st->nodes[j].raw_data = NULL;
             }
-            tal_mutex_release(st->lock);
+            core_mutex_release(st->lock);
             st->lock = NULL;
             return OPRT_MALLOC_FAILED;
         }
@@ -176,15 +176,15 @@ OPERATE_RET tuya_ipc_ring_buffer_uninit(int device, int channel, IPC_STREAM_E st
     if (st == NULL || !st->inited) {
         return OPRT_OK;
     }
-    tal_mutex_lock(st->lock);
+    core_mutex_lock(st->lock);
     for (i = 0; i < st->slot_cnt; i++) {
         if (st->nodes[i].raw_data != NULL) {
             RBUF_FREE(st->nodes[i].raw_data);
             st->nodes[i].raw_data = NULL;
         }
     }
-    tal_mutex_unlock(st->lock);
-    tal_mutex_release(st->lock);
+    core_mutex_unlock(st->lock);
+    core_mutex_release(st->lock);
     memset(st, 0, sizeof(*st));
     return OPRT_OK;
 }
@@ -206,7 +206,7 @@ RING_BUFFER_USER_HANDLE_T tuya_ipc_ring_buffer_open(int device, int channel, IPC
     if (st == NULL || !st->inited) {
         return NULL;
     }
-    user = (RBUF_USER_T *)tal_malloc(sizeof(RBUF_USER_T));
+    user = (RBUF_USER_T *)core_malloc(sizeof(RBUF_USER_T));
     if (user == NULL) {
         return NULL;
     }
@@ -227,7 +227,7 @@ OPERATE_RET tuya_ipc_ring_buffer_close(RING_BUFFER_USER_HANDLE_T handle)
     if (handle == NULL) {
         return OPRT_INVALID_PARM;
     }
-    tal_free(handle);
+    core_free(handle);
     return OPRT_OK;
 }
 
@@ -261,7 +261,7 @@ OPERATE_RET tuya_ipc_ring_buffer_append_data_with_timestamp(RING_BUFFER_USER_HAN
         return OPRT_INVALID_PARM;
     }
 
-    tal_mutex_lock(st->lock);
+    core_mutex_lock(st->lock);
     node = &st->nodes[st->write_idx % st->slot_cnt];
     memcpy(node->raw_data, addr, size);
     node->size = size;
@@ -277,7 +277,7 @@ OPERATE_RET tuya_ipc_ring_buffer_append_data_with_timestamp(RING_BUFFER_USER_HAN
     node->seq_no = st->seq;
     node->seq_sync = st->seq;
     st->write_idx = (st->write_idx + 1) % st->slot_cnt;
-    tal_mutex_unlock(st->lock);
+    core_mutex_unlock(st->lock);
     return OPRT_OK;
 }
 
@@ -383,12 +383,12 @@ RING_BUFFER_NODE_T *tuya_ipc_ring_buffer_get_frame(RING_BUFFER_USER_HANDLE_T han
         return NULL;
     }
 
-    tal_mutex_lock(st->lock);
+    core_mutex_lock(st->lock);
     best = __rbuf_pick_locked(user, st, &skip_from, &skip_to);
     if (best != NULL) {
         user->read_seq = best->seq_no;
     }
-    tal_mutex_unlock(st->lock);
+    core_mutex_unlock(st->lock);
 
     __rbuf_report_skip(st, skip_from, skip_to);
     return best;
@@ -415,7 +415,7 @@ OPERATE_RET tuya_ipc_ring_buffer_read_frame(RING_BUFFER_USER_HANDLE_T handle, ui
         return OPRT_INVALID_PARM;
     }
 
-    tal_mutex_lock(st->lock);
+    core_mutex_lock(st->lock);
     best = __rbuf_pick_locked(user, st, &skip_from, &skip_to);
     if (best != NULL) {
         if (best->size > dst_cap) {
@@ -430,7 +430,7 @@ OPERATE_RET tuya_ipc_ring_buffer_read_frame(RING_BUFFER_USER_HANDLE_T handle, ui
             rt             = OPRT_OK;
         }
     }
-    tal_mutex_unlock(st->lock);
+    core_mutex_unlock(st->lock);
 
     __rbuf_report_skip(st, skip_from, skip_to);
     return rt;
@@ -457,12 +457,12 @@ void tuya_ipc_ring_buffer_clean_user_state(RING_BUFFER_USER_HANDLE_T handle)
     }
 
     /* Forward to the newest frame held, which is what a late reader wants. */
-    tal_mutex_lock(st->lock);
+    core_mutex_lock(st->lock);
     user->read_seq = 0;
     for (i = 0; i < st->slot_cnt; i++) {
         if (st->nodes[i].seq_no > user->read_seq) {
             user->read_seq = st->nodes[i].seq_no;
         }
     }
-    tal_mutex_unlock(st->lock);
+    core_mutex_unlock(st->lock);
 }

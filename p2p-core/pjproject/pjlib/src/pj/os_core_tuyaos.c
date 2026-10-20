@@ -1,12 +1,12 @@
 /**
  * @file os_core_tuyaos.c
- * @brief pjlib OS core via TAL/TKL — unified for LINUX host and MCU
+ * @brief pjlib OS core via CORE/TKL — unified for LINUX host and MCU
  * @version 1.1
  * @date 2026-08-06
  * @copyright Copyright (c) Tuya Inc. / based on pjlib os_core_unix
  *
- * One implementation for all platforms. LINUX: TAL → platform/LINUX TKL → POSIX.
- * MCU: TAL → platform TKL → RTOS.
+ * One implementation for all platforms. LINUX: CORE → platform/LINUX TKL → POSIX.
+ * MCU: CORE → platform TKL → RTOS.
  */
 #include <pj/os.h>
 #include <pj/assert.h>
@@ -19,10 +19,10 @@
 #include <pj/errno.h>
 #include <pj/config.h>
 
-#include "tal_mutex.h"
-#include "tal_semaphore.h"
-#include "tal_thread.h"
-#include "tal_system.h"
+#include "core_mutex.h"
+#include "core_semaphore.h"
+#include "core_thread.h"
+#include "core_system.h"
 #include "tuya_cloud_types.h"
 
 #include <errno.h>
@@ -72,7 +72,7 @@ struct pj_sem_t {
 #endif
 
 typedef struct pj_tuyaos_tls_row {
-    THREAD_HANDLE task; /* OS task identity from tal_thread_get_id() */
+    THREAD_HANDLE task; /* OS task identity from core_thread_get_id() */
     int in_use;
     void *vals[PJ_TUYAOS_TLS_KEYS];
 } pj_tuyaos_tls_row;
@@ -105,7 +105,7 @@ static THREAD_HANDLE __tls_self_task(void)
 {
     THREAD_HANDLE id = NULL;
 
-    (void)tal_thread_get_id(&id);
+    (void)core_thread_get_id(&id);
     return id;
 }
 
@@ -113,7 +113,7 @@ static THREAD_HANDLE __tls_self_task(void)
  * @brief Find or allocate TLS row for the calling OS task
  * @param[in] create allocate a free row when not found
  * @return row pointer or NULL
- * @note Match by tal_thread_get_id() only. Never share a "main" row across tasks
+ * @note Match by core_thread_get_id() only. Never share a "main" row across tasks
  *       (that caused pj_thread_register2 on every sendto and heap thrashing).
  */
 static pj_tuyaos_tls_row *__tls_row_current(int create)
@@ -122,19 +122,19 @@ static pj_tuyaos_tls_row *__tls_row_current(int create)
     THREAD_HANDLE self = __tls_self_task();
 
     if (s_tls_lock) {
-        tal_mutex_lock(s_tls_lock);
+        core_mutex_lock(s_tls_lock);
     }
     for (i = 0; i < PJ_TUYAOS_TLS_ROWS; i++) {
         if (s_tls_rows[i].in_use && s_tls_rows[i].task == self) {
             if (s_tls_lock) {
-                tal_mutex_unlock(s_tls_lock);
+                core_mutex_unlock(s_tls_lock);
             }
             return &s_tls_rows[i];
         }
     }
     if (!create) {
         if (s_tls_lock) {
-            tal_mutex_unlock(s_tls_lock);
+            core_mutex_unlock(s_tls_lock);
         }
         return NULL;
     }
@@ -144,13 +144,13 @@ static pj_tuyaos_tls_row *__tls_row_current(int create)
             s_tls_rows[i].in_use = 1;
             s_tls_rows[i].task = self;
             if (s_tls_lock) {
-                tal_mutex_unlock(s_tls_lock);
+                core_mutex_unlock(s_tls_lock);
             }
             return &s_tls_rows[i];
         }
     }
     if (s_tls_lock) {
-        tal_mutex_unlock(s_tls_lock);
+        core_mutex_unlock(s_tls_lock);
     }
     return NULL;
 }
@@ -168,7 +168,7 @@ PJ_DEF(pj_status_t) pj_init(void)
 
     pj_log_init();
 
-    if (tal_mutex_create_init(&s_tls_lock) != OPRT_OK) {
+    if (core_mutex_create_init(&s_tls_lock) != OPRT_OK) {
         return PJ_ENOMEM;
     }
     memset(s_tls_rows, 0, sizeof(s_tls_rows));
@@ -204,7 +204,7 @@ PJ_DEF(pj_status_t) pj_init(void)
 
     ++initialized;
     pj_assert(initialized == 1);
-    PJ_LOG(4, (THIS_FILE, "pjlib %s for TAL initialized", PJ_VERSION));
+    PJ_LOG(4, (THIS_FILE, "pjlib %s for CORE initialized", PJ_VERSION));
     return PJ_SUCCESS;
 }
 
@@ -245,7 +245,7 @@ PJ_DEF(void) pj_shutdown(void)
     pj_bzero(&main_thread, sizeof(main_thread));
 #endif
     if (s_tls_lock) {
-        tal_mutex_release(s_tls_lock);
+        core_mutex_release(s_tls_lock);
         s_tls_lock = NULL;
     }
     pj_errno_clear_handlers();
@@ -353,7 +353,7 @@ pj_status_t pj_thread_init(void)
 
 #if PJ_HAS_THREADS
 /**
- * @brief TAL thread trampoline for pj threads
+ * @brief CORE thread trampoline for pj threads
  */
 static void __pj_thread_entry(void *param)
 {
@@ -372,7 +372,7 @@ static void __pj_thread_entry(void *param)
     PJ_LOG(6, (rec->obj_name, "Thread quitting"));
 
     if (rec->join_sem) {
-        tal_semaphore_post(rec->join_sem);
+        core_semaphore_post(rec->join_sem);
     }
 }
 #endif
@@ -418,7 +418,7 @@ pj_thread_create(pj_pool_t *pool, const char *thread_name, pj_thread_proc *proc,
         pj_mutex_lock(rec->suspended_mutex);
     }
 
-    if (tal_semaphore_create_init(&rec->join_sem, 0, 1) != OPRT_OK) {
+    if (core_semaphore_create_init(&rec->join_sem, 0, 1) != OPRT_OK) {
         return PJ_ENOMEM;
     }
 
@@ -432,9 +432,9 @@ pj_thread_create(pj_pool_t *pool, const char *thread_name, pj_thread_proc *proc,
     cfg.ex_ram_mode = 1;
 #endif
 
-    ort = tal_thread_create_and_start(&rec->thread, NULL, NULL, __pj_thread_entry, rec, &cfg);
+    ort = core_thread_create_and_start(&rec->thread, NULL, NULL, __pj_thread_entry, rec, &cfg);
     if (ort != OPRT_OK) {
-        tal_semaphore_release(rec->join_sem);
+        core_semaphore_release(rec->join_sem);
         rec->join_sem = NULL;
         return map_oprt(ort);
     }
@@ -504,7 +504,7 @@ PJ_DEF(pj_status_t) pj_thread_join(pj_thread_t *p)
         return PJ_SUCCESS;
     }
     if (p->join_sem) {
-        tal_semaphore_wait(p->join_sem, SEM_WAIT_FOREVER);
+        core_semaphore_wait(p->join_sem, SEM_WAIT_FOREVER);
     }
     p->joined = 1;
     return PJ_SUCCESS;
@@ -522,14 +522,14 @@ PJ_DEF(pj_status_t) pj_thread_destroy(pj_thread_t *p)
         pj_thread_join(p);
     }
     if (p->join_sem) {
-        tal_semaphore_release(p->join_sem);
+        core_semaphore_release(p->join_sem);
         p->join_sem = NULL;
     }
     if (p->suspended_mutex) {
         pj_mutex_destroy(p->suspended_mutex);
         p->suspended_mutex = NULL;
     }
-    /* THREAD_HANDLE lifetime owned by TAL after exit; do not delete forcibly */
+    /* THREAD_HANDLE lifetime owned by CORE after exit; do not delete forcibly */
     p->thread = NULL;
     return PJ_SUCCESS;
 #else
@@ -544,7 +544,7 @@ PJ_DEF(pj_status_t) pj_thread_sleep(unsigned msec)
     if (msec == 0) {
         msec = 1;
     }
-    tal_system_sleep(msec);
+    core_system_sleep(msec);
     return PJ_SUCCESS;
 }
 
@@ -666,20 +666,20 @@ PJ_DEF(pj_status_t) pj_thread_local_alloc(long *p_index)
     int i;
     PJ_ASSERT_RETURN(p_index != NULL, PJ_EINVAL);
     if (s_tls_lock) {
-        tal_mutex_lock(s_tls_lock);
+        core_mutex_lock(s_tls_lock);
     }
     for (i = 0; i < PJ_TUYAOS_TLS_KEYS; i++) {
         if (!s_tls_key_used[i]) {
             s_tls_key_used[i] = 1;
             *p_index = i;
             if (s_tls_lock) {
-                tal_mutex_unlock(s_tls_lock);
+                core_mutex_unlock(s_tls_lock);
             }
             return PJ_SUCCESS;
         }
     }
     if (s_tls_lock) {
-        tal_mutex_unlock(s_tls_lock);
+        core_mutex_unlock(s_tls_lock);
     }
     return PJ_ETOOMANY;
 }
@@ -688,11 +688,11 @@ PJ_DEF(void) pj_thread_local_free(long index)
 {
     PJ_ASSERT_ON_FAIL(index >= 0 && index < PJ_TUYAOS_TLS_KEYS, return );
     if (s_tls_lock) {
-        tal_mutex_lock(s_tls_lock);
+        core_mutex_lock(s_tls_lock);
     }
     s_tls_key_used[index] = 0;
     if (s_tls_lock) {
-        tal_mutex_unlock(s_tls_lock);
+        core_mutex_unlock(s_tls_lock);
     }
 }
 
@@ -742,7 +742,7 @@ static pj_status_t init_mutex(pj_mutex_t *mutex, const char *name, int type)
     PJ_CHECK_STACK();
     PJ_ASSERT_RETURN(mutex, PJ_EINVAL);
     memset(mutex, 0, sizeof(*mutex));
-    if (tal_mutex_create_init(&mutex->mutex) != OPRT_OK) {
+    if (core_mutex_create_init(&mutex->mutex) != OPRT_OK) {
         return PJ_ENOMEM;
     }
     if (!name) {
@@ -801,7 +801,7 @@ PJ_DEF(pj_status_t) pj_mutex_lock(pj_mutex_t *mutex)
 {
 #if PJ_HAS_THREADS
     PJ_ASSERT_RETURN(mutex && mutex->mutex, PJ_EINVAL);
-    return map_oprt(tal_mutex_lock(mutex->mutex));
+    return map_oprt(core_mutex_lock(mutex->mutex));
 #else
     PJ_UNUSED_ARG(mutex);
     return PJ_SUCCESS;
@@ -812,7 +812,7 @@ PJ_DEF(pj_status_t) pj_mutex_unlock(pj_mutex_t *mutex)
 {
 #if PJ_HAS_THREADS
     PJ_ASSERT_RETURN(mutex && mutex->mutex, PJ_EINVAL);
-    return map_oprt(tal_mutex_unlock(mutex->mutex));
+    return map_oprt(core_mutex_unlock(mutex->mutex));
 #else
     PJ_UNUSED_ARG(mutex);
     return PJ_SUCCESS;
@@ -821,7 +821,7 @@ PJ_DEF(pj_status_t) pj_mutex_unlock(pj_mutex_t *mutex)
 
 PJ_DEF(pj_status_t) pj_mutex_trylock(pj_mutex_t *mutex)
 {
-    /* TAL has no trylock — best-effort blocking lock (same as prior shim) */
+    /* CORE has no trylock — best-effort blocking lock (same as prior shim) */
     return pj_mutex_lock(mutex);
 }
 
@@ -830,7 +830,7 @@ PJ_DEF(pj_status_t) pj_mutex_destroy(pj_mutex_t *mutex)
 #if PJ_HAS_THREADS
     PJ_ASSERT_RETURN(mutex, PJ_EINVAL);
     if (mutex->mutex) {
-        tal_mutex_release(mutex->mutex);
+        core_mutex_release(mutex->mutex);
         mutex->mutex = NULL;
     }
     return PJ_SUCCESS;
@@ -863,7 +863,7 @@ PJ_DEF(pj_status_t) pj_sem_create(pj_pool_t *pool, const char *name, unsigned in
     if (sem_max < 64) {
         sem_max = 64;
     }
-    if (tal_semaphore_create_init(&sem->sem, initial, sem_max) != OPRT_OK) {
+    if (core_semaphore_create_init(&sem->sem, initial, sem_max) != OPRT_OK) {
         return PJ_ENOMEM;
     }
     if (!name) {
@@ -891,7 +891,7 @@ PJ_DEF(pj_status_t) pj_sem_wait(pj_sem_t *sem)
 {
 #if PJ_HAS_THREADS
     PJ_ASSERT_RETURN(sem && sem->sem, PJ_EINVAL);
-    return map_oprt(tal_semaphore_wait(sem->sem, SEM_WAIT_FOREVER));
+    return map_oprt(core_semaphore_wait(sem->sem, SEM_WAIT_FOREVER));
 #else
     PJ_UNUSED_ARG(sem);
     return PJ_SUCCESS;
@@ -902,7 +902,7 @@ PJ_DEF(pj_status_t) pj_sem_trywait(pj_sem_t *sem)
 {
 #if PJ_HAS_THREADS
     PJ_ASSERT_RETURN(sem && sem->sem, PJ_EINVAL);
-    if (tal_semaphore_wait(sem->sem, 0) != OPRT_OK) {
+    if (core_semaphore_wait(sem->sem, 0) != OPRT_OK) {
         return PJ_EGONE;
     }
     return PJ_SUCCESS;
@@ -916,7 +916,7 @@ PJ_DEF(pj_status_t) pj_sem_post(pj_sem_t *sem)
 {
 #if PJ_HAS_THREADS
     PJ_ASSERT_RETURN(sem && sem->sem, PJ_EINVAL);
-    return map_oprt(tal_semaphore_post(sem->sem));
+    return map_oprt(core_semaphore_post(sem->sem));
 #else
     PJ_UNUSED_ARG(sem);
     return PJ_SUCCESS;
@@ -928,7 +928,7 @@ PJ_DEF(pj_status_t) pj_sem_destroy(pj_sem_t *sem)
 #if PJ_HAS_THREADS
     PJ_ASSERT_RETURN(sem, PJ_EINVAL);
     if (sem->sem) {
-        tal_semaphore_release(sem->sem);
+        core_semaphore_release(sem->sem);
         sem->sem = NULL;
     }
     return PJ_SUCCESS;

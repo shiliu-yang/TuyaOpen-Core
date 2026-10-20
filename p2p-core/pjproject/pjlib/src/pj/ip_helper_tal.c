@@ -1,6 +1,6 @@
 /**
  * @file ip_helper_tal.c
- * @brief Local IP enumeration on TuyaOpen TAL — replaces ip_helper_generic.c
+ * @brief Local IP enumeration on TuyaOpen CORE — replaces ip_helper_generic.c
  *
  * ip_helper_generic.c walked getifaddrs()/SIOCGIFCONF or netlink, none of
  * which exist on an RTOS. TuyaOpen already knows the active station or wired
@@ -15,7 +15,7 @@
 #include <pj/log.h>
 #include <pj/string.h>
 
-#include "tal_local_ip.h"
+#include "core_local_ip.h"
 
 #define THIS_FILE "ip_helper_tal.c"
 
@@ -42,7 +42,7 @@ PJ_DEF(pj_status_t) pj_enum_ip_interface(int af, unsigned *count, pj_sockaddr if
         return PJ_EIPV6NOTSUP;
     }
 
-    if (tal_compat_get_sta_ipv4_nbo(&nbo) != 0 || nbo == 0) {
+    if (core_compat_get_sta_ipv4_nbo(&nbo) != 0 || nbo == 0) {
         *count = 0;
         return PJ_ENOTFOUND;
     }

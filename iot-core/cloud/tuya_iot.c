@@ -42,14 +42,14 @@
 #include <stdio.h>
 
 #include "tuya_endpoint.h"
-#include "tal_kv.h"
-#include "tal_memory.h"
+#include "core_kv.h"
+#include "core_memory.h"
 #include "atop_base.h"
 #include "atop_service.h"
 #include "mqtt_bind.h"
 #include "cJSON.h"
-#include "tal_sw_timer.h"
-#include "tal_api.h"
+#include "core_sw_timer.h"
+#include "core_api.h"
 #include "dev_evt.h"
 #include "tuya_iot_dp.h"
 #include "tuya_device_meta.h"
@@ -151,7 +151,7 @@ static dp_schema_t *schema_instance_create(char *devid, char *schema_id)
     size_t readlen = 0;
     uint8_t *schema_data = NULL;
 
-    if (OPRT_OK != tal_kv_get((const char *)schema_id, &schema_data, &readlen)) {
+    if (OPRT_OK != core_kv_get((const char *)schema_id, &schema_data, &readlen)) {
         PR_WARN("schema data read failed");
         goto __exit;
     }
@@ -160,7 +160,7 @@ static dp_schema_t *schema_instance_create(char *devid, char *schema_id)
 
 __exit:
     if (schema_data) {
-        tal_free(schema_data);
+        core_free(schema_data);
     }
 
     return schema;
@@ -173,7 +173,7 @@ static int activated_data_read(const char *storage_key, tuya_activated_data_t *o
     char *readbuf = NULL;
 
     /* Try read activate config data */
-    rt = tal_kv_get((const char *)storage_key, (uint8_t **)&readbuf, &readlen);
+    rt = core_kv_get((const char *)storage_key, (uint8_t **)&readbuf, &readlen);
     if (OPRT_OK != rt) {
         PR_WARN("activate config not found:%d", rt);
         return rt;
@@ -181,16 +181,16 @@ static int activated_data_read(const char *storage_key, tuya_activated_data_t *o
 
     /* Parse activate json string */
     rt = activate_json_string_parse((const char *)readbuf, out);
-    tal_free((uint8_t *)readbuf);
+    core_free((uint8_t *)readbuf);
     if (OPRT_OK != rt) {
         PR_ERR("activate_json_string_parse fail:%d", rt);
         return rt;
     }
 
     // Set time zone
-    rt = tal_time_set_time_zone(out->timezone);
+    rt = core_time_set_time_zone(out->timezone);
     if (OPRT_OK != rt) {
-        PR_ERR("tal_time_set_time_zone fail:%d", rt);
+        PR_ERR("core_time_set_time_zone fail:%d", rt);
     }
 
 
@@ -216,7 +216,7 @@ static int activate_response_parse(atop_base_response_t *response)
     // cJSON object to string save
     char *schemaId = cJSON_GetObjectItem(result_root, "schemaId")->valuestring;
     cJSON *schema_obj = cJSON_DetachItemFromObject(result_root, "schema");
-    ret = tal_kv_set(schemaId, (const uint8_t *)schema_obj->valuestring, strlen(schema_obj->valuestring));
+    ret = core_kv_set(schemaId, (const uint8_t *)schema_obj->valuestring, strlen(schema_obj->valuestring));
     cJSON_Delete(schema_obj);
     if (ret != OPRT_OK) {
         PR_ERR("activate data save error:%d", ret);
@@ -227,7 +227,7 @@ static int activate_response_parse(atop_base_response_t *response)
     char *result_string = cJSON_PrintUnformatted(result_root);
     const char *activate_data_key = client->config.storage_namespace;
     // PR_DEBUG("result len %d :%s", (int)strlen(result_string), result_string);
-    ret = tal_kv_set(activate_data_key, (const uint8_t *)result_string, strlen(result_string));
+    ret = core_kv_set(activate_data_key, (const uint8_t *)result_string, strlen(result_string));
     cJSON_free(result_string);
     if (ret != OPRT_OK) {
         PR_ERR("activate data save error:%d", ret);
@@ -247,9 +247,9 @@ static int client_activate_process(tuya_iot_client_t *client, const char *token)
     char *devid_vaule = NULL;
 
     snprintf(devid_key, sizeof devid_key, "%s.devid", client->config.storage_namespace);
-    if (tal_kv_get(devid_key, (uint8_t **)&devid_vaule, &devid_len) == OPRT_OK) {
+    if (core_kv_get(devid_key, (uint8_t **)&devid_vaule, &devid_len) == OPRT_OK) {
         memcpy(devid_cache, devid_vaule, devid_len);
-        tal_free((uint8_t *)devid_vaule);
+        core_free((uint8_t *)devid_vaule);
         exist_devid = true;
     }
 
@@ -279,7 +279,7 @@ static int client_activate_process(tuya_iot_client_t *client, const char *token)
     }
 
     /* timestamp sync */
-    tal_time_set_posix(response.t, 1);
+    core_time_set_posix(response.t, 1);
 
     /* Send timestamp sync event*/
     client->event.id = TUYA_EVENT_TIMESTAMP_SYNC;
@@ -294,7 +294,7 @@ static int client_activate_process(tuya_iot_client_t *client, const char *token)
     atop_base_response_free(&response);
 
     /* Send timestamp sync event*/
-    tal_event_publish(EVENT_TIME_SYNC, (void *)client);
+    core_event_publish(EVENT_TIME_SYNC, (void *)client);
 
     if (OPRT_OK != rt) {
         PR_ERR("activate_response_parse error:%d", rt);
@@ -360,7 +360,7 @@ static void matop_upgrade_info_on(atop_base_response_t *response, void *user_dat
     }
 
     /* timestamp sync */
-    tal_time_set_posix(response->t, 1);
+    core_time_set_posix(response->t, 1);
 
     /* Send timestamp sync event*/
     client->event.id = TUYA_EVENT_TIMESTAMP_SYNC;
@@ -369,7 +369,7 @@ static void matop_upgrade_info_on(atop_base_response_t *response, void *user_dat
     iot_dispatch_event(client);
 
     /* Send timestamp sync event*/
-    tal_event_publish(EVENT_TIME_SYNC, (void *)client);
+    core_event_publish(EVENT_TIME_SYNC, (void *)client);
 
     /* Param verify */
     if (response->result == NULL) {
@@ -433,8 +433,8 @@ static void mqtt_client_connected_on(void *context, void *user_data)
                       &(const matop_config_t){.mqctx = &client->mqctx, .devid = client->activate.devid});
 
     /* Auto check upgrade timer start */
-    if (tal_sw_timer_is_running(client->check_upgrade_timer) == false) {
-        tal_sw_timer_start(client->check_upgrade_timer, 1000 * 1, TAL_TIMER_ONCE);
+    if (core_sw_timer_is_running(client->check_upgrade_timer) == false) {
+        core_sw_timer_start(client->check_upgrade_timer, 1000 * 1, CORE_TIMER_ONCE);
     }
 
     /* Send connected event*/
@@ -443,7 +443,7 @@ static void mqtt_client_connected_on(void *context, void *user_data)
     iot_dispatch_event(client);
 
     /* Send MQTT connected event*/
-    tal_event_publish(EVENT_MQTT_CONNECTED, (void *)client);
+    core_event_publish(EVENT_MQTT_CONNECTED, (void *)client);
 }
 
 static void mqtt_client_disconnect_on(void *context, void *user_data)
@@ -459,7 +459,7 @@ static void mqtt_client_disconnect_on(void *context, void *user_data)
     iot_dispatch_event(client);
 
     /* Send MQTT disconnected event*/
-    tal_event_publish(EVENT_MQTT_DISCONNECTED, (void *)client);
+    core_event_publish(EVENT_MQTT_DISCONNECTED, (void *)client);
 }
 
 static void mqtt_client_unbind_on(void *context, void *user_data)
@@ -494,7 +494,7 @@ static void check_auto_upgrade_timeout_on(TIMER_ID timer, void *user_data)
         matop_service_auto_upgrade_info_get(&client->matop, matop_upgrade_info_on, client);
     }
 
-    tal_sw_timer_start(timer, AUTO_UPGRADE_CHECK_INTERVAL, TAL_TIMER_ONCE);
+    core_sw_timer_start(timer, AUTO_UPGRADE_CHECK_INTERVAL, CORE_TIMER_ONCE);
 }
 
 static void mqtt_rtc_req_notify_cb(tuya_protocol_event_t *ev)
@@ -579,9 +579,9 @@ static int run_state_reset(tuya_iot_client_t *client)
     /* Save devId */
     char devid_key[32];
     snprintf(devid_key, sizeof devid_key, "%s.devid", client->config.storage_namespace);
-    tal_kv_set((const char *)devid_key, (const uint8_t *)client->activate.devid, strlen(client->activate.devid));
+    core_kv_set((const char *)devid_key, (const uint8_t *)client->activate.devid, strlen(client->activate.devid));
 
-    tal_event_publish(EVENT_RESET, client);
+    core_event_publish(EVENT_RESET, client);
     tuya_dev_evt_notify(DEV_EVT_RESET, ACTION_AFTER, NULL);
     /* Clean client local data */
     return tuya_iot_activated_data_remove(client);
@@ -627,7 +627,7 @@ int tuya_iot_init(tuya_iot_client_t *client, const tuya_iot_config_t *config)
     // PR_DEBUG("uuid:%s", client->config.uuid);
     // PR_DEBUG("authkey:%s", client->config.authkey);
 
-    tal_semaphore_create_init(&client->token_get.sem, 0, 1);
+    core_semaphore_create_init(&client->token_get.sem, 0, 1);
 
     /* Default storage namespace */
     if (client->config.storage_namespace == NULL) {
@@ -656,7 +656,7 @@ int tuya_iot_init(tuya_iot_client_t *client, const tuya_iot_config_t *config)
     tuya_ota_init(&ota_config);
 
     /* Auto check upgrade timer init */
-    ret = tal_sw_timer_create(check_auto_upgrade_timeout_on, client, &client->check_upgrade_timer);
+    ret = core_sw_timer_create(check_auto_upgrade_timeout_on, client, &client->check_upgrade_timer);
     if (OPRT_OK != ret) {
         return ret;
     }
@@ -772,7 +772,7 @@ int tuya_iot_reset(tuya_iot_client_t *client)
 
     if (client->state == STATE_TOKEN_PENDING) {
         client->token_get.result = OPRT_COM_ERROR;
-        tal_semaphore_post(client->token_get.sem);
+        core_semaphore_post(client->token_get.sem);
     }
 
     return ret;
@@ -813,17 +813,17 @@ int tuya_iot_destroy(tuya_iot_client_t *client)
     }
 
     if (client->check_upgrade_timer) {
-        tal_sw_timer_delete(client->check_upgrade_timer);
+        core_sw_timer_delete(client->check_upgrade_timer);
         client->check_upgrade_timer = NULL;
     }
 
     if (client->token_get.sem) {
-        tal_semaphore_release(client->token_get.sem);
+        core_semaphore_release(client->token_get.sem);
         client->token_get.sem = NULL;
     }
 
     if (client->binding) {
-        tal_free(client->binding);
+        core_free(client->binding);
         client->binding = NULL;
     }
 
@@ -832,7 +832,7 @@ int tuya_iot_destroy(tuya_iot_client_t *client)
         client->schema = NULL;
     }
 
-    tal_event_unsubscribe(EVENT_LINK_ACTIVATE, "iot", tuya_iot_token_activate_evt);
+    core_event_unsubscribe(EVENT_LINK_ACTIVATE, "iot", tuya_iot_token_activate_evt);
 
     client->state = STATE_IDLE;
     client->nextstate = STATE_IDLE;
@@ -848,7 +848,7 @@ static int tuya_iot_token_activate_evt(void *data)
     memcpy(client->binding, (tuya_binding_info_t *)data, sizeof(tuya_binding_info_t));
 
     client->token_get.result = OPRT_OK;
-    tal_semaphore_post(client->token_get.sem);
+    core_semaphore_post(client->token_get.sem);
 
     return OPRT_OK;
 }
@@ -869,7 +869,7 @@ int tuya_iot_token_get_pending(tuya_iot_client_t *client)
         client->token_get.cb[i](&client->config);
     }
 
-    tal_semaphore_wait_forever(client->token_get.sem);
+    core_semaphore_wait_forever(client->token_get.sem);
 
     return client->token_get.result;
 }
@@ -902,7 +902,7 @@ int tuya_iot_yield(tuya_iot_client_t *client)
         break;
 
     case STATE_IDLE:
-        tal_system_sleep(500);
+        core_system_sleep(500);
         break;
 
     case STATE_START:
@@ -925,12 +925,12 @@ int tuya_iot_yield(tuya_iot_client_t *client)
         }
         /* If the reading fails, enter the pending activation mode. */
         PR_INFO("Activation data read fail, go activation mode...");
-        client->binding = tal_calloc(1, sizeof(tuya_binding_info_t));
+        client->binding = core_calloc(1, sizeof(tuya_binding_info_t));
         if (client->binding == NULL) {
             PR_ERR("binding calloc error");
             break;
         }
-        tal_event_subscribe(EVENT_LINK_ACTIVATE, "iot", tuya_iot_token_activate_evt, SUBSCRIBE_TYPE_ONETIME);
+        core_event_subscribe(EVENT_LINK_ACTIVATE, "iot", tuya_iot_token_activate_evt, SUBSCRIBE_TYPE_ONETIME);
         client->nextstate = STATE_TOKEN_PENDING;
         break;
 
@@ -941,7 +941,7 @@ int tuya_iot_yield(tuya_iot_client_t *client)
         iot_dispatch_event(client);
 
         if (tuya_iot_token_get_pending(client) != OPRT_OK) {
-            tal_free(client->binding);
+            core_free(client->binding);
             client->binding = NULL;
             PR_ERR("Get token fail, retry..");
             break;
@@ -969,7 +969,7 @@ int tuya_iot_yield(tuya_iot_client_t *client)
             client->status = TUYA_STATUS_WIFI_CONNECTED;
             client->nextstate = client->is_activated ? STATE_ENDPOINT_GET : STATE_ENDPOINT_UPDATE;
         } else {
-            tal_system_sleep(1000);
+            core_system_sleep(1000);
         }
         break;
 
@@ -987,7 +987,7 @@ int tuya_iot_yield(tuya_iot_client_t *client)
     case STATE_ENDPOINT_UPDATE:
         rt = tuya_endpoint_update();
         if (rt != OPRT_OK) {
-            tal_system_sleep(1000);
+            core_system_sleep(1000);
             break;
         }
         if (client->is_activated) {
@@ -1005,11 +1005,11 @@ int tuya_iot_yield(tuya_iot_client_t *client)
     case STATE_ACTIVATING:
         rt = client_activate_process(client, client->binding->token);
         if (rt != OPRT_OK) {
-            tal_system_sleep(1000);
+            core_system_sleep(1000);
             break;
         }
 
-        tal_free(client->binding);
+        core_free(client->binding);
         client->binding = NULL;
 
         /* Read and parse activate data */
@@ -1077,7 +1077,7 @@ int tuya_iot_yield(tuya_iot_client_t *client)
             client->status = TUYA_STATUS_WIFI_CONNECTED;
             client->nextstate = STATE_MQTT_CONNECT_START;
         } else {
-            tal_system_sleep(1000);
+            core_system_sleep(1000);
         }
         break;
 
@@ -1146,8 +1146,8 @@ int tuya_iot_activated_data_remove(tuya_iot_client_t *client)
 #endif
     /* Clean client local data */
     dp_schema_delete(client->activate.devid);
-    tal_kv_del((const char *)(client->activate.schemaId));
-    tal_kv_del((const char *)(client->config.storage_namespace));
+    core_kv_del((const char *)(client->activate.schemaId));
+    core_kv_del((const char *)(client->config.storage_namespace));
     tuya_endpoint_remove();
     PR_INFO("Activated data remove successed");
 
@@ -1173,21 +1173,21 @@ static int tuya_iot_dp_report_json_common(tuya_iot_client_t *client, const char 
     /* Package JSON format */
     if (time) {
         size_t buf_len = strlen(dps) + strlen(time) + 64;
-        buffer = tal_malloc(buf_len);
+        buffer = core_malloc(buf_len);
         TUYA_CHECK_NULL_RETURN(buffer, OPRT_MALLOC_FAILED);
         printlen = snprintf(buffer, buf_len, "{\"devId\":\"%s\",\"dps\":%s,\"t\":%s}",
                              client->activate.devid, dps, time);
         if (printlen < 0 || (size_t)printlen >= buf_len) {
-            tal_free(buffer);
+            core_free(buffer);
             return OPRT_BUFFER_NOT_ENOUGH;
         }
     } else {
         size_t buf_len = strlen(dps) + 64;
-        buffer = tal_malloc(buf_len);
+        buffer = core_malloc(buf_len);
         TUYA_CHECK_NULL_RETURN(buffer, OPRT_MALLOC_FAILED);
         printlen = snprintf(buffer, buf_len, "{\"devId\":\"%s\",\"dps\":%s}", client->activate.devid, dps);
         if (printlen < 0 || (size_t)printlen >= buf_len) {
-            tal_free(buffer);
+            core_free(buffer);
             return OPRT_BUFFER_NOT_ENOUGH;
         }
     }
@@ -1198,7 +1198,7 @@ static int tuya_iot_dp_report_json_common(tuya_iot_client_t *client, const char 
                                                  (uint16_t)printlen, (mqtt_publish_notify_cb_t)cb, user_data,
                                                  timeout_ms, async);
     tuya_dev_evt_notify(DEV_EVT_DP_PROCESS, ACTION_AFTER, NULL);
-    tal_free(buffer);
+    core_free(buffer);
     return ret;
 }
 /**
@@ -1345,7 +1345,7 @@ int tuya_iot_version_update_sync(tuya_iot_client_t *client)
         prealloc_size += strlen(client->config.modules) + 10;
     }
 
-    char *version_buffer = tal_malloc(prealloc_size);
+    char *version_buffer = core_malloc(prealloc_size);
     if (version_buffer == NULL) {
         return OPRT_INVALID_PARM;
     }
@@ -1357,12 +1357,12 @@ int tuya_iot_version_update_sync(tuya_iot_client_t *client)
         /* extension modules version */
         int written = snprintf(version_buffer + version_len, remain, "%s", client->config.modules);
         if (written < 0 || (size_t)written >= remain) {
-            tal_free(version_buffer);
+            core_free(version_buffer);
             return OPRT_BUFFER_NOT_ENOUGH;
         }
         version_len += (size_t)written;
         if (version_len == 0) {
-            tal_free(version_buffer);
+            core_free(version_buffer);
             return OPRT_BUFFER_NOT_ENOUGH;
         }
         version_len -= 1; // remove ']'
@@ -1370,7 +1370,7 @@ int tuya_iot_version_update_sync(tuya_iot_client_t *client)
         remain = prealloc_size - version_len;
         written = snprintf(version_buffer + version_len, remain, ",");
         if (written < 0 || (size_t)written >= remain) {
-            tal_free(version_buffer);
+            core_free(version_buffer);
             return OPRT_BUFFER_NOT_ENOUGH;
         }
         version_len += (size_t)written;
@@ -1378,7 +1378,7 @@ int tuya_iot_version_update_sync(tuya_iot_client_t *client)
     } else {
         int written = snprintf(version_buffer + version_len, remain, "[");
         if (written < 0 || (size_t)written >= remain) {
-            tal_free(version_buffer);
+            core_free(version_buffer);
             return OPRT_BUFFER_NOT_ENOUGH;
         }
         version_len += (size_t)written;
@@ -1391,7 +1391,7 @@ int tuya_iot_version_update_sync(tuya_iot_client_t *client)
                            "\\\"baselineVer\\\":\\\"%s\\\",\\\"softVer\\\":\\\"%s\\\"}",
                            0, PV_VERSION, BS_VERSION, client->config.software_ver);
     if (written < 0 || (size_t)written >= remain) {
-        tal_free(version_buffer);
+        core_free(version_buffer);
         return OPRT_BUFFER_NOT_ENOUGH;
     }
     version_len += (size_t)written;
@@ -1399,7 +1399,7 @@ int tuya_iot_version_update_sync(tuya_iot_client_t *client)
 
     written = snprintf(version_buffer + version_len, remain, "]");
     if (written < 0 || (size_t)written >= remain) {
-        tal_free(version_buffer);
+        core_free(version_buffer);
         return OPRT_BUFFER_NOT_ENOUGH;
     }
     version_len += (size_t)written;
@@ -1412,7 +1412,7 @@ int tuya_iot_version_update_sync(tuya_iot_client_t *client)
     /* Try read activate config data */
     char version_key[32];
     snprintf(version_key, sizeof version_key, "%s.ver", client->config.storage_namespace);
-    rt = tal_kv_get((const char *)version_key, (uint8_t **)&readbuf, &readlen);
+    rt = core_kv_get((const char *)version_key, (uint8_t **)&readbuf, &readlen);
     if (OPRT_OK != rt) {
         PR_WARN("version save info not found:%d", rt);
     }
@@ -1420,22 +1420,22 @@ int tuya_iot_version_update_sync(tuya_iot_client_t *client)
     /* Compare the version info changed? */
     if (readbuf && readlen == version_len && memcmp(version_buffer, readbuf, version_len) == 0) {
         PR_DEBUG("The verison unchanged, dont need sync.");
-        tal_free((uint8_t *)readbuf);
-        tal_free(version_buffer);
+        core_free((uint8_t *)readbuf);
+        core_free(version_buffer);
         return OPRT_OK;
     }
 
     /* Post version info to ATOP service */
     rt = atop_service_version_update_v41(client->activate.devid, client->activate.seckey, (const char *)version_buffer);
-    tal_free((uint8_t *)readbuf);
+    core_free((uint8_t *)readbuf);
     if (rt != OPRT_OK) {
-        tal_free(version_buffer);
+        core_free(version_buffer);
         return rt;
     }
 
     /* Save version info */
-    rt = tal_kv_set((const char *)version_key, (const uint8_t *)version_buffer, version_len);
-    tal_free(version_buffer);
+    rt = core_kv_set((const char *)version_key, (const uint8_t *)version_buffer, version_len);
+    core_free(version_buffer);
 
     return rt;
 }

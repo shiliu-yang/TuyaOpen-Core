@@ -35,7 +35,7 @@
 #include "http_inf.h"
 #include "http_manager.h"
 #include "mix_method.h"
-#include "tal_workq_service.h"
+#include "core_workq_service.h"
 #include "tuya_ai_private.h"
 #include "tuya_ai_biz.h"
 #include "tuya_ai_http.h"
@@ -177,7 +177,7 @@ STATIC OPERATE_RET __ai_http_dld_media(CHAR_T *url, AI_PACKET_PT type, AI_BIZ_RE
         return OPRT_MALLOC_FAILED;
     }
     PR_DEBUG("do http dld work");
-    rt             = tal_workq_schedule(WORKQ_SYSTEM, __ai_http_dld_work, dld);
+    rt             = core_workq_schedule(WORKQ_SYSTEM, __ai_http_dld_work, dld);
     if (OPRT_OK != rt) {
         PR_ERR("schedule workq err,rt:%d", rt);
         Free(dld->url);

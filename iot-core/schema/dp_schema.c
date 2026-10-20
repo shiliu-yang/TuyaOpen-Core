@@ -19,7 +19,7 @@
 #include "dp_schema.h"
 #include "cJSON.h"
 #include "mix_method.h"
-#include "tal_api.h"
+#include "core_api.h"
 
 #define MAX_ITEM_LEN 1024
 
@@ -89,9 +89,9 @@ int dp_rept_json_append(dp_schema_t *schema, char *data, char *time, char *type,
     } else {
         len = strlen(data) + strlen(time) + 128;
     }
-    char *tmp = tal_malloc(len);
+    char *tmp = core_malloc(len);
     if (NULL == tmp) {
-        PR_ERR("tal_malloc err:%d", len);
+        PR_ERR("core_malloc err:%d", len);
         return OPRT_MALLOC_FAILED;
     }
     memset(tmp, 0, len);
@@ -130,7 +130,7 @@ int dp_rept_json_append(dp_schema_t *schema, char *data, char *time, char *type,
     return OPRT_OK;
 
 __err_exit:
-    tal_free(tmp);
+    core_free(tmp);
     PR_ERR("snprintf %d", offset);
     return OPRT_COM_ERROR;
 }
@@ -230,7 +230,7 @@ static __attribute__((unused)) OPERATE_RET dp_obj_equal_resp(dp_schema_t *schema
     }
 
     int i;
-    tal_mutex_lock(schema->mutex);
+    core_mutex_lock(schema->mutex);
     for (i = 0; i < num; i++) {
         int id = dpid[i];
         dp_node_t *dpnode = dp_node_find(schema, id);
@@ -256,13 +256,13 @@ static __attribute__((unused)) OPERATE_RET dp_obj_equal_resp(dp_schema_t *schema
             cJSON_AddNumberToObject(qr_data, dpid, dpnode->prop.prop_int.value);
         } break;
         case PROP_STR: {
-            tal_mutex_lock(dpnode->prop.prop_str.dp_str_mutex);
+            core_mutex_lock(dpnode->prop.prop_str.dp_str_mutex);
             if (dpnode->prop.prop_str.value) {
                 cJSON_AddStringToObject(qr_data, dpid, dpnode->prop.prop_str.value);
             } else {
                 PR_WARN("DP:%d dpnode null", dpid);
             }
-            tal_mutex_unlock(dpnode->prop.prop_str.dp_str_mutex);
+            core_mutex_unlock(dpnode->prop.prop_str.dp_str_mutex);
         } break;
         case PROP_ENUM: {
             int cnt = dpnode->prop.prop_enum.value;
@@ -276,7 +276,7 @@ static __attribute__((unused)) OPERATE_RET dp_obj_equal_resp(dp_schema_t *schema
             break;
         }
     }
-    tal_mutex_unlock(schema->mutex);
+    core_mutex_unlock(schema->mutex);
 
     char *tmp = NULL;
     tmp = cJSON_PrintUnformatted(qr_data);
@@ -291,7 +291,7 @@ static __attribute__((unused)) OPERATE_RET dp_obj_equal_resp(dp_schema_t *schema
 
     // char *out = NULL;
     // op_ret = make_dpstr(schema, tmp, NULL, "query", 0, 0, &out);
-    // tal_free(tmp);
+    // core_free(tmp);
     // if (OPRT_OK != op_ret) {
     //     PR_ERR("add_devid_time_to_dpstr err:%d", op_ret);
     //     return op_ret;
@@ -301,7 +301,7 @@ static __attribute__((unused)) OPERATE_RET dp_obj_equal_resp(dp_schema_t *schema
     //! FIXME:
     //     SMARTPOINTER_T *rfc_da = NULL;
     //     op_ret = __sf_mk_rfc_msg_data((uint8_t *)out, strlen(out),
-    //     &rfc_da);//root ref tal_free(out); if (OPRT_OK != op_ret) {
+    //     &rfc_da);//root ref core_free(out); if (OPRT_OK != op_ret) {
     //         PR_ERR("mk_rfc_msg_data err:%d", op_ret);
     //         return op_ret;
     //     }
@@ -350,7 +350,7 @@ int dp_data_recv_parse(dp_recv_msg_t *msg, dp_recv_cb_t dp_recv_cb)
         return OPRT_COM_ERROR;
     }
 
-    tal_mutex_lock(schema->mutex);
+    core_mutex_lock(schema->mutex);
     for (item = dps_js->child; item != NULL; item = item->next) {
         dpnode = dp_node_find(schema, atoi(item->string));
         if (dpnode == NULL) {
@@ -365,10 +365,10 @@ int dp_data_recv_parse(dp_recv_msg_t *msg, dp_recv_cb_t dp_recv_cb)
             dpscnt++;
         }
     }
-    tal_mutex_unlock(schema->mutex);
+    core_mutex_unlock(schema->mutex);
 
     if (dpscnt) {
-        dpobj = (dp_obj_recv_t *)tal_malloc(sizeof(dp_obj_recv_t) + (dpscnt * sizeof(dp_obj_t)));
+        dpobj = (dp_obj_recv_t *)core_malloc(sizeof(dp_obj_recv_t) + (dpscnt * sizeof(dp_obj_t)));
         if (NULL == dpobj) {
             PR_ERR("malloc err:%d", dpscnt);
             op_ret = OPRT_MALLOC_FAILED;
@@ -385,7 +385,7 @@ int dp_data_recv_parse(dp_recv_msg_t *msg, dp_recv_cb_t dp_recv_cb)
        decide whether to reply directly.
         */
     int i = 0;
-    tal_mutex_lock(schema->mutex);
+    core_mutex_lock(schema->mutex);
     for (item = dps_js->child; item != NULL; item = item->next) {
         dpnode = dp_node_find(schema, atoi(item->string));
         if (NULL == dpnode) {
@@ -395,9 +395,9 @@ int dp_data_recv_parse(dp_recv_msg_t *msg, dp_recv_cb_t dp_recv_cb)
         if (T_RAW == dpnode->desc.type && cJSON_String == item->type) { // raw dp process
             // dp_raw_t
             int data_len = sizeof(dp_raw_recv_t) + strlen(item->valuestring);
-            dp_raw_recv_t *dpraw = tal_malloc(data_len);
+            dp_raw_recv_t *dpraw = core_malloc(data_len);
             if (NULL == dpraw) {
-                tal_mutex_unlock(schema->mutex);
+                core_mutex_unlock(schema->mutex);
                 goto __err_exit;
             }
             memset(dpraw, 0, data_len);
@@ -409,11 +409,11 @@ int dp_data_recv_parse(dp_recv_msg_t *msg, dp_recv_cb_t dp_recv_cb)
             dpraw->dp.len = tuya_base64_decode(item->valuestring, dpraw->dp.data);
 
             if (dp_recv_cb) {
-                tal_mutex_unlock(schema->mutex);
+                core_mutex_unlock(schema->mutex);
                 dp_recv_cb(T_RAW, dpraw, msg->user_data);
-                tal_mutex_lock(schema->mutex);
+                core_mutex_lock(schema->mutex);
             }
-            tal_free(dpraw);
+            core_free(dpraw);
             continue;
         }
 
@@ -479,16 +479,16 @@ int dp_data_recv_parse(dp_recv_msg_t *msg, dp_recv_cb_t dp_recv_cb)
         } /* end of switch */
         dpobj->dps[i].id = dpnode->desc.id;
         dpobj->dps[i].type = dpnode->desc.prop_tp;
-        dpobj->dps[i].time_stamp = tal_time_get_posix();
+        dpobj->dps[i].time_stamp = core_time_get_posix();
         i++;
     } /* end of for */
-    tal_mutex_unlock(schema->mutex);
+    core_mutex_unlock(schema->mutex);
 
     if (dpobj) {
         if (dp_recv_cb) {
-            // tal_mutex_unlock(schema->mutex);
+            // core_mutex_unlock(schema->mutex);
             dp_recv_cb(T_OBJ, dpobj, msg->user_data);
-            // tal_mutex_lock(schema->mutex);
+            // core_mutex_lock(schema->mutex);
         }
     }
 
@@ -496,7 +496,7 @@ int dp_data_recv_parse(dp_recv_msg_t *msg, dp_recv_cb_t dp_recv_cb)
 
 __err_exit:
     if (dpobj) {
-        tal_free(dpobj);
+        core_free(dpobj);
     }
 
     return op_ret;
@@ -583,7 +583,7 @@ static bool dp_rept_update(dp_rept_type_t rept_type, dp_obj_t *dp, dp_node_t *dp
             break;
         }
         case PROP_STR: {
-            tal_mutex_lock(dpnode->prop.prop_str.dp_str_mutex);
+            core_mutex_lock(dpnode->prop.prop_str.dp_str_mutex);
             PR_DEBUG("dp<%d> str: %s, new: %s", dpnode->desc.id, dpnode->prop.prop_str.value, dp->value.dp_str);
             if ((NULL == dpnode->prop.prop_str.value) ||
                 (strlen(dpnode->prop.prop_str.value) != strlen(dp->value.dp_str)) ||
@@ -595,11 +595,11 @@ static bool dp_rept_update(dp_rept_type_t rept_type, dp_obj_t *dp, dp_node_t *dp
                 if ((NULL == dpnode->prop.prop_str.value) ||
                     (dpnode->prop.prop_str.cur_len < strlen(dp->value.dp_str))) {
                     if (NULL != dpnode->prop.prop_str.value) {
-                        tal_free(dpnode->prop.prop_str.value);
+                        core_free(dpnode->prop.prop_str.value);
                         dpnode->prop.prop_str.value = NULL;
                     }
                     dpnode->prop.prop_str.cur_len = strlen(dp->value.dp_str);
-                    dpnode->prop.prop_str.value = tal_malloc(dpnode->prop.prop_str.cur_len + 1);
+                    dpnode->prop.prop_str.value = core_malloc(dpnode->prop.prop_str.cur_len + 1);
                     if (dpnode->prop.prop_str.value) {
                         memcpy(dpnode->prop.prop_str.value, dp->value.dp_str, dpnode->prop.prop_str.cur_len);
                         dpnode->prop.prop_str.value[dpnode->prop.prop_str.cur_len] = '\0';
@@ -623,7 +623,7 @@ static bool dp_rept_update(dp_rept_type_t rept_type, dp_obj_t *dp, dp_node_t *dp
                     dpnode->time_stamp = dp->time_stamp;
                 }
             }
-            tal_mutex_unlock(dpnode->prop.prop_str.dp_str_mutex);
+            core_mutex_unlock(dpnode->prop.prop_str.dp_str_mutex);
             break;
         }
         case PROP_ENUM: {
@@ -781,7 +781,7 @@ int dp_rept_valid_check(dp_schema_t *schema, dp_rept_in_t *dpin, dp_rept_valid_t
 {
     int i;
 
-    tal_mutex_lock(schema->mutex);
+    core_mutex_lock(schema->mutex);
     for (i = 0; i < dpin->dpscnt; i++) {
         dp_obj_t *dp = &(dpin->dps[i]);
         dp_node_t *dpnode = dp_node_find(schema, dp->id);
@@ -791,7 +791,7 @@ int dp_rept_valid_check(dp_schema_t *schema, dp_rept_in_t *dpin, dp_rept_valid_t
         }
         if (dp->type != dpnode->desc.prop_tp) {
             PR_ERR("dparr[%d] type not match:%d %d", i, dp->type, dpnode->desc.prop_tp);
-            tal_mutex_unlock(schema->mutex);
+            core_mutex_unlock(schema->mutex);
             return OPRT_SVC_DP_TP_NOT_MATCH;
         }
 
@@ -827,7 +827,7 @@ int dp_rept_valid_check(dp_schema_t *schema, dp_rept_in_t *dpin, dp_rept_valid_t
         case PROP_ENUM: {
             if (dp->value.dp_enum >= dpnode->prop.prop_enum.cnt) {
                 PR_ERR("dparr[%d] enum not match:%d %d", i, dp->value.dp_enum, dpnode->prop.prop_enum.cnt);
-                tal_mutex_unlock(schema->mutex);
+                core_mutex_unlock(schema->mutex);
                 return OPRT_SVC_DP_TYPE_PROP_ILLEGAL;
             }
             dpvalid->len += strlen(dpnode->prop.prop_enum.pp_enum[dp->value.dp_enum]) + 15;
@@ -835,7 +835,7 @@ int dp_rept_valid_check(dp_schema_t *schema, dp_rept_in_t *dpin, dp_rept_valid_t
 
         default: {
             PR_ERR("dparr[%d] type invalid %d", i, dp->type);
-            tal_mutex_unlock(schema->mutex);
+            core_mutex_unlock(schema->mutex);
             return OPRT_COM_ERROR;
         }
         }
@@ -844,7 +844,7 @@ int dp_rept_valid_check(dp_schema_t *schema, dp_rept_in_t *dpin, dp_rept_valid_t
         }
         dpvalid->dpid[dpvalid->num++] = dp->id;
     }
-    tal_mutex_unlock(schema->mutex);
+    core_mutex_unlock(schema->mutex);
 
     if (0 == dpvalid->num) {
         PR_DEBUG("no vaild dp to rept");
@@ -880,14 +880,14 @@ int dp_rept_json_output(dp_schema_t *schema, dp_rept_in_t *dpin, dp_rept_valid_t
     char *dptimestr = NULL;
     bool is_need_time = false;
 
-    dpstr = (char *)tal_malloc(dpvalid->len);
+    dpstr = (char *)core_malloc(dpvalid->len);
     if (NULL == dpstr) {
         PR_ERR("malloc err:%d", dpvalid->len);
         return OPRT_MALLOC_FAILED;
     }
     // STAT type DP needs to assemble a timestamp
     if ((T_STAT_REPT == dpin->rept_type) && dpvalid->timelen && dpout->timejson) {
-        dptimestr = (char *)tal_malloc(dpvalid->timelen);
+        dptimestr = (char *)core_malloc(dpvalid->timelen);
         if (NULL == dptimestr) {
             PR_ERR("malloc err:%d", dpvalid->timelen);
             op_ret = OPRT_MALLOC_FAILED;
@@ -1027,9 +1027,9 @@ int dp_rept_json_output(dp_schema_t *schema, dp_rept_in_t *dpin, dp_rept_valid_t
     return OPRT_OK;
 
 __err_exit:
-    tal_free(dpstr);
+    core_free(dpstr);
     if (is_need_time) {
-        tal_free(dptimestr);
+        core_free(dptimestr);
     }
 
     return op_ret;
@@ -1045,7 +1045,7 @@ __err_exit:
 //     }
 
 //     dp_rept_valid_t *dpvaild = (dp_rept_valid_t
-//     *)tal_malloc(sizeof(dp_rept_valid_t) + sizeof(uint8_t) * dpin->dpscnt);
+//     *)core_malloc(sizeof(dp_rept_valid_t) + sizeof(uint8_t) * dpin->dpscnt);
 //     if (NULL == dpvaild) {
 //         return OPRT_MALLOC_FAILED;
 //     }
@@ -1065,7 +1065,7 @@ __err_exit:
 
 // __err_exit:
 //     if (dpvaild) {
-//         tal_free(dpvaild);
+//         core_free(dpvaild);
 //     }
 
 //     return op_ret;
@@ -1092,12 +1092,12 @@ static int dp_obj_json_create(cJSON *root, dp_node_t *dpnode)
     }
 
     case PROP_STR: {
-        tal_mutex_lock(dpnode->prop.prop_str.dp_str_mutex);
+        core_mutex_lock(dpnode->prop.prop_str.dp_str_mutex);
         if (dpnode->prop.prop_str.value) {
             length += (10 + strlen(dpnode->prop.prop_str.value));
             cJSON_AddStringToObject(root, dpid, dpnode->prop.prop_str.value);
         }
-        tal_mutex_unlock(dpnode->prop.prop_str.dp_str_mutex);
+        core_mutex_unlock(dpnode->prop.prop_str.dp_str_mutex);
         break;
     }
 
@@ -1171,7 +1171,7 @@ int dp_obj_dump_stat_local_json(char *devid, dp_rept_valid_t **outdpvalid, char 
         return OPRT_MALLOC_FAILED;
     }
 
-    dp_rept_valid_t *dpvaild = tal_malloc(sizeof(dp_rept_valid_t) + sizeof(uint8_t) * dp_stat_local_num);
+    dp_rept_valid_t *dpvaild = core_malloc(sizeof(dp_rept_valid_t) + sizeof(uint8_t) * dp_stat_local_num);
     if (NULL == dpvaild) {
         cJSON_Delete(cjson);
         return OPRT_MALLOC_FAILED;
@@ -1202,7 +1202,7 @@ int dp_obj_dump_stat_local_json(char *devid, dp_rept_valid_t **outdpvalid, char 
     char *jsonstr = cJSON_PrintUnformatted(cjson);
     cJSON_Delete(cjson);
     if (NULL == jsonstr) {
-        tal_free(dpvaild);
+        core_free(dpvaild);
         PR_ERR("Json err");
         return OPRT_CR_CJSON_ERR;
     }
@@ -1213,7 +1213,7 @@ int dp_obj_dump_stat_local_json(char *devid, dp_rept_valid_t **outdpvalid, char 
         cJSON_free(jsonstr);
     }else {
         size_t jsonstr_len = strlen(jsonstr);
-        out = tal_malloc(jsonstr_len + 1);
+        out = core_malloc(jsonstr_len + 1);
         if(out) {
             memset(out, 0, jsonstr_len + 1);
             memcpy(out, jsonstr, jsonstr_len);
@@ -1224,13 +1224,13 @@ int dp_obj_dump_stat_local_json(char *devid, dp_rept_valid_t **outdpvalid, char 
     if (outjson) {
         *outjson = out;
     } else {
-        tal_free(out);
+        core_free(out);
     }
 
     if (outdpvalid) {
         *outdpvalid = dpvaild;
     } else {
-        tal_free(dpvaild);
+        core_free(dpvaild);
     }
 
     return OPRT_OK;
@@ -1294,7 +1294,7 @@ char *dp_obj_dump_all_json(char *devid, int flags)
         return NULL;
     }
 
-    char *out_str = tal_malloc(strlen(tmp) + 1);
+    char *out_str = core_malloc(strlen(tmp) + 1);
     if (NULL == out_str) {
         PR_ERR("malloc err");
         cJSON_free(tmp);
@@ -1363,7 +1363,7 @@ static OPERATE_RET dp_node_parse(char *schema_json, dp_node_pos_t *nodepos, uint
     cJSON *item = NULL;
     char *pBuf = NULL;
 
-    pBuf = (char *)tal_malloc(MAX_ITEM_LEN);
+    pBuf = (char *)core_malloc(MAX_ITEM_LEN);
     if (NULL == pBuf) {
         PR_ERR("malloc fail");
         op_ret = OPRT_COM_ERROR;
@@ -1525,7 +1525,7 @@ static OPERATE_RET dp_node_parse(char *schema_json, dp_node_pos_t *nodepos, uint
             prop->prop_str.max_len = child->valueint;
             prop->prop_str.value = NULL;
             prop->prop_str.cur_len = 0;
-            op_ret = tal_mutex_create_init(&prop->prop_str.dp_str_mutex);
+            op_ret = core_mutex_create_init(&prop->prop_str.dp_str_mutex);
             if (OPRT_OK != op_ret) {
                 PR_ERR("mutex init fail:%d", op_ret);
                 op_ret = OPRT_CR_MUTEX_ERR;
@@ -1546,7 +1546,7 @@ static OPERATE_RET dp_node_parse(char *schema_json, dp_node_pos_t *nodepos, uint
                 op_ret = OPRT_CJSON_GET_ERR;
                 goto __exit;
             }
-            prop->prop_enum.pp_enum = tal_malloc(num * sizeof(char *));
+            prop->prop_enum.pp_enum = core_malloc(num * sizeof(char *));
             if (NULL == prop->prop_enum.pp_enum) {
                 PR_ERR("malloc fail");
                 op_ret = OPRT_MALLOC_FAILED;
@@ -1586,13 +1586,13 @@ static OPERATE_RET dp_node_parse(char *schema_json, dp_node_pos_t *nodepos, uint
         cjson = NULL;
     }
 
-    tal_free(pBuf);
+    core_free(pBuf);
 
     return OPRT_OK;
 
 __exit:
     if (pBuf) {
-        tal_free(pBuf);
+        core_free(pBuf);
     }
 
     if (cjson) {
@@ -1622,7 +1622,7 @@ int dp_schema_create(char *devid, char *schema_json, dp_schema_t **dp_schema_out
     dp_node_pos_t *nodepos = NULL;
     int nodenum;
 
-    nodepos = tal_malloc(sizeof(dp_node_pos_t) * 255);
+    nodepos = core_malloc(sizeof(dp_node_pos_t) * 255);
     if (NULL == nodepos) {
         PR_ERR("malloc fail");
         return OPRT_MALLOC_FAILED;
@@ -1632,7 +1632,7 @@ int dp_schema_create(char *devid, char *schema_json, dp_schema_t **dp_schema_out
     nodenum = dp_node_pos_decode(schema_json, nodepos, 255);
     if (nodenum >= 255) {
         PR_ERR("dp num parse err:%d", nodenum);
-        tal_free(nodepos);
+        core_free(nodepos);
         return OPRT_SVC_DEVOS_DEV_DP_CNT_INVALID;
     }
     // An empty DP schema ([]) is valid: some products legitimately define no DPs.
@@ -1641,14 +1641,14 @@ int dp_schema_create(char *devid, char *schema_json, dp_schema_t **dp_schema_out
     if (0 == nodenum) {
         PR_NOTICE("empty dp schema, create schema with 0 dp");
     }
-    dp_schema_t *dp_schema = (dp_schema_t *)tal_malloc(sizeof(dp_schema_t) + nodenum * sizeof(dp_node_t));
+    dp_schema_t *dp_schema = (dp_schema_t *)core_malloc(sizeof(dp_schema_t) + nodenum * sizeof(dp_node_t));
     if (NULL == dp_schema) {
-        tal_free(nodepos);
+        core_free(nodepos);
         PR_ERR("malloc fail:%d", nodenum);
         return OPRT_MALLOC_FAILED;
     }
     memset(dp_schema, 0, sizeof(dp_schema_t) + nodenum * sizeof(dp_node_t));
-    op_ret = tal_mutex_create_init(&(dp_schema->mutex));
+    op_ret = core_mutex_create_init(&(dp_schema->mutex));
     if (OPRT_OK != op_ret) {
         PR_ERR("mutex create fail:%d", op_ret);
         goto __exit;
@@ -1657,9 +1657,9 @@ int dp_schema_create(char *devid, char *schema_json, dp_schema_t **dp_schema_out
     // dp schema parse
     SCHEMA_OTHER_ATTR_S other_attr;
     memset(&other_attr, 0, sizeof(other_attr));
-    tal_mutex_lock(dp_schema->mutex);
+    core_mutex_lock(dp_schema->mutex);
     op_ret = dp_node_parse(schema_json, nodepos, nodenum, dp_schema->node, &other_attr);
-    tal_mutex_unlock(dp_schema->mutex);
+    core_mutex_unlock(dp_schema->mutex);
     if (OPRT_OK != op_ret) {
         PR_ERR("dp_node_parse fail:%d", op_ret);
         goto __exit;
@@ -1675,14 +1675,14 @@ int dp_schema_create(char *devid, char *schema_json, dp_schema_t **dp_schema_out
         s_dsmgr.schema_num++;
     }
     PR_DEBUG("create dp_schema Success ");
-    tal_free(nodepos);
+    core_free(nodepos);
 
     return OPRT_OK;
 
 __exit:
-    tal_mutex_release(dp_schema->mutex);
-    tal_free(dp_schema);
-    tal_free(nodepos);
+    core_mutex_release(dp_schema->mutex);
+    core_free(dp_schema);
+    core_free(nodepos);
     return op_ret;
 }
 
@@ -1708,8 +1708,8 @@ int dp_schema_delete(char *devid)
         }
 
         if (0 == strcmp(devid, dsmgr->schema_list[i]->devid)) {
-            tal_mutex_release(dsmgr->schema_list[i]->mutex);
-            tal_free(dsmgr->schema_list[i]);
+            core_mutex_release(dsmgr->schema_list[i]->mutex);
+            core_free(dsmgr->schema_list[i]);
             dsmgr->schema_list[i] = NULL;
             dsmgr->schema_num--;
             return OPRT_OK;

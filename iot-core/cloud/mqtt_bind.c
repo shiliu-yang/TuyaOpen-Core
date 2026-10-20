@@ -23,7 +23,7 @@
 #include "tuya_endpoint.h"
 #include "mqtt_service.h"
 #include "cJSON.h"
-#include "tal_system.h"
+#include "core_system.h"
 
 typedef enum {
     STATE_MQTT_BIND_INIT,
@@ -49,7 +49,7 @@ static mqtt_bind_t *s_mqbind = NULL;
 void mqtt_bind_free(void)
 {
     if (s_mqbind) {
-        tal_free(s_mqbind);
+        core_free(s_mqbind);
         s_mqbind = NULL;
     }
 }
@@ -125,8 +125,8 @@ static void mqtt_bind_activate_token_on(tuya_protocol_event_t *ev)
     strncpy(binding.regist_key, regist_key, sizeof(binding.regist_key) - 1);
     binding.regist_key[sizeof(binding.regist_key) - 1] = '\0';
 
-    tal_event_unsubscribe(EVENT_LINK_ACTIVATE, "mqbind", __mqbind_link_activete_cb);
-    tal_event_publish(EVENT_LINK_ACTIVATE, &binding);
+    core_event_unsubscribe(EVENT_LINK_ACTIVATE, "mqbind", __mqbind_link_activete_cb);
+    core_event_publish(EVENT_LINK_ACTIVATE, &binding);
 
     mqbind->state = STATE_MQTT_BIND_COMPLETE;
 }
@@ -145,7 +145,7 @@ void mqtt_bind_token_get_thread(void *args)
     mqbind->state = STATE_MQTT_BIND_INIT;
 
     TUYA_CALL_ERR_LOG(
-        tal_event_subscribe(EVENT_LINK_ACTIVATE, "mqbind", __mqbind_link_activete_cb, SUBSCRIBE_TYPE_ONETIME));
+        core_event_subscribe(EVENT_LINK_ACTIVATE, "mqbind", __mqbind_link_activete_cb, SUBSCRIBE_TYPE_ONETIME));
 
     while (mqbind->state != STATE_MQTT_BIND_EXIT) {
 
@@ -155,14 +155,14 @@ void mqtt_bind_token_get_thread(void *args)
             if (mqbind->config->network_check()) {
                 mqbind->state = STATE_MQTT_BIND_START;
             } else {
-                tal_system_sleep(200);
+                core_system_sleep(200);
             }
             break;
 
         case STATE_MQTT_BIND_START: {
             /* Update region demain */
             if (OPRT_OK != tuya_endpoint_update_auto_region()) {
-                tal_system_sleep(1000);
+                core_system_sleep(1000);
                 continue;
             }
             /* mqtt init */
@@ -179,7 +179,7 @@ void mqtt_bind_token_get_thread(void *args)
             if (OPRT_OK != rt) {
                 PR_ERR("tuya mqtt init error:%d", rt);
                 tuya_mqtt_destory(&mqbind->mqctx);
-                tal_system_sleep(1000);
+                core_system_sleep(1000);
                 continue;
             }
             /* register token callback */
@@ -192,7 +192,7 @@ void mqtt_bind_token_get_thread(void *args)
             rt = tuya_mqtt_start(&mqbind->mqctx);
             if (OPRT_OK != rt) {
                 PR_ERR("tuya mqtt connect fail:%d, retry..", rt);
-                tal_system_sleep(1000);
+                core_system_sleep(1000);
                 break;
             }
             mqbind->state = STATE_MQTT_BIND_CONNECTED_WAIT;
@@ -230,7 +230,7 @@ void mqtt_bind_token_get_thread(void *args)
     }
 
     if (mqbind->thread != NULL) {
-        tal_thread_delete(mqbind->thread);
+        core_thread_delete(mqbind->thread);
         mqbind->thread = NULL;
     }
 
@@ -252,12 +252,12 @@ int mqtt_bind_token_get(tuya_iot_config_t *config)
 
     //! simple wait for reset
     while (s_mqbind != NULL) {
-        tal_system_sleep(200);
+        core_system_sleep(200);
     }
 
-    TUYA_CALL_ERR_RETURN(tal_event_subscribe(EVENT_RESET, "mqbind", __mqbind_reset_event_cb, SUBSCRIBE_TYPE_NORMAL));
+    TUYA_CALL_ERR_RETURN(core_event_subscribe(EVENT_RESET, "mqbind", __mqbind_reset_event_cb, SUBSCRIBE_TYPE_NORMAL));
 
-    s_mqbind = tal_malloc(sizeof(mqtt_bind_t));
+    s_mqbind = core_malloc(sizeof(mqtt_bind_t));
     if (NULL == s_mqbind) {
         return OPRT_MALLOC_FAILED;
     }
@@ -266,10 +266,10 @@ int mqtt_bind_token_get(tuya_iot_config_t *config)
     s_mqbind->config = config;
 
     THREAD_CFG_T thread_cfg = {.priority = THREAD_PRIO_3, .stackDepth = 4096, .thrdname = "mqtt_bind"};
-    rt = tal_thread_create_and_start(&s_mqbind->thread, NULL, NULL, mqtt_bind_token_get_thread, s_mqbind, &thread_cfg);
+    rt = core_thread_create_and_start(&s_mqbind->thread, NULL, NULL, mqtt_bind_token_get_thread, s_mqbind, &thread_cfg);
     if (OPRT_OK != rt) {
         PR_ERR("tuya cli create thread failed %d", rt);
-        tal_free(s_mqbind);
+        core_free(s_mqbind);
         s_mqbind = NULL;
     }
 

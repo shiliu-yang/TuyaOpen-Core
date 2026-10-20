@@ -15,11 +15,11 @@
 
 #include "tuya_cloud_types.h"
 #include "mix_method.h"
-#include "tal_event.h"
-#include "tal_api.h"
-#include "tal_security.h"
-#include "tal_kv.h"
-#include "tal_memory.h"
+#include "core_event.h"
+#include "core_api.h"
+#include "core_security.h"
+#include "core_kv.h"
+#include "core_memory.h"
 #include "tuya_register_center.h"
 
 static const unsigned char default_iotdns_cacert[] = {
@@ -116,9 +116,9 @@ static OPERATE_RET __rcs_serialize(register_center_t *rcs, uint8_t **data, uint1
     total += strlen(rcs->urlx);
 #endif
 
-    uint8_t *buf = tal_malloc(total);
+    uint8_t *buf = core_malloc(total);
     if (NULL == buf) {
-        PR_ERR("tal_malloc err");
+        PR_ERR("core_malloc err");
         return OPRT_MALLOC_FAILED;
     }
 
@@ -168,7 +168,7 @@ static OPERATE_RET __rcs_serialize(register_center_t *rcs, uint8_t **data, uint1
     buf[offset++] = len & 0xFF;
     buf[offset++] = (len >> 8) & 0xFF;
     memcpy(&buf[offset], out, len);
-    tal_free(out);
+    core_free(out);
 #endif
 
     *data = buf;
@@ -202,7 +202,7 @@ static OPERATE_RET __rcs_deserialize(uint8_t *data, uint16_t length, register_ce
         } else if (TLV_PUB == type) {
             rcs->pub = data[offset++];
         } else {
-            buf = tal_malloc(len);
+            buf = core_malloc(len);
             if (NULL == buf) {
                 PR_ERR("malloc err");
                 return OPRT_MALLOC_FAILED;
@@ -219,7 +219,7 @@ static OPERATE_RET __rcs_deserialize(uint8_t *data, uint16_t length, register_ce
                 rcs->ca_cert = buf;
                 rcs->ca_cert_len = len;
             } else {
-                tal_free(buf);
+                core_free(buf);
                 PR_ERR("type:%d", type);
                 return OPRT_INVALID_PARM;
             }
@@ -233,7 +233,7 @@ static OPERATE_RET __rcs_deserialize(uint8_t *data, uint16_t length, register_ce
 
 static OPERATE_RET __rcs_reset_cb(void *data)
 {
-    tal_kv_del(RCS_KV_ACTIVE);
+    core_kv_del(RCS_KV_ACTIVE);
     return OPRT_OK;
 }
 
@@ -291,10 +291,10 @@ EXIT:
     if (OPRT_OK != rt) {
         PR_NOTICE("rcs restore failed %d", rt);
 
-        tal_free(rcs->code);
-        tal_free(rcs->url0);
-        tal_free(rcs->urlx);
-        tal_free(rcs->ca_cert);
+        core_free(rcs->code);
+        core_free(rcs->url0);
+        core_free(rcs->urlx);
+        core_free(rcs->ca_cert);
     }
 
     if (NULL != root) {
@@ -308,18 +308,18 @@ static void __rcs_update(register_center_t *rcs)
 {
     if (s_tuya_rcs.source != RCS_CODE) {
         if (s_tuya_rcs.url0) {
-            tal_free(s_tuya_rcs.url0);
+            core_free(s_tuya_rcs.url0);
         }
         if (s_tuya_rcs.urlx) {
-            tal_free(s_tuya_rcs.urlx);
+            core_free(s_tuya_rcs.urlx);
         }
 
         if (s_tuya_rcs.code) {
-            tal_free(s_tuya_rcs.code);
+            core_free(s_tuya_rcs.code);
         }
 
         if (s_tuya_rcs.ca_cert) {
-            tal_free(s_tuya_rcs.ca_cert);
+            core_free(s_tuya_rcs.ca_cert);
         }
     }
     memcpy(&s_tuya_rcs, rcs, sizeof(register_center_t));
@@ -341,16 +341,16 @@ OPERATE_RET tuya_register_center_init(void)
         return OPRT_OK;
     }
 
-    rt = tal_kv_get(RCS_KV_ACTIVE, &data, &len);
+    rt = core_kv_get(RCS_KV_ACTIVE, &data, &len);
     if (OPRT_OK != rt) {
-        rt = tal_kv_get(RCS_KV_MF, &data, &len);
+        rt = core_kv_get(RCS_KV_MF, &data, &len);
         if (OPRT_OK != rt) {
             goto EXIT;
         }
     }
 
     rt = __rcs_deserialize(data, len, &s_tuya_rcs);
-    tal_free(data);
+    core_free(data);
 
 EXIT:
 
@@ -358,7 +358,7 @@ EXIT:
         PR_DEBUG("use default rcs [%d]", rt);
         memcpy(&s_tuya_rcs, &s_def_rcs, sizeof(register_center_t));
     }
-    // tal_event_subscribe(EVENT_RESET, "rcs", __rcs_reset_cb, 0);
+    // core_event_subscribe(EVENT_RESET, "rcs", __rcs_reset_cb, 0);
 
     return OPRT_OK;
 }
@@ -407,13 +407,13 @@ OPERATE_RET tuya_register_center_save(RCS_E source, cJSON *rcs)
         key = RCS_KV_ACTIVE;
     }
 
-    rt = tal_kv_set(key, (uint8_t *)data, length);
+    rt = core_kv_set(key, (uint8_t *)data, length);
     if (OPRT_OK == rt) {
         __rcs_update(&tmp_rcs);
     }
-    tal_free(data);
+    core_free(data);
 
-    tal_event_publish(EVENT_RSC_UPDATE, NULL);
+    core_event_publish(EVENT_RSC_UPDATE, NULL);
 
     return rt;
 }

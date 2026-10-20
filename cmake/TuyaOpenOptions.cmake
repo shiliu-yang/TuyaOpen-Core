@@ -1,13 +1,13 @@
 # Boolean feature flags. Host may set these before add_subdirectory().
 # Values y/Y/yes/1/on and n/N/no/0/off are normalized after option().
 
-option(CONFIG_ENABLE_WIRED "Build wired netmgr sources (tal_netif: local IP / link callback)" OFF)
-option(CONFIG_ENABLE_BLUETOOTH "Build tal_bluetooth and BLE cloud sources" OFF)
-option(CONFIG_ENABLE_NIMBLE "Include NimBLE sources in tal_bluetooth" OFF)
-option(CONFIG_ENABLE_CELLULAR "Build tal_cellular and cellular netmgr sources" OFF)
+option(CONFIG_ENABLE_WIRED "Build wired netmgr sources (core_netif: local IP / link callback)" OFF)
+option(CONFIG_ENABLE_BLUETOOTH "Build core_bluetooth and BLE cloud sources" OFF)
+option(CONFIG_ENABLE_NIMBLE "Include NimBLE sources in core_bluetooth" OFF)
+option(CONFIG_ENABLE_CELLULAR "Build core_cellular and cellular netmgr sources" OFF)
 option(CONFIG_ENABLE_PLATFORM_MBEDTLS "Use platform mbedTLS instead of the bundled copy" OFF)
 option(CONFIG_ENABLE_DEVICE_TIMER "Include tuya_device_timer.c in tuya_cloud_service" OFF)
-option(CONFIG_ENABLE_EXT_RAM "Mount the ex-RAM (PSRAM) ops members and build tal_ex_ram_* (default OFF)" OFF)
+option(CONFIG_ENABLE_EXT_RAM "Mount the ex-RAM (PSRAM) ops members and build core_ex_ram_* (default OFF)" OFF)
 option(CONFIG_ENABLE_TUYA_P2P "Build tuya_p2p subtree" OFF)
 # Default ON: when disabled, the LAN protocol is not compiled and the port does
 # not need to adapt LAN-related net ops (accept/listen/send_to/recvfrom/recv_nd_size).

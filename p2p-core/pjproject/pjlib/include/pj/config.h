@@ -115,7 +115,7 @@
 
 #elif defined(PJ_TUYAOS) && PJ_TUYAOS != 0
 /*
- * TuyaOpen unified profile (TAL/TKL on LINUX host and MCU/lwIP).
+ * TuyaOpen unified profile (CORE/TKL on LINUX host and MCU/lwIP).
  * Must be selected before the generic __linux__ branch so PJ_TUYAOS=1 wins.
  */
 #include <pj/compat/os_tuyaos.h>

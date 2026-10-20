@@ -20,10 +20,10 @@
  * in all copies or substantial portions of the Software.
  *
  */
-#include "tal_memory.h"
-#include "tal_thread.h"
-#include "tal_system.h"
-#include "tal_mutex.h"
+#include "core_memory.h"
+#include "core_thread.h"
+#include "core_system.h"
+#include "core_mutex.h"
 #include "tuya_ringbuf.h"
 #include "uni_log.h"
 #include "tuya_ai_agent.h"
@@ -31,8 +31,8 @@
 #include "base_event.h"
 #include "tuya_ai_internal.h"
 #include "tuya_ai_input.h"
-#include "tal_queue.h"
-#include "tal_sw_timer.h"
+#include "core_queue.h"
+#include "core_sw_timer.h"
 
 #ifndef AI_INPUT_STACK_SIZE
 #define AI_INPUT_STACK_SIZE (4608)
@@ -68,17 +68,17 @@ STATIC AI_INPUT_CTX_T ai_input_ctx;
 STATIC AI_INPUT_SESSION_CTX_T* __ai_get_sctx(CHAR_T *scode)
 {
     UINT_T idx = 0;
-    tal_mutex_lock(ai_input_ctx.mutex);
+    core_mutex_lock(ai_input_ctx.mutex);
     for (idx = 0; idx < AI_SESSION_MAX_NUM; idx++) {
         if (ai_input_ctx.sctx[idx] != NULL) {
             if ((!scode && ai_input_ctx.sctx[idx]->scode[0] == 0) ||
                 (scode && strncmp(ai_input_ctx.sctx[idx]->scode, scode, AI_SOLUTION_CODE_LEN) == 0)) {
-                tal_mutex_unlock(ai_input_ctx.mutex);
+                core_mutex_unlock(ai_input_ctx.mutex);
                 return ai_input_ctx.sctx[idx];
             }
         }
     }
-    tal_mutex_unlock(ai_input_ctx.mutex);
+    core_mutex_unlock(ai_input_ctx.mutex);
     return NULL;
 }
 
@@ -91,12 +91,12 @@ STATIC AI_INPUT_SESSION_CTX_T* __ai_crt_sctx(CHAR_T *scode)
         return sctx;
     }
 
-    tal_mutex_lock(ai_input_ctx.mutex);
+    core_mutex_lock(ai_input_ctx.mutex);
     for (idx = 0; idx < AI_SESSION_MAX_NUM; idx++) {
         if (ai_input_ctx.sctx[idx] == NULL) {
             ai_input_ctx.sctx[idx] = (AI_INPUT_SESSION_CTX_T *)Malloc(SIZEOF(AI_INPUT_SESSION_CTX_T));
             if (ai_input_ctx.sctx[idx] == NULL) {
-                tal_mutex_unlock(ai_input_ctx.mutex);
+                core_mutex_unlock(ai_input_ctx.mutex);
                 PR_ERR("malloc session ctx failed");
                 return NULL;
             }
@@ -104,20 +104,20 @@ STATIC AI_INPUT_SESSION_CTX_T* __ai_crt_sctx(CHAR_T *scode)
             if (scode) {
                 strncpy(ai_input_ctx.sctx[idx]->scode, scode, AI_SOLUTION_CODE_LEN);
             }
-            rt = tal_queue_create_init(&ai_input_ctx.sctx[idx]->queue, SIZEOF(AI_INPUT_STATE_E), 3);
+            rt = core_queue_create_init(&ai_input_ctx.sctx[idx]->queue, SIZEOF(AI_INPUT_STATE_E), 3);
             if (rt != OPRT_OK) {
                 PR_ERR("create input queue failed");
                 Free(ai_input_ctx.sctx[idx]);
                 ai_input_ctx.sctx[idx] = NULL;
-                tal_mutex_unlock(ai_input_ctx.mutex);
+                core_mutex_unlock(ai_input_ctx.mutex);
                 return NULL;
             }
-            tal_mutex_unlock(ai_input_ctx.mutex);
+            core_mutex_unlock(ai_input_ctx.mutex);
             return ai_input_ctx.sctx[idx];
         }
     }
     PR_ERR("crt ctx full");
-    tal_mutex_unlock(ai_input_ctx.mutex);
+    core_mutex_unlock(ai_input_ctx.mutex);
     return NULL;
 }
 
@@ -133,7 +133,7 @@ STATIC TUYA_RINGBUFF_T __ai_crt_ringbuf(CHAR_T *scode)
         return sctx->ringbuf;
     }
 
-    tal_mutex_lock(ai_input_ctx.mutex);
+    core_mutex_lock(ai_input_ctx.mutex);
 #if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
     rt = tuya_ring_buff_create(AI_INPUT_RINGBUF_SIZE, OVERFLOW_PSRAM_STOP_TYPE, &sctx->ringbuf);
 #else
@@ -141,10 +141,10 @@ STATIC TUYA_RINGBUFF_T __ai_crt_ringbuf(CHAR_T *scode)
 #endif
     if (rt != OPRT_OK) {
         PR_ERR("create input ringbuf failed");
-        tal_mutex_unlock(ai_input_ctx.mutex);
+        core_mutex_unlock(ai_input_ctx.mutex);
         return NULL;
     }
-    tal_mutex_unlock(ai_input_ctx.mutex);
+    core_mutex_unlock(ai_input_ctx.mutex);
     return sctx->ringbuf;
 }
 
@@ -158,7 +158,7 @@ STATIC VOID __ai_free_sctx(VOID)
                 ai_input_ctx.sctx[idx]->ringbuf = NULL;
             }
             if (ai_input_ctx.sctx[idx]->queue) {
-                tal_queue_free(ai_input_ctx.sctx[idx]->queue);
+                core_queue_free(ai_input_ctx.sctx[idx]->queue);
                 ai_input_ctx.sctx[idx]->queue = NULL;
             }
             Free(ai_input_ctx.sctx[idx]);
@@ -190,10 +190,10 @@ STATIC OPERATE_RET __ai_ringbuf_write(AI_RINGBUF_HEAD_T *head, BYTE_T *data)
         return OPRT_COM_ERROR;
     }
 
-    tal_mutex_lock(ai_input_ctx.mutex);
+    core_mutex_lock(ai_input_ctx.mutex);
     UINT_T free_size = tuya_ring_buff_free_size_get(ringbuf);
     if (free_size < (SIZEOF(AI_RINGBUF_HEAD_T) + head->len)) {
-        tal_mutex_unlock(ai_input_ctx.mutex);
+        core_mutex_unlock(ai_input_ctx.mutex);
         return OPRT_RESOURCE_NOT_READY;
     }
     rt = tuya_ring_buff_write(ringbuf, (VOID_T *)head, SIZEOF(AI_RINGBUF_HEAD_T));
@@ -206,12 +206,12 @@ STATIC OPERATE_RET __ai_ringbuf_write(AI_RINGBUF_HEAD_T *head, BYTE_T *data)
         PR_ERR("ring buf write pbuf failed %d %d", rt, head->len);
         goto EXIT;
     }
-    tal_mutex_unlock(ai_input_ctx.mutex);
+    core_mutex_unlock(ai_input_ctx.mutex);
     return OPRT_OK;
 
 EXIT:
     tuya_ring_buff_reset(ringbuf);
-    tal_mutex_unlock(ai_input_ctx.mutex);
+    core_mutex_unlock(ai_input_ctx.mutex);
     return OPRT_COM_ERROR;
 }
 
@@ -261,7 +261,7 @@ STATIC BOOL_T tuya_ai_input_is_started_s(CHAR_T *scode)
     }
 
     while (!sctx->queue_sync) {
-        tal_system_sleep(50);
+        core_system_sleep(50);
         if (cnt++ > 100) {
             PR_ERR("input failed, ai input not started");
             return FALSE;
@@ -285,7 +285,7 @@ OPERATE_RET tuya_ai_audio_input_s(CHAR_T *scode, UINT64_T timestamp, UINT64_T pt
     }
     rt = __ai_ringbuf_write(&head, data);
     while (rt == OPRT_RESOURCE_NOT_READY) {
-        tal_system_sleep(10);
+        core_system_sleep(10);
         rt = __ai_ringbuf_write(&head, data);
         if (cnt++ > 1000) {
             PR_ERR("audio input failed %d", rt);
@@ -323,7 +323,7 @@ VOID tuya_ai_input_start_s(CHAR_T *scode, BOOL_T force)
     }
 
     sctx->queue_sync = FALSE;
-    rt = tal_queue_post(sctx->queue, &state, 0);
+    rt = core_queue_post(sctx->queue, &state, 0);
     if (OPRT_OK != rt) {
         PR_ERR("queue post err, rt:%d", rt);
     } else {
@@ -349,13 +349,13 @@ VOID tuya_ai_input_stop_s(CHAR_T *scode)
     sctx->lazy_input = 0;
     sctx->queue_sync = FALSE;
 
-    rt = tal_queue_post(sctx->queue, &state, 0);
+    rt = core_queue_post(sctx->queue, &state, 0);
     if (OPRT_OK != rt) {
         PR_ERR("queue post err, rt:%d", rt);
     } else {
         PR_DEBUG("ai input stop, state:%d", state);
         while (!sctx->queue_sync) {
-            tal_system_sleep(100);
+            core_system_sleep(100);
             if (cnt++ >= 5) {
                 PR_ERR("ai input stop timeout, cnt:%d", cnt);
                 break;
@@ -373,7 +373,7 @@ VOID tuya_ai_input_deinit(VOID)
 STATIC VOID __ai_input_free(VOID)
 {
     if (ai_input_ctx.thread) {
-        tal_thread_delete(ai_input_ctx.thread);
+        core_thread_delete(ai_input_ctx.thread);
         ai_input_ctx.thread = NULL;
     }
     if (ai_input_ctx.input_buf) {
@@ -381,7 +381,7 @@ STATIC VOID __ai_input_free(VOID)
         ai_input_ctx.input_buf = NULL;
     }
     if (ai_input_ctx.mutex) {
-        tal_mutex_release(ai_input_ctx.mutex);
+        core_mutex_release(ai_input_ctx.mutex);
         ai_input_ctx.mutex = NULL;
     }
     __ai_free_sctx();
@@ -396,17 +396,17 @@ STATIC VOID __ai_input_thread(VOID* arg)
     AI_INPUT_STATE_E queue_state = AI_INPUT_IDLE, new_state = AI_INPUT_IDLE;
     AI_RINGBUF_HEAD_T head = {0};
 
-    while (!ai_input_ctx.terminate && tal_thread_get_state(ai_input_ctx.thread) == THREAD_STATE_RUNNING) {
+    while (!ai_input_ctx.terminate && core_thread_get_state(ai_input_ctx.thread) == THREAD_STATE_RUNNING) {
         for (idx = 0; idx < AI_SESSION_MAX_NUM; idx++) {
             BOOL_T need_unlock = TRUE;
-            tal_mutex_lock(ai_input_ctx.mutex);
+            core_mutex_lock(ai_input_ctx.mutex);
             if (ai_input_ctx.sctx[idx] != NULL) {
                 AI_INPUT_SESSION_CTX_T sctx = {0};
                 memcpy(&sctx, ai_input_ctx.sctx[idx], SIZEOF(AI_INPUT_SESSION_CTX_T));
-                tal_mutex_unlock(ai_input_ctx.mutex);
+                core_mutex_unlock(ai_input_ctx.mutex);
                 need_unlock = FALSE;
                 queue_state = new_state = sctx.state;
-                if (tal_queue_fetch(sctx.queue, &queue_state, 0) == 0) {
+                if (core_queue_fetch(sctx.queue, &queue_state, 0) == 0) {
                     PR_DEBUG("recv queue state %d, scode %s", queue_state, sctx.scode);
                 }
                 switch (queue_state) {
@@ -424,12 +424,12 @@ STATIC VOID __ai_input_thread(VOID* arg)
                         new_state = AI_INPUT_IDLE;
                     }
                     PR_DEBUG("start queue sync");
-                    tal_mutex_lock(ai_input_ctx.mutex);
+                    core_mutex_lock(ai_input_ctx.mutex);
                     if (ai_input_ctx.sctx[idx] != NULL) {
                         ai_input_ctx.sctx[idx]->state = new_state;
                         ai_input_ctx.sctx[idx]->queue_sync = TRUE;
                     }
-                    tal_mutex_unlock(ai_input_ctx.mutex);
+                    core_mutex_unlock(ai_input_ctx.mutex);
                     need_unlock = FALSE;
                 }
                 break;
@@ -445,19 +445,19 @@ STATIC VOID __ai_input_thread(VOID* arg)
                         new_state = AI_INPUT_IDLE;
                     }
                     PR_DEBUG("start lazy queue sync");
-                    tal_mutex_lock(ai_input_ctx.mutex);
+                    core_mutex_lock(ai_input_ctx.mutex);
                     if (ai_input_ctx.sctx[idx] != NULL) {
                         ai_input_ctx.sctx[idx]->state = new_state;
                         ai_input_ctx.sctx[idx]->queue_sync = TRUE;
                     }
-                    tal_mutex_unlock(ai_input_ctx.mutex);
+                    core_mutex_unlock(ai_input_ctx.mutex);
                     need_unlock = FALSE;
                 }
                 break;
                 case AI_INPUT_PROC: {
-                    tal_mutex_lock(ai_input_ctx.mutex);
+                    core_mutex_lock(ai_input_ctx.mutex);
                     rt = __ai_ringbuf_read(&sctx, &head, ai_input_ctx.input_buf);
-                    tal_mutex_unlock(ai_input_ctx.mutex);
+                    core_mutex_unlock(ai_input_ctx.mutex);
                     need_unlock = FALSE;
                     if ((rt == OPRT_OK) && (head.len > 0)) {
                         tuya_ai_agent_upload_stream(sctx.scode, head.type, &head.biz, ai_input_ctx.input_buf, head.len, head.total_len);
@@ -465,7 +465,7 @@ STATIC VOID __ai_input_thread(VOID* arg)
                 }
                 break;
                 case AI_INPUT_STOPPING: {
-                    tal_mutex_lock(ai_input_ctx.mutex);
+                    core_mutex_lock(ai_input_ctx.mutex);
                     if (sctx.lazy_input < 30) {
                         rt = __ai_ringbuf_read(&sctx, &head, ai_input_ctx.input_buf);
                         if ((rt == OPRT_OK) && (head.len > 0)) {
@@ -480,7 +480,7 @@ STATIC VOID __ai_input_thread(VOID* arg)
                         ai_input_ctx.sctx[idx]->state = new_state;
                         ai_input_ctx.sctx[idx]->lazy_input++;
                     }
-                    tal_mutex_unlock(ai_input_ctx.mutex);
+                    core_mutex_unlock(ai_input_ctx.mutex);
                     need_unlock = FALSE;
                     if ((rt == OPRT_OK) && (head.len > 0)) {
                         tuya_ai_agent_upload_stream(sctx.scode, head.type, &head.biz, ai_input_ctx.input_buf, head.len, head.total_len);
@@ -489,13 +489,13 @@ STATIC VOID __ai_input_thread(VOID* arg)
                 break;
                 case AI_INPUT_STOP: {
                     tuya_ai_agent_end(sctx.scode);
-                    tal_mutex_lock(ai_input_ctx.mutex);
+                    core_mutex_lock(ai_input_ctx.mutex);
                     if (ai_input_ctx.sctx[idx] != NULL) {
                         tuya_ring_buff_reset(ai_input_ctx.sctx[idx]->ringbuf);
                         ai_input_ctx.sctx[idx]->state = AI_INPUT_IDLE;
                         ai_input_ctx.sctx[idx]->queue_sync = TRUE;
                     }
-                    tal_mutex_unlock(ai_input_ctx.mutex);
+                    core_mutex_unlock(ai_input_ctx.mutex);
                     need_unlock = FALSE;
                 }
                 break;
@@ -507,10 +507,10 @@ STATIC VOID __ai_input_thread(VOID* arg)
             }
 
             if (need_unlock) {
-                tal_mutex_unlock(ai_input_ctx.mutex);
+                core_mutex_unlock(ai_input_ctx.mutex);
             }
         }
-        tal_system_sleep(AI_INPUT_TASK_DELAY);
+        core_system_sleep(AI_INPUT_TASK_DELAY);
     }
     __ai_input_free();
 }
@@ -522,7 +522,7 @@ OPERATE_RET tuya_ai_input_init(VOID)
         return OPRT_OK;
     }
     memset(&ai_input_ctx, 0, SIZEOF(ai_input_ctx));
-    TUYA_CALL_ERR_RETURN(tal_mutex_create_init(&ai_input_ctx.mutex));
+    TUYA_CALL_ERR_RETURN(core_mutex_create_init(&ai_input_ctx.mutex));
     ai_input_ctx.input_buf = Malloc(AI_INPUT_BUF_SIZE);
     TUYA_CHECK_NULL_GOTO(ai_input_ctx.input_buf, EXIT);
 
@@ -533,7 +533,7 @@ OPERATE_RET tuya_ai_input_init(VOID)
 #if defined(AI_STACK_IN_EXT_RAM) && (AI_STACK_IN_EXT_RAM == 1)
     thrd_param.ex_ram_mode = 1;
 #endif
-    rt = tal_thread_create_and_start(&ai_input_ctx.thread, NULL, NULL, __ai_input_thread, NULL, &thrd_param);
+    rt = core_thread_create_and_start(&ai_input_ctx.thread, NULL, NULL, __ai_input_thread, NULL, &thrd_param);
     if (OPRT_OK != rt) {
         PR_ERR("ai inpput thread create err, rt:%d", rt);
         goto EXIT;

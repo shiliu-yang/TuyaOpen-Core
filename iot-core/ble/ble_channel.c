@@ -11,7 +11,7 @@
  *
  */
 
-#include "tal_api.h"
+#include "core_api.h"
 #include "ble_channel.h"
 
 #define SUBPACKET_RECV_ALL_DONE         0
@@ -150,7 +150,7 @@ static void __response_to_app_by_subpack(uint16_t type)
         return;
     }
 
-    pkg_buff = tal_malloc(TUYA_BLE_TRANS_DATA_SUBPACK_LEN);
+    pkg_buff = core_malloc(TUYA_BLE_TRANS_DATA_SUBPACK_LEN);
     if (NULL == pkg_buff) {
         PR_ERR("malloc error in __get_timer_data");
         return;
@@ -189,7 +189,7 @@ static void __response_to_app_by_subpack(uint16_t type)
         s_ble_channel_mgr.subpack_no++;
     }
 
-    tal_free(pkg_buff);
+    core_free(pkg_buff);
 }
 
 /**
@@ -210,7 +210,7 @@ void ble_channle_ack(uint16_t type, uint8_t *data, uint32_t len)
 {
     if (s_ble_channel_mgr.rsp_data) {
         PR_ERR("pre subpack data overwrite!");
-        tal_free(s_ble_channel_mgr.rsp_data);
+        core_free(s_ble_channel_mgr.rsp_data);
     }
 
     memset(&s_ble_channel_mgr, 0, sizeof(s_ble_channel_mgr));
@@ -273,7 +273,7 @@ void ble_session_channel_process(ble_packet_t *req, void *user_data)
                 PR_DEBUG("first downlink subpacket, totalLen:%u", totalLen);
 
                 if (pBuffer) {
-                    tal_free(pBuffer);
+                    core_free(pBuffer);
                     pBuffer = NULL;
                 }
                 // below the channel type bytes or above the reassembly cap
@@ -282,7 +282,7 @@ void ble_session_channel_process(ble_packet_t *req, void *user_data)
                     return;
                 }
                 // spare byte terminates the payload for cJSON_Parse
-                pBuffer = tal_malloc(totalLen + 1);
+                pBuffer = core_malloc(totalLen + 1);
                 if (NULL == pBuffer) {
                     PR_ERR("malloc error for pBuffer in __handle_bt_timer_task");
                     return;
@@ -322,10 +322,10 @@ void ble_session_channel_process(ble_packet_t *req, void *user_data)
                      "curSubpacketLen:%u, receivedLen:%u, totalLen:%u",
                      curSubpacketNo, curSubpacketLen, receivedLen, totalLen);
 
-            ble_channel_ack_t *pAck = tal_malloc(sizeof(ble_channel_ack_t));
+            ble_channel_ack_t *pAck = core_malloc(sizeof(ble_channel_ack_t));
             if (pAck == NULL) {
                 PR_ERR("malloc error for pAck in __handle_bt_timer_task");
-                tal_free(pBuffer);
+                core_free(pBuffer);
                 pBuffer = NULL;
                 return;
             }
@@ -338,11 +338,11 @@ void ble_session_channel_process(ble_packet_t *req, void *user_data)
             if (receivedLen < totalLen) {
                 pAck->status = SUBPACKET_RECV_ONE_AND_NEXT;
                 tuya_ble_send(req->type, req->sn, (uint8_t *)pAck, sizeof(ble_channel_ack_t));
-                tal_free(pAck);
+                core_free(pAck);
             } else {
                 pAck->status = SUBPACKET_RECV_ALL_DONE;
                 tuya_ble_send(req->type, req->sn, (uint8_t *)pAck, sizeof(ble_channel_ack_t));
-                tal_free(pAck);
+                core_free(pAck);
 
                 tuya_ble_raw_print("recv_donwlink_cmd", 16, pBuffer, totalLen);
                 ble_channel_process(pBuffer);
@@ -361,7 +361,7 @@ void ble_session_channel_process(ble_packet_t *req, void *user_data)
         uint8_t status = pRawData[2];
         if (status == 0) { // complete subpack send
             if (s_ble_channel_mgr.rsp_data) {
-                tal_free(s_ble_channel_mgr.rsp_data);
+                core_free(s_ble_channel_mgr.rsp_data);
             }
             memset(&s_ble_channel_mgr, 0, sizeof(s_ble_channel_mgr));
         } else if (status == 1) { // continue subpack send

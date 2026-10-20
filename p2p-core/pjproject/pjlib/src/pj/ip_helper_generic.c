@@ -355,11 +355,11 @@ static pj_status_t if_enum_by_af(int af, unsigned *p_cnt, pj_sockaddr ifs[])
 }
 
 #elif defined(PJ_TUYAOS) && PJ_TUYAOS != 0
-#include "tal_local_ip.h"
+#include "core_local_ip.h"
 #include <stdio.h>
 
 /**
- * @brief Enumerate local IPv4 via TAL WiFi STA address (no getifaddrs on RTOS)
+ * @brief Enumerate local IPv4 via CORE WiFi STA address (no getifaddrs on RTOS)
  * @param[in] af address family
  * @param[in,out] p_cnt in: capacity, out: count
  * @param[out] ifs output addresses
@@ -375,7 +375,7 @@ static pj_status_t if_enum_by_af(int af, unsigned *p_cnt, pj_sockaddr ifs[])
         *p_cnt = 0;
         return PJ_ENOTFOUND;
     }
-    if (tal_compat_get_sta_ipv4_nbo(&nbo) != 0) {
+    if (core_compat_get_sta_ipv4_nbo(&nbo) != 0) {
         *p_cnt = 0;
         return PJ_ENOTFOUND;
     }

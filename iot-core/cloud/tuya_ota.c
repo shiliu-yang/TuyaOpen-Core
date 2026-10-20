@@ -15,7 +15,7 @@
 
 #include "tuya_iot.h"
 #include "cJSON.h"
-#include "tal_api.h"
+#include "core_api.h"
 #include "tuya_cloud_com_defs.h"
 #include "dev_evt.h"
 #include "tuya_endpoint.h"
@@ -29,7 +29,7 @@ typedef struct {
     uint8_t channel;
     uint8_t progress_percent;
     THREAD_HANDLE upgrade_thrd;
-    TAL_HASH_HANDLE sha256;
+    CORE_HASH_HANDLE sha256;
 } tuya_ota_t;
 
 int tuya_ota_upgrade_status_report(tuya_ota_t *handle, int status);
@@ -51,14 +51,14 @@ static void file_download_event_cb(http_download_event_id_t id, http_download_ev
         PR_DEBUG("DL_EVENT_START");
         tuya_dev_evt_notify(DEV_EVT_OTA, ACTION_BEFORE, NULL);
         tuya_ota_upgrade_status_report(ota, TUS_UPGRDING);
-        tal_sha256_create_init(&ota->sha256);
-        tal_sha256_starts_ret(ota->sha256, 0);
+        core_sha256_create_init(&ota->sha256);
+        core_sha256_starts_ret(ota->sha256, 0);
         break;
 
     case DL_EVENT_ON_FILESIZE:
         PR_DEBUG("DL_EVENT_ON_FILESIZE");
         if (0 == ota->channel) {
-            tal_ota_start_notify(event->file_size, TUYA_OTA_FULL, TUYA_OTA_PATH_AIR);
+            core_ota_start_notify(event->file_size, TUYA_OTA_FULL, TUYA_OTA_PATH_AIR);
         } else if (event_cb) {
             ota->event.id = TUYA_OTA_EVENT_START;
             ota->event.file_size = event->file_size;
@@ -78,11 +78,11 @@ static void file_download_event_cb(http_download_event_id_t id, http_download_ev
             ota_pack.data = event->data;
             ota_pack.len = event->data_len;
             ota_pack.pri_data = NULL;
-            tal_ota_data_process(&ota_pack, (uint32_t *)&event->remain_len);
+            core_ota_data_process(&ota_pack, (uint32_t *)&event->remain_len);
             if (event->remain_len) {
-                tal_sha256_update_ret(ota->sha256, event->data, event->data_len - event->remain_len);
+                core_sha256_update_ret(ota->sha256, event->data, event->data_len - event->remain_len);
             } else {
-                tal_sha256_update_ret(ota->sha256, event->data, event->data_len);
+                core_sha256_update_ret(ota->sha256, event->data, event->data_len);
             }
         } else if (event_cb) {
             ota->event.id = TUYA_OTA_EVENT_ON_DATA;
@@ -104,10 +104,10 @@ static void file_download_event_cb(http_download_event_id_t id, http_download_ev
         PR_DEBUG("DL_EVENT_FINISH");
         tuya_dev_evt_notify(DEV_EVT_OTA, ACTION_AFTER, NULL);
         PR_DEBUG("File Download Percent: %d%%", 100);
-        tal_sha256_finish_ret(ota->sha256, file_hmac);
-        tal_sha256_free(ota->sha256);
+        core_sha256_finish_ret(ota->sha256, file_hmac);
+        core_sha256_free(ota->sha256);
         hex2str((uint8_t *)file_sha256, file_hmac, 32);
-        tal_sha256_mac((const uint8_t *)client->activate.seckey, strlen(client->activate.seckey), file_sha256, 32 * 2,
+        core_sha256_mac((const uint8_t *)client->activate.seckey, strlen(client->activate.seckey), file_sha256, 32 * 2,
                        file_hmac);
         ascs2hex(self_hmac, (uint8_t *)(ota->msg.fw_hmac), FW_HMAC_LEN);
         if ((memcmp(self_hmac, file_hmac, 32) == 0)) {
@@ -115,7 +115,7 @@ static void file_download_event_cb(http_download_event_id_t id, http_download_ev
             tuya_ota_upgrade_progress_report(ota, 100);
             tuya_ota_upgrade_status_report(ota, TUS_UPGRD_FINI);
             if (0 == ota->channel) {
-                tal_ota_end_notify(TRUE);
+                core_ota_end_notify(TRUE);
             } else if (event_cb) {
                 ota->event.id = TUYA_OTA_EVENT_FINISH;
                 event_cb(&ota->msg, &ota->event);
@@ -153,7 +153,7 @@ int tuya_ota_init(tuya_ota_config_t *config)
         return OPRT_OK;
     }
 
-    s_ota_ctx = tal_malloc(sizeof(tuya_ota_t));
+    s_ota_ctx = core_malloc(sizeof(tuya_ota_t));
     if (NULL == s_ota_ctx) {
         return OPRT_MALLOC_FAILED;
     }
@@ -184,7 +184,7 @@ static void ota_process_thread_func(void *arg)
     download_cfg.user_data = ota;
 
     http_file_download(&download_cfg);
-    tal_free(cert);
+    core_free(cert);
 }
 
 /**
@@ -218,7 +218,7 @@ int tuya_ota_start(cJSON *upgrade)
     thrd_param.priority = THREAD_PRIO_3;
     thrd_param.stackDepth = 4086;
     thrd_param.thrdname = "tuya_ota";
-    rt = tal_thread_create_and_start(&(ota->upgrade_thrd), NULL, NULL, ota_process_thread_func, ota, &thrd_param);
+    rt = core_thread_create_and_start(&(ota->upgrade_thrd), NULL, NULL, ota_process_thread_func, ota, &thrd_param);
 
     return rt;
 }

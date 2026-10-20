@@ -10,11 +10,11 @@
 //#include "mqc_app.h"
 //#include "tuya_tls.h"
 //#include "iot_httpc.h"
-#include "tal_memory.h"
-#include "tal_system.h"
-#include "tal_time_service.h"
+#include "core_memory.h"
+#include "core_system.h"
+#include "core_time_service.h"
 
-#include "tal_kv.h"
+#include "core_kv.h"
 #include "tuya_iot.h"
 #include "atop_service.h"
 
@@ -34,7 +34,7 @@ OPERATE_RET httpc_ipc_p2p_cfg_get_v20(const char *gw_id, const int p2p_type, cJS
     // HTTPC_NULL_CHECK(result);
 
     TIME_T timestamp = 0;
-    timestamp = tal_time_get_posix();
+    timestamp = core_time_get_posix();
 
     char *post_data = malloc(64);
     if (post_data == NULL) {
@@ -65,7 +65,7 @@ OPERATE_RET httpc_ipc_p2p_passwd_update_v10(const char *gw_id, const char *p2p_p
     // HTTPC_NULL_CHECK(result);
 
     TIME_T timestamp = 0;
-    timestamp = tal_time_get_posix();
+    timestamp = core_time_get_posix();
 
     char *post_data = Malloc(128);
     if (post_data == NULL) {
@@ -142,14 +142,14 @@ OPERATE_RET tuya_ipc_p2p_get_pw(char p2p_pw[])
     uint8_t new_pwd[P2P_PASSWD_LEN + 1] = {0};
     int rtyCnt = 0;
 
-    OPERATE_RET ret = tal_kv_get("p2p_pwd", &(old_pwd), &old_pwd_len);
+    OPERATE_RET ret = core_kv_get("p2p_pwd", &(old_pwd), &old_pwd_len);
     if ((OPRT_OK != ret) || (0 == old_pwd[0])) {
         if (sg_p2p_passwd_update_flag == FALSE) {
             sg_p2p_passwd_update_flag = TRUE;
 
             // Loop to get pw
             while (rtyCnt < P2P_AUTH_INFO_UPDATE_RETRY_CNT) {
-                TIME_T curtime = tal_time_get_posix();
+                TIME_T curtime = core_time_get_posix();
                 memset(new_pwd, 0x00, P2P_PASSWD_LEN + 1);
 
                 snprintf((char *)new_pwd, P2P_PASSWD_LEN + 1, "ad%06x", (int)curtime & 0xFFFFFF);
@@ -158,7 +158,7 @@ OPERATE_RET tuya_ipc_p2p_get_pw(char p2p_pw[])
                     cJSON_Delete(result);
                     PR_DEBUG("passwd update failed [%d]", rtyCnt);
                     rtyCnt++;
-                    tal_system_sleep(500);
+                    core_system_sleep(500);
                     continue;
                 }
                 cJSON_Delete(result);
@@ -170,27 +170,27 @@ OPERATE_RET tuya_ipc_p2p_get_pw(char p2p_pw[])
                 return OPRT_COM_ERROR;
             } else {
                 snprintf(p2p_pw, P2P_PASSWD_LEN + 1, "%s", (char *)new_pwd);
-                tal_kv_set("p2p_pwd", (const uint8_t *)p2p_pw, P2P_PASSWD_LEN + 1);
+                core_kv_set("p2p_pwd", (const uint8_t *)p2p_pw, P2P_PASSWD_LEN + 1);
             }
         } else {
             PR_DEBUG("p2p passwd wait for passwd update\n");
             int wait_times = P2P_AUTH_INFO_UPDATE_RETRY_CNT;
             do {
-                OPERATE_RET ret = tal_kv_get("p2p_pwd", &(old_pwd), &old_pwd_len);
+                OPERATE_RET ret = core_kv_get("p2p_pwd", &(old_pwd), &old_pwd_len);
                 if (ret == OPRT_OK) {
                     // PR_DEBUG("get p2p passwd = %s",old_pwd);
                     snprintf(p2p_pw, P2P_PASSWD_LEN + 1, "%s", (char *)old_pwd);
-                    tal_free(old_pwd);
+                    core_free(old_pwd);
                     break;
                 } else {
-                    tal_system_sleep(500);
+                    core_system_sleep(500);
                 }
             } while (--wait_times);
         }
     } else {
 
         snprintf(p2p_pw, P2P_PASSWD_LEN + 1, "%s", (char *)old_pwd);
-        tal_free(old_pwd);
+        core_free(old_pwd);
         if (sg_p2p_pwd_cloud_synced == FALSE && sg_p2p_passwd_update_flag == FALSE) {
             OPERATE_RET sync_ret;
             sg_p2p_passwd_update_flag = TRUE;
@@ -223,7 +223,7 @@ OPERATE_RET tuya_ipc_p2p_get_lk(char p2p_lk[])
             break;
         } else {
             PR_DEBUG("p2p get local key failed, wait: %d\n", wait_lk);
-            tal_system_sleep(10);
+            core_system_sleep(10);
         }
     } while (--wait_lk);
     // PR_DEBUG("get local_key = %s",p2p_lk);
@@ -250,7 +250,7 @@ OPERATE_RET tuya_ipc_p2p_get_id(char p2p_id[])
     uint8_t *p_auth_str = NULL;
     size_t   auth_param_len = 0;
 
-    OPERATE_RET ret = tal_kv_get("p2p_auth_info", &p_auth_str, &auth_param_len);
+    OPERATE_RET ret = core_kv_get("p2p_auth_info", &p_auth_str, &auth_param_len);
     if ((ret != OPRT_OK) || (0 == p_auth_str[0])) {
         PR_ERR("read p2p_auth_info fails ..%d", ret);
         return OPRT_COM_ERROR;
@@ -260,7 +260,7 @@ OPERATE_RET tuya_ipc_p2p_get_id(char p2p_id[])
     cJSON *p_authjson = cJSON_Parse((char *)p_auth_str);
     if (NULL == p_authjson) {
         PR_ERR("parse json fails");
-        tal_free(p_auth_str);
+        core_free(p_auth_str);
         return OPRT_CJSON_PARSE_ERR;
     }
     cJSON *p_child = NULL;
@@ -271,7 +271,7 @@ OPERATE_RET tuya_ipc_p2p_get_id(char p2p_id[])
     }
 
     cJSON_Delete(p_authjson);
-    tal_free(p_auth_str);
+    core_free(p_auth_str);
 
     return OPRT_OK;
 }
@@ -306,7 +306,7 @@ OPERATE_RET tuya_ipc_get_p2p_auth_proc()
 
     if (ret == OPRT_OK) {
         // PR_DEBUG("SY P2P AUTH:%s",tmp_str);
-        tal_kv_set("p2p_auth_info", (uint8_t *)tmp_str, strlen(tmp_str) + 1);
+        core_kv_set("p2p_auth_info", (uint8_t *)tmp_str, strlen(tmp_str) + 1);
         cJSON_free(tmp_str);
     }
 
@@ -336,8 +336,8 @@ OPERATE_RET tuya_ipc_check_p2p_auth_update(void)
     int rtyCnt = 0;
     BOOL_T isNeedReLoad = FALSE;
 
-    OPERATE_RET ret = tal_kv_get("p2p_auth_info", &p_auth_str, &auth_param_len);
-    OPERATE_RET ret2 = tal_kv_get("p2p_type", &p_type, &p2p_type_len);
+    OPERATE_RET ret = core_kv_get("p2p_auth_info", &p_auth_str, &auth_param_len);
+    OPERATE_RET ret2 = core_kv_get("p2p_type", &p_type, &p2p_type_len);
 
     if ((OPRT_OK != ret) || (OPRT_OK != ret2)) {
         isNeedReLoad = TRUE;
@@ -367,8 +367,8 @@ OPERATE_RET tuya_ipc_check_p2p_auth_update(void)
             }
         }
     }
-    tal_free(p_type);
-    tal_free(p_auth_str);
+    core_free(p_type);
+    core_free(p_auth_str);
 
     if (TRUE == isNeedReLoad) {
         char new_str_p2p_type[P2P_TYPE_LEN] = {0};
@@ -383,9 +383,9 @@ OPERATE_RET tuya_ipc_check_p2p_auth_update(void)
             if (rtyCnt % 5 == 0) {
                 PR_ERR("get p2p auth retry cnt[%d]", rtyCnt);
             }
-            tal_system_sleep(1000);
+            core_system_sleep(1000);
         }
-        tal_kv_set("p2p_type", (uint8_t *)new_str_p2p_type, strlen(new_str_p2p_type) + 1);
+        core_kv_set("p2p_type", (uint8_t *)new_str_p2p_type, strlen(new_str_p2p_type) + 1);
     } else {
         PR_DEBUG("no need update p2p_auth_info from service");
     }
@@ -400,18 +400,18 @@ int iot_gw_reset_cb(void *rst_tp)
 
     char new_auth[P2P_ID_LEN + 1];
     memset(new_auth, 0x00, sizeof(new_auth));
-    if (OPRT_OK != tal_kv_set("p2p_auth_info", (uint8_t *)new_auth, strlen(new_auth) + 1)) {
+    if (OPRT_OK != core_kv_set("p2p_auth_info", (uint8_t *)new_auth, strlen(new_auth) + 1)) {
         PR_ERR("reset  p2p_auth_info failed");
     }
     char new_pwd[P2P_PASSWD_LEN + 1];
     memset(new_pwd, 0x00, sizeof(new_pwd));
-    if (OPRT_OK != tal_kv_set("p2p_pwd", (uint8_t *)new_pwd, strlen(new_pwd) + 1)) {
+    if (OPRT_OK != core_kv_set("p2p_pwd", (uint8_t *)new_pwd, strlen(new_pwd) + 1)) {
         PR_ERR("reset  p2p_pwd failed");
     }
 
     uint8_t new_type[P2P_TYPE_LEN + 1];
     memset(new_type, 0x00, sizeof(new_type));
-    if (OPRT_OK != tal_kv_set("p2p_type", new_type, strlen((char *)new_type) + 1)) {
+    if (OPRT_OK != core_kv_set("p2p_type", new_type, strlen((char *)new_type) + 1)) {
         PR_ERR("reset  p2p_type failed");
     }
     return OPRT_OK;
@@ -431,12 +431,12 @@ BOOL_T iot_permit_mqtt_connect_cb(void)
     if (TRUE == sg_p2p_passwd_flag) {
         return TRUE;
     }
-    ret = tal_kv_get("p2p_pwd", &(old_pwd), &old_pwd_len);
+    ret = core_kv_get("p2p_pwd", &(old_pwd), &old_pwd_len);
     if ((OPRT_OK != ret) || (0 == old_pwd[0])) {
         if (sg_p2p_passwd_update_flag == FALSE) {
             sg_p2p_passwd_update_flag = TRUE;
 
-            TIME_T curtime = tal_time_get_posix();
+            TIME_T curtime = core_time_get_posix();
             memset(new_pwd, 0x00, P2P_PASSWD_LEN + 1);
 
             snprintf((char *)new_pwd, P2P_PASSWD_LEN + 1, "ad%06x", (int)curtime & 0xFFFFFF);
@@ -450,7 +450,7 @@ BOOL_T iot_permit_mqtt_connect_cb(void)
                     // set_gw_ext_stat(EXT_NET_FAIL);
                 }
             } else {
-                tal_kv_set("p2p_pwd", (uint8_t *)new_pwd, P2P_PASSWD_LEN + 1);
+                core_kv_set("p2p_pwd", (uint8_t *)new_pwd, P2P_PASSWD_LEN + 1);
                 sg_p2p_passwd_flag = TRUE;
                 ret = 0;
                 fail_cnt = 0;
@@ -462,7 +462,7 @@ BOOL_T iot_permit_mqtt_connect_cb(void)
         }
     } else {
         // PR_DEBUG("get p2p passwd = %s",old_pwd);
-        tal_free(old_pwd);
+        core_free(old_pwd);
         sg_p2p_passwd_flag = TRUE;
         ret = 0;
     }

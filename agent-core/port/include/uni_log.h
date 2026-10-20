@@ -9,7 +9,7 @@
 #define __UNI_LOG_H__
 
 #include "tuya_cloud_types.h"
-#include "tal_log.h"
+#include "core_log.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -19,17 +19,17 @@ extern "C" {
 ************************macro define************************
 ***********************************************************/
 
-#ifndef TAL_PR_DEBUG
-#define TAL_PR_DEBUG PR_DEBUG
+#ifndef CORE_PR_DEBUG
+#define CORE_PR_DEBUG PR_DEBUG
 #endif
-#ifndef TAL_PR_INFO
-#define TAL_PR_INFO  PR_INFO
+#ifndef CORE_PR_INFO
+#define CORE_PR_INFO  PR_INFO
 #endif
-#ifndef TAL_PR_WARN
-#define TAL_PR_WARN  PR_WARN
+#ifndef CORE_PR_WARN
+#define CORE_PR_WARN  PR_WARN
 #endif
-#ifndef TAL_PR_ERR
-#define TAL_PR_ERR   PR_ERR
+#ifndef CORE_PR_ERR
+#define CORE_PR_ERR   PR_ERR
 #endif
 
 /***********************************************************

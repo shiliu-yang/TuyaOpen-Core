@@ -1,12 +1,12 @@
 /**
  * @file pj_sync_condition.h
- * @brief Condition-style sync using TAL mutex + semaphore
+ * @brief Condition-style sync using CORE mutex + semaphore
  */
 #ifndef __SYNC_CONDITION_H__
 #define __SYNC_CONDITION_H__
 
-#include "tal_mutex.h"
-#include "tal_semaphore.h"
+#include "core_mutex.h"
+#include "core_semaphore.h"
 
 typedef struct tagSyncCondition {
     MUTEX_HANDLE mutex;

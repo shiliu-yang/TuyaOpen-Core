@@ -217,8 +217,8 @@ typedef int socklen_t;
 #endif
 
 /*
- * With the TAL socket backend no system header defines FD_SETSIZE, so cap it
- * at the ioqueue capacity. TAL's own descriptor set is at least this wide on
+ * With the CORE socket backend no system header defines FD_SETSIZE, so cap it
+ * at the ioqueue capacity. CORE's own descriptor set is at least this wide on
  * every supported target.
  */
 #ifndef FD_SETSIZE

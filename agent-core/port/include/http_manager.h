@@ -18,8 +18,8 @@
  * flag): http_session_receive() returns only the status line, content length
  * and keep-alive flag, and this layer never reads the body.
  *
- * Session memory uses tal_ex_ram_malloc/tal_ex_ram_free when ENABLE_EXT_RAM is
- * enabled, and tal_malloc/tal_free otherwise.
+ * Session memory uses core_ex_ram_malloc/core_ex_ram_free when ENABLE_EXT_RAM is
+ * enabled, and core_malloc/core_free otherwise.
  */
 
 #ifndef __HTTP_MANAGER_H__
@@ -27,7 +27,7 @@
 
 #include "tuya_cloud_types.h"
 
-#include "tal_api.h"
+#include "core_api.h"
 
 #include "tuya_ai_types.h"
 #include "http_inf.h"

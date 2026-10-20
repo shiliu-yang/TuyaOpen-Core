@@ -7,7 +7,7 @@
 
 #include "gw_intf.h"
 
-#include "tal_api.h"
+#include "core_api.h"
 
 #include "tuya_iot.h"
 

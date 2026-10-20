@@ -28,7 +28,7 @@
 #include <pj/compat/socket.h>
 
 #if defined(PJ_TUYAOS) && PJ_TUYAOS != 0
-#include "tal_local_ip.h"
+#include "core_local_ip.h"
 #endif
 
 #if 0
@@ -1012,10 +1012,10 @@ PJ_DEF(pj_status_t) pj_getdefaultipinterface(int af, pj_sockaddr *addr)
     pj_str_t cp;
 
 #if defined(PJ_TUYAOS) && PJ_TUYAOS != 0
-    /* Prefer TAL WiFi STA IP; connect()+getsockname often yields 127.0.0.1 on lwIP */
+    /* Prefer CORE WiFi STA IP; connect()+getsockname often yields 127.0.0.1 on lwIP */
     if (af == PJ_AF_INET) {
         unsigned int nbo;
-        if (tal_compat_get_sta_ipv4_nbo(&nbo) == 0) {
+        if (core_compat_get_sta_ipv4_nbo(&nbo) == 0) {
             pj_sockaddr_init(PJ_AF_INET, addr, NULL, 0);
             addr->ipv4.sin_addr.s_addr = nbo;
             return PJ_SUCCESS;

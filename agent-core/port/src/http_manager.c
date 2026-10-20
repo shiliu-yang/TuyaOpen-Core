@@ -18,8 +18,8 @@
  * flag): http_session_receive() returns only the status line, content length
  * and keep-alive flag, and this layer never reads the body.
  *
- * Session memory uses tal_ex_ram_malloc/tal_ex_ram_free when ENABLE_EXT_RAM is
- * enabled, and tal_malloc/tal_free otherwise.
+ * Session memory uses core_ex_ram_malloc/core_ex_ram_free when ENABLE_EXT_RAM is
+ * enabled, and core_malloc/core_free otherwise.
  */
 
 #include "http_manager.h"
@@ -30,9 +30,9 @@
 
 #include "http_client_interface.h"
 #include "iotdns.h"
-#include "tal_api.h"
-#include "tal_log.h"
-#include "tal_memory.h"
+#include "core_api.h"
+#include "core_log.h"
+#include "core_memory.h"
 #include "tuya_error_code.h"
 #include "transport_interface.h"
 #include "core_http_client.h"
@@ -47,11 +47,11 @@
 #define HTTP_TIMEOUT_MS_DEFAULT (60 * 1000)
 
 #if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
-#define HTTP_MEMORY_MALLOC tal_ex_ram_malloc
-#define HTTP_MEMORY_FREE   tal_ex_ram_free
+#define HTTP_MEMORY_MALLOC core_ex_ram_malloc
+#define HTTP_MEMORY_FREE   core_ex_ram_free
 #else
-#define HTTP_MEMORY_MALLOC tal_malloc
-#define HTTP_MEMORY_FREE   tal_free
+#define HTTP_MEMORY_MALLOC core_malloc
+#define HTTP_MEMORY_FREE   core_free
 #endif
 
 /***********************************************************
@@ -95,7 +95,7 @@ S_HTTP_MANAGER *get_http_manager_instance(VOID_T)
 {
     if (!s_http_manager.inited) {
         memset(&s_http_manager, 0, sizeof(s_http_manager));
-        if (tal_mutex_create_init(&s_http_manager.mutex) != OPRT_OK) {
+        if (core_mutex_create_init(&s_http_manager.mutex) != OPRT_OK) {
             PR_ERR("create http manager mutex failed");
             return NULL;
         }
@@ -145,7 +145,7 @@ static SESSION_ID http_session_create_internal(const char *url, BOOL_T is_persis
     session->s = (http_session_t)ctx;
     session->state = HTTP_DISCONNECT;
 
-    tal_mutex_lock(s_http_manager.mutex);
+    core_mutex_lock(s_http_manager.mutex);
     int idx = -1;
     for (int i = 0; i < MAX_HTTP_SESSION_NUM; ++i) {
         if (NULL == s_http_manager.session[i]) {
@@ -155,7 +155,7 @@ static SESSION_ID http_session_create_internal(const char *url, BOOL_T is_persis
     }
 
     if (idx < 0) {
-        tal_mutex_unlock(s_http_manager.mutex);
+        core_mutex_unlock(s_http_manager.mutex);
         PR_ERR("no free session slot");
         http_safe_free(ctx->url);
         HTTP_MEMORY_FREE(ctx);
@@ -164,7 +164,7 @@ static SESSION_ID http_session_create_internal(const char *url, BOOL_T is_persis
     }
 
     s_http_manager.session[idx] = session;
-    tal_mutex_unlock(s_http_manager.mutex);
+    core_mutex_unlock(s_http_manager.mutex);
 
     return session;
 }
@@ -230,11 +230,11 @@ static OPERATE_RET http_session_destroy(SESSION_ID id)
         return OPRT_INVALID_PARM;
     }
 
-    tal_mutex_lock(s_http_manager.mutex);
+    core_mutex_lock(s_http_manager.mutex);
     for (int i = 0; i < MAX_HTTP_SESSION_NUM; ++i) {
         if (s_http_manager.session[i] == id) {
             s_http_manager.session[i] = NULL;
-            tal_mutex_unlock(s_http_manager.mutex);
+            core_mutex_unlock(s_http_manager.mutex);
 
             http_session_ctx_t *ctx = (http_session_ctx_t *)id->s;
             http_session_ctx_reset_response(ctx);
@@ -245,7 +245,7 @@ static OPERATE_RET http_session_destroy(SESSION_ID id)
         }
     }
 
-    tal_mutex_unlock(s_http_manager.mutex);
+    core_mutex_unlock(s_http_manager.mutex);
     return OPRT_NOT_FOUND;
 }
 

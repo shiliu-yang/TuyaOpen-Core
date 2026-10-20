@@ -36,29 +36,29 @@
  * window.
  *
  * TLS server certificates obtained during connection setup are persisted via
- * tal_kv under AI_DOMAIN_CA_KV_KEY and restored on reconnect.
+ * core_kv under AI_DOMAIN_CA_KV_KEY and restored on reconnect.
  */
 #include "gw_intf.h"
 #include "uni_log.h"
 #include "uni_random.h"
-#include "tal_system.h"
-#include "tal_hash.h"
-#include "tal_thread.h"
-#include "tal_security.h"
-#include "tal_sw_timer.h"
-#include "tal_time_service.h"
+#include "core_system.h"
+#include "core_hash.h"
+#include "core_thread.h"
+#include "core_security.h"
+#include "core_sw_timer.h"
+#include "core_time_service.h"
 #include "tuya_svc_netmgr.h"
-#include "tal_workq_service.h"
-#include "tal_memory.h"
+#include "core_workq_service.h"
+#include "core_memory.h"
 #include "tuya_ai_client.h"
 #include "base_event.h"
 #include "tuya_ai_biz.h"
-#include "tal_semaphore.h"
+#include "core_semaphore.h"
 #include "tuya_ai_mqtt.h"
 #include "tuya_ai_private.h"
 #include "tuya_cert_manager.h"
-#include "tal_event_info.h"
-#include "tal_kv.h"
+#include "core_event_info.h"
+#include "core_kv.h"
 
 #define AI_RECONN_TIME_NUM 7
 #ifndef AT_PING_TIMEOUT
@@ -173,10 +173,10 @@ STATIC OPERATE_RET __ai_auth_resp(VOID)
     }
     ai_basic_client->heartbeat_lost_cnt = 0;
     tuya_ai_client_start_ping();
-    ai_basic_client->start_time = tal_time_get_posix();
+    ai_basic_client->start_time = core_time_get_posix();
     ai_basic_client->recv_biz_pkt = FALSE;
     ai_basic_client->idle_check_enable = FALSE;
-    tal_sw_timer_start(ai_basic_client->idle_check_timer, AI_IDLE_CHECK_TIME, TAL_TIMER_ONCE);
+    core_sw_timer_start(ai_basic_client->idle_check_timer, AI_IDLE_CHECK_TIME, CORE_TIMER_ONCE);
     __ai_client_set_state(AI_STATE_RUNNING);
     ty_publish_event(EVENT_AI_CLIENT_RUN, NULL);
     return rt;
@@ -205,7 +205,7 @@ STATIC VOID __ai_client_handle_err(OPERATE_RET rt)
         UINT_T size = AI_RECONN_TIME_NUM - 1;
         sleep_random = __ai_get_random_value(ai_basic_client->reconn[ai_basic_client->reconn_cnt].min, ai_basic_client->reconn[ai_basic_client->reconn_cnt].max);
         PR_NOTICE("connect to cloud failed, sleep %d s", sleep_random);
-        tal_system_sleep(sleep_random * 1000);
+        core_system_sleep(sleep_random * 1000);
         if (ai_basic_client->reconn_cnt >= size) {
             ai_basic_client->reconn_cnt = size;
         } else {
@@ -213,33 +213,33 @@ STATIC VOID __ai_client_handle_err(OPERATE_RET rt)
         }
     } else if ((ai_basic_client->state == AI_STATE_CONNECT) || (ai_basic_client->state == AI_STATE_CLIENT_HELLO) ||
                (ai_basic_client->state == AI_STATE_AUTH_REQ) || (ai_basic_client->state == AI_STATE_AUTH_RESP)) {
-        tal_system_sleep(1000);
+        core_system_sleep(1000);
         __ai_client_set_state(AI_STATE_SETUP);
     } else if (ai_basic_client->state == AI_STATE_RUNNING) {
-        PR_NOTICE("ai client running error %d, reconnect %d", rt, tal_net_get_errno());
+        PR_NOTICE("ai client running error %d, reconnect %d", rt, core_net_get_errno());
         __ai_conn_close();
     } else {
-        tal_system_sleep(1000);
+        core_system_sleep(1000);
     }
 }
 
 STATIC VOID __ai_stop_alive_time()
 {
     ai_basic_client->heartbeat_lost_cnt = 0;
-    tal_sw_timer_stop(ai_basic_client->alive_timeout_timer);
+    core_sw_timer_stop(ai_basic_client->alive_timeout_timer);
     return;
 }
 
 STATIC VOID __ai_start_expire_tid()
 {
     UINT64_T expire  = tuya_ai_mq_ser_cfg_get()->expire;
-    UINT64_T current = tal_time_get_posix();
+    UINT64_T current = core_time_get_posix();
     if (expire <= current) {
         PR_ERR("expire time is invalid, expire:%llu, current:%llu", expire, current);
         return;
     }
-    tal_sw_timer_stop(ai_basic_client->tid);
-    tal_sw_timer_start(ai_basic_client->tid, (expire - current - 10) * 1000, TAL_TIMER_ONCE); // 10s before expire
+    core_sw_timer_stop(ai_basic_client->tid);
+    core_sw_timer_start(ai_basic_client->tid, (expire - current - 10) * 1000, CORE_TIMER_ONCE); // 10s before expire
     PR_NOTICE("connect refresh success,expire:%llu current:%llu next %d s", expire, current, expire - current - 10);
 }
 
@@ -299,7 +299,7 @@ STATIC VOID __ai_delay_dis_req(VOID)
         if (!ai_basic_client->idle_check_enable) {
             ai_basic_client->idle_check_enable = TRUE;
             ai_basic_client->recv_biz_pkt = FALSE;
-            tal_sw_timer_start(ai_basic_client->idle_check_timer, AI_IDLE_CHECK_TIME, TAL_TIMER_ONCE);
+            core_sw_timer_start(ai_basic_client->idle_check_timer, AI_IDLE_CHECK_TIME, CORE_TIMER_ONCE);
         } else {
             PR_NOTICE("ai already in idle check mode");
         }
@@ -313,7 +313,7 @@ STATIC VOID __ai_idle_check(TIMER_ID timer_id, VOID_T *data)
         PR_ERR("ai client is null");
         return;
     }
-    TIME_T now_time = tal_time_get_posix();
+    TIME_T now_time = core_time_get_posix();
     PR_NOTICE("ai idle check, enable:%d, recv pkt:%d", ai_basic_client->idle_check_enable, ai_basic_client->recv_biz_pkt);
     PR_NOTICE("ai client start time %d, now %d", ai_basic_client->start_time, now_time);
     if (ai_basic_client->idle_check_enable) {
@@ -332,7 +332,7 @@ STATIC VOID __ai_idle_check(TIMER_ID timer_id, VOID_T *data)
             ai_basic_client->recv_biz_pkt = FALSE;
         }
     }
-    tal_sw_timer_start(ai_basic_client->idle_check_timer, AI_IDLE_CHECK_TIME, TAL_TIMER_ONCE);
+    core_sw_timer_start(ai_basic_client->idle_check_timer, AI_IDLE_CHECK_TIME, CORE_TIMER_ONCE);
 #endif
     return;
 }
@@ -352,7 +352,7 @@ STATIC OPERATE_RET __ai_running(VOID)
         if ((rt == -1) && (cnt <= 3)) {
             if (tuya_svc_netmgr_get_status() == NETWORK_STATUS_MQTT) {
                 cnt++;
-                tal_system_sleep(1000);
+                core_system_sleep(1000);
                 return OPRT_OK;
             }
         }
@@ -393,7 +393,7 @@ STATIC OPERATE_RET __ai_running(VOID)
 STATIC OPERATE_RET __ai_idle()
 {
     if ((tuya_svc_netmgr_get_status() != NETWORK_STATUS_MQTT) ||
-        (tal_time_check_time_sync() != OPRT_OK)) {
+        (core_time_check_time_sync() != OPRT_OK)) {
         return OPRT_COM_ERROR;
     }
     __ai_client_set_state(AI_STATE_SETUP);
@@ -415,7 +415,7 @@ STATIC OPERATE_RET __ai_setup()
         return rt;
     }
     __ai_start_expire_tid();
-    tal_workq_stop_delayed(ai_basic_client->alive_work);
+    core_workq_stop_delayed(ai_basic_client->alive_work);
     __ai_client_set_state(AI_STATE_CONNECT);
     return OPRT_OK;
 }
@@ -430,7 +430,7 @@ VOID tuya_ai_client_deinit(VOID)
 
 STATIC OPERATE_RET __ai_client_reset_evt(VOID *data)
 {
-    tal_kv_del(AI_DOMAIN_CA_KV_KEY);
+    core_kv_del(AI_DOMAIN_CA_KV_KEY);
     return OPRT_OK;
 }
 
@@ -440,23 +440,23 @@ STATIC VOID __ai_client_free(VOID)
     tuya_ai_mq_deinit();
     if (ai_basic_client) {
         if (ai_basic_client->thread) {
-            tal_thread_delete(ai_basic_client->thread);
+            core_thread_delete(ai_basic_client->thread);
             ai_basic_client->thread = NULL;
         }
         if (ai_basic_client->tid) {
-            tal_sw_timer_delete(ai_basic_client->tid);
+            core_sw_timer_delete(ai_basic_client->tid);
             ai_basic_client->tid = NULL;
         }
         if (ai_basic_client->alive_timeout_timer) {
-            tal_sw_timer_delete(ai_basic_client->alive_timeout_timer);
+            core_sw_timer_delete(ai_basic_client->alive_timeout_timer);
             ai_basic_client->alive_timeout_timer = NULL;
         }
         if (ai_basic_client->idle_check_timer) {
-            tal_sw_timer_delete(ai_basic_client->idle_check_timer);
+            core_sw_timer_delete(ai_basic_client->idle_check_timer);
             ai_basic_client->idle_check_timer = NULL;
         }
         if (ai_basic_client->alive_work) {
-            tal_workq_cancel_delayed(ai_basic_client->alive_work);
+            core_workq_cancel_delayed(ai_basic_client->alive_work);
             ai_basic_client->alive_work = NULL;
         }
         OS_FREE(ai_basic_client);
@@ -471,7 +471,7 @@ STATIC VOID __ai_client_free(VOID)
 STATIC VOID __ai_client_thread_cb(PVOID_T args)
 {
     OPERATE_RET rt = OPRT_OK;
-    while (!ai_basic_client->terminate && tal_thread_get_state(ai_basic_client->thread) == THREAD_STATE_RUNNING) {
+    while (!ai_basic_client->terminate && core_thread_get_state(ai_basic_client->thread) == THREAD_STATE_RUNNING) {
         switch (ai_basic_client->state) {
         case AI_STATE_IDLE:
             rt = __ai_idle();
@@ -517,7 +517,7 @@ STATIC OPERATE_RET __ai_client_create_task(VOID)
     thrd_param.ex_ram_mode = 1;
 #endif
 
-    rt = tal_thread_create_and_start(&ai_basic_client->thread, NULL, NULL, __ai_client_thread_cb, NULL, &thrd_param);
+    rt = core_thread_create_and_start(&ai_basic_client->thread, NULL, NULL, __ai_client_thread_cb, NULL, &thrd_param);
     if (OPRT_OK != rt) {
         PR_ERR("ai client thread create err, rt:%d", rt);
     }
@@ -527,7 +527,7 @@ STATIC OPERATE_RET __ai_client_create_task(VOID)
 STATIC VOID __ai_ping(VOID *data)
 {
     OPERATE_RET rt = OPRT_OK;
-    tal_sw_timer_start(ai_basic_client->alive_timeout_timer, AT_PING_TIMEOUT * 1000, TAL_TIMER_ONCE);
+    core_sw_timer_start(ai_basic_client->alive_timeout_timer, AT_PING_TIMEOUT * 1000, CORE_TIMER_ONCE);
     rt = tuya_ai_basic_ping();
     if (OPRT_OK != rt) {
         PR_ERR("send ping to cloud failed, rt:%d", rt);
@@ -543,7 +543,7 @@ STATIC VOID __ai_alive_timeout(TIMER_ID timer_id, VOID_T *data)
         __ai_conn_close();
     } else {
         AI_PROTO_D("start ping, %p", ai_basic_client->alive_work);
-        tal_workq_start_delayed(ai_basic_client->alive_work, 10, LOOP_ONCE);
+        core_workq_start_delayed(ai_basic_client->alive_work, 10, LOOP_ONCE);
         AI_PROTO_D("start ping success");
     }
 }
@@ -569,7 +569,7 @@ BOOL_T tuya_ai_client_is_ready(VOID)
 STATIC VOID tuya_ai_client_stop_ping(VOID)
 {
     if (ai_basic_client) {
-        tal_workq_stop_delayed(ai_basic_client->alive_work);
+        core_workq_stop_delayed(ai_basic_client->alive_work);
         __ai_stop_alive_time();
     }
     AI_PROTO_D("ai stop ping");
@@ -577,7 +577,7 @@ STATIC VOID tuya_ai_client_stop_ping(VOID)
 
 VOID tuya_ai_client_start_ping(VOID)
 {
-    tal_workq_start_delayed(ai_basic_client->alive_work, (ai_basic_client->heartbeat_interval * 1000), LOOP_ONCE);
+    core_workq_start_delayed(ai_basic_client->alive_work, (ai_basic_client->heartbeat_interval * 1000), LOOP_ONCE);
 }
 
 STATIC OPERATE_RET __ai_client_save_ca(CHAR_T *url, UCHAR_T *ca, UINT_T len)
@@ -591,7 +591,7 @@ STATIC OPERATE_RET __ai_client_save_ca(CHAR_T *url, UCHAR_T *ca, UINT_T len)
     for (idx = 0; idx < ser_cfg->domain_num; idx++) {
         if (strncmp(url, ser_cfg->domains[idx], strlen(url)) == 0) {
             PR_DEBUG("save url[%d] %s ca to kv", idx, url);
-            rt = tal_kv_set(AI_DOMAIN_CA_KV_KEY, ca, len);
+            rt = core_kv_set(AI_DOMAIN_CA_KV_KEY, ca, len);
             return rt;
         }
     }
@@ -610,11 +610,11 @@ STATIC BOOL_T __ai_client_restore_ca(VOID *p_ctx, CHAR_T *url)
     BYTE_T *buffer = 0;
     for (idx = 0; idx < ser_cfg->domain_num; idx++) {
         if (strncmp(url, ser_cfg->domains[idx], strlen(url)) == 0) {
-            rt = tal_kv_get(AI_DOMAIN_CA_KV_KEY, &buffer, (size_t *)&len);
+            rt = core_kv_get(AI_DOMAIN_CA_KV_KEY, &buffer, (size_t *)&len);
             if (rt == OPRT_OK) {
                 rt = tuya_tls_register_x509_crt_der(p_ctx, buffer, len);
                 PR_DEBUG("load url %s ca to tls %d", url, rt);
-                tal_free(buffer);
+                core_free(buffer);
                 return TRUE;
             }
         }
@@ -640,11 +640,11 @@ OPERATE_RET tuya_ai_client_init(AI_MQTT_RECV_CB cb, AI_SECURITY_CFG_T *security_
     memcpy(&ai_basic_client->security_cfg, security_cfg, SIZEOF(AI_SECURITY_CFG_T));
     tuya_ai_mq_init(cb);
     tuya_ai_biz_init();
-    TUYA_CALL_ERR_GOTO(tal_sw_timer_create(__ai_conn_refresh, NULL, &ai_basic_client->tid), EXIT);
+    TUYA_CALL_ERR_GOTO(core_sw_timer_create(__ai_conn_refresh, NULL, &ai_basic_client->tid), EXIT);
     TUYA_CALL_ERR_GOTO(__ai_client_create_task(), EXIT);
-    TUYA_CALL_ERR_GOTO(tal_sw_timer_create(__ai_alive_timeout, NULL, &ai_basic_client->alive_timeout_timer), EXIT);
-    TUYA_CALL_ERR_GOTO(tal_sw_timer_create(__ai_idle_check, NULL, &ai_basic_client->idle_check_timer), EXIT);
-    TUYA_CALL_ERR_GOTO(tal_workq_init_delayed(WORKQ_HIGHTPRI, __ai_ping, NULL, &ai_basic_client->alive_work), EXIT);
+    TUYA_CALL_ERR_GOTO(core_sw_timer_create(__ai_alive_timeout, NULL, &ai_basic_client->alive_timeout_timer), EXIT);
+    TUYA_CALL_ERR_GOTO(core_sw_timer_create(__ai_idle_check, NULL, &ai_basic_client->idle_check_timer), EXIT);
+    TUYA_CALL_ERR_GOTO(core_workq_init_delayed(WORKQ_HIGHTPRI, __ai_ping, NULL, &ai_basic_client->alive_work), EXIT);
     tuya_cert_manager_reg(__ai_client_save_ca, __ai_client_restore_ca);
     ty_subscribe_event(EVENT_RESET, "ai_client", __ai_client_reset_evt, SUBSCRIBE_TYPE_ONETIME);
     PR_NOTICE("ai client init success, version:%d", AI_VERSION);

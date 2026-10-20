@@ -40,9 +40,9 @@
 #include <pj/errno.h>
 #include <pj/rand.h>
 
-/* Non-blocking mode is set through TAL instead of ioctl(FIONBIO). */
-#include "tal_api.h"
-#include "tal_network.h"
+/* Non-blocking mode is set through CORE instead of ioctl(FIONBIO). */
+#include "core_api.h"
+#include "core_network.h"
 
 /* Now that we have access to OS'es <sys/select>, lets check again that
  * PJ_IOQUEUE_MAX_HANDLES is not greater than FD_SETSIZE
@@ -385,7 +385,7 @@ pj_ioqueue_register_sock2(pj_pool_t *pool, pj_ioqueue_t *ioqueue, pj_sock_t sock
 
     /* Set socket to nonblocking. */
     value = 1;
-    if (tal_net_set_block(sock, PJ_FALSE) != OPRT_OK) {
+    if (core_net_set_block(sock, PJ_FALSE) != OPRT_OK) {
         rc = pj_get_netos_error();
         goto on_return;
     }
@@ -817,7 +817,7 @@ static pj_status_t replace_udp_sock(pj_ioqueue_key_t *h)
 
     /* Set socket to nonblocking. */
     val = 1;
-    if (tal_net_set_block(new_sock, PJ_FALSE) != OPRT_OK) {
+    if (core_net_set_block(new_sock, PJ_FALSE) != OPRT_OK) {
         status = pj_get_netos_error();
         goto on_error;
     }

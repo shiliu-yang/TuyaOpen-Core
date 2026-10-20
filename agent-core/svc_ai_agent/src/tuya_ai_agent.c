@@ -54,9 +54,9 @@
 #include "tuya_list.h"
 #include "http_inf.h"
 #include "http_manager.h"
-#include "tal_workq_service.h"
+#include "core_workq_service.h"
 #include "tuya_ai_mqtt.h"
-#include "tal_symmetry.h"
+#include "core_symmetry.h"
 #include "smart_frame.h"
 #include "uni_base64.h"
 #include "tuya_ai_protocol.h"
@@ -115,7 +115,7 @@ STATIC OPERATE_RET __parse_attr_time(BYTE_T *data, UINT_T len, CHAR_T *time_str)
     }
     Free(attr);
 #else
-    // tal_log_hex_dump("__parse_attr_time", 64, data, len);
+    // core_log_hex_dump("__parse_attr_time", 64, data, len);
     ty_cJSON *root, *attr, *time;
     root = ty_cJSON_Parse((CHAR_T *)data);
     if (NULL == root) {
@@ -161,7 +161,7 @@ STATIC OPERATE_RET __ai_event_cb(AI_EVENT_ATTR_T *event, AI_EVENT_HEAD_T *head, 
             OPERATE_RET rt                            = __parse_attr_time(event->user_data, event->user_len, intr_time);
             if (OPRT_OK == rt) {
                 if ((ai_agent_ctx.last_intr_time[0] != '\0') && (strcmp(intr_time, ai_agent_ctx.last_intr_time) <= 0)) {
-                    TAL_PR_DEBUG("Interrupt event ignored, last:%s, cur:%s", ai_agent_ctx.last_intr_time, intr_time);
+                    CORE_PR_DEBUG("Interrupt event ignored, last:%s, cur:%s", ai_agent_ctx.last_intr_time, intr_time);
                     return OPRT_OK;
                 }
                 strncpy(ai_agent_ctx.last_intr_time, intr_time, INTTERUPT_TIME_MAX);
@@ -355,7 +355,7 @@ STATIC OPERATE_RET __ai_image_recv_cb(AI_BIZ_ATTR_INFO_T *attr, AI_BIZ_HEAD_INFO
             goto EXIT;
         }
         UINT32_T gcm_len = 0;
-        rt = tal_aes_gcm_decode(key, TUYA_AI_SECRET_KEY_LEN, head->value.image.iv, AI_IV_LEN,
+        rt = core_aes_gcm_decode(key, TUYA_AI_SECRET_KEY_LEN, head->value.image.iv, AI_IV_LEN,
                                 NULL, 0, (UINT8_T *)eff_data, cipher_len,
                                 (UINT8_T *)dec_data, &gcm_len,
                                 tag, AI_GCM_TAG_LEN);
@@ -399,7 +399,7 @@ STATIC OPERATE_RET __ai_video_recv_cb(AI_BIZ_ATTR_INFO_T *attr, AI_BIZ_HEAD_INFO
             return OPRT_MALLOC_FAILED;
         }
         UINT32_T dec_len = 0;
-        OPERATE_RET rt = tal_aes_gcm_decode(key, TUYA_AI_SECRET_KEY_LEN, head->value.video.iv, AI_IV_LEN,
+        OPERATE_RET rt = core_aes_gcm_decode(key, TUYA_AI_SECRET_KEY_LEN, head->value.video.iv, AI_IV_LEN,
                                             NULL, 0, (UINT8_T *)data, cipher_len,
                                             (UINT8_T *)plaintext, &dec_len,
                                             tag, AI_GCM_TAG_LEN);
@@ -634,12 +634,12 @@ STATIC VOID __cloud_trigger_wq(VOID *data)
     }
 
     if (trigger->request_id) {
-        tal_free((CHAR_T *)trigger->request_id);
+        core_free((CHAR_T *)trigger->request_id);
     }
     if (trigger->content) {
-        tal_free((CHAR_T *)trigger->content);
+        core_free((CHAR_T *)trigger->content);
     }
-    tal_free(trigger);
+    core_free(trigger);
 }
 
 STATIC OPERATE_RET __ai_agent_cloud_trigger(CONST CHAR_T *request_id, CONST CHAR_T *content)
@@ -652,7 +652,7 @@ STATIC OPERATE_RET __ai_agent_cloud_trigger(CONST CHAR_T *request_id, CONST CHAR
         return OPRT_INVALID_PARM;
     }
 
-    AI_CLOUD_TRIGGER_T *trigger = (AI_CLOUD_TRIGGER_T *)tal_malloc(SIZEOF(AI_CLOUD_TRIGGER_T));
+    AI_CLOUD_TRIGGER_T *trigger = (AI_CLOUD_TRIGGER_T *)core_malloc(SIZEOF(AI_CLOUD_TRIGGER_T));
     if (trigger == NULL) {
         return OPRT_MALLOC_FAILED;
     }
@@ -663,17 +663,17 @@ STATIC OPERATE_RET __ai_agent_cloud_trigger(CONST CHAR_T *request_id, CONST CHAR
         rt = OPRT_MALLOC_FAILED;
         goto err;
     }
-    TUYA_CALL_ERR_GOTO(tal_workq_schedule(WORKQ_SYSTEM, __cloud_trigger_wq, trigger), err);
+    TUYA_CALL_ERR_GOTO(core_workq_schedule(WORKQ_SYSTEM, __cloud_trigger_wq, trigger), err);
     return rt;
 err:
     if (trigger && trigger->request_id) {
-        tal_free((CHAR_T *)trigger->request_id);
+        core_free((CHAR_T *)trigger->request_id);
     }
     if (trigger && trigger->content) {
-        tal_free((CHAR_T *)trigger->content);
+        core_free((CHAR_T *)trigger->content);
     }
     if (trigger) {
-        tal_free(trigger);
+        core_free(trigger);
     }
     return rt;
 }
@@ -1487,7 +1487,7 @@ OPERATE_RET tuya_ai_agent_mcp_set_cb(TY_AI_MCP_CB cb, VOID *user_data)
 
 STATIC OPERATE_RET __mcp_handle(CHAR_T *sid, CHAR_T *eid, CHAR_T *data)
 {
-    TAL_PR_DEBUG("mcp data: %s", data);
+    CORE_PR_DEBUG("mcp data: %s", data);
 
     if (ai_agent_ctx.mcp_cb) {
         ty_cJSON   *root = ty_cJSON_Parse(data);
@@ -1498,7 +1498,7 @@ STATIC OPERATE_RET __mcp_handle(CHAR_T *sid, CHAR_T *eid, CHAR_T *data)
         }
     }
 
-    TAL_PR_ERR("mcp handle not found or handle failed");
+    CORE_PR_ERR("mcp handle not found or handle failed");
     // generate error response
     CHAR_T *message = "{\"error\":{\"code\":500,\"message\":\"Internal Server Error\"}}";
     return tuya_ai_event_mcp(sid, eid, message);

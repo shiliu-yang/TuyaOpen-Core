@@ -16,7 +16,7 @@
 #if defined(__linux__)
 #include <sys/time.h>
 #else
-#include "tal_system.h"
+#include "core_system.h"
 #endif
 #include "mbedtls/pk.h"
 #include "mbedtls/entropy.h"
@@ -39,8 +39,8 @@ uint64_t tuya_uv_hrtime2(void)
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (((uint64_t)ts.tv_sec) * NANOSEC + ts.tv_nsec);
 #else
-    /* MCU: use TAL tick (ms) — avoid glibc-only CLOCK_* / clock_gettime decls */
-    return (uint64_t)tal_system_get_millisecond() * 1000000ULL;
+    /* MCU: use CORE tick (ms) — avoid glibc-only CLOCK_* / clock_gettime decls */
+    return (uint64_t)core_system_get_millisecond() * 1000000ULL;
 #endif
 }
 

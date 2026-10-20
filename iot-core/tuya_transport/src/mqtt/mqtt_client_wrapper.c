@@ -20,9 +20,9 @@
 
 #include "tuya_tls.h"
 #include "tuya_transporter.h"
-#include "tal_log.h"
-#include "tal_system.h"
-#include "tal_memory.h"
+#include "core_log.h"
+#include "core_system.h"
+#include "core_memory.h"
 
 #define log_debug PR_DEBUG
 #define log_error PR_ERR
@@ -96,7 +96,7 @@ static void core_mqtt_library_callback(struct MQTTContext *pContext, struct MQTT
             return;
         }
 
-        char *topic = tal_malloc(pDeserializedInfo->pPublishInfo->topicNameLength + 1);
+        char *topic = core_malloc(pDeserializedInfo->pPublishInfo->topicNameLength + 1);
         if (topic == NULL) {
             return;
         }
@@ -111,7 +111,7 @@ static void core_mqtt_library_callback(struct MQTTContext *pContext, struct MQTT
                                        .qos = pDeserializedInfo->pPublishInfo->qos,
                                    },
                                    context->config.userdata);
-        tal_free(topic);
+        core_free(topic);
 
     } else {
         switch (pPacketInfo->type) {
@@ -144,12 +144,12 @@ static void core_mqtt_library_callback(struct MQTTContext *pContext, struct MQTT
 
 void *mqtt_client_new(void)
 {
-    return tal_malloc(sizeof(mqtt_client_context_t));
+    return core_malloc(sizeof(mqtt_client_context_t));
 }
 
 void mqtt_client_free(void *client)
 {
-    tal_free(client);
+    core_free(client);
 }
 
 static int network_write(NetworkContext_t *pNetwork, const unsigned char *pMsg, size_t len)
@@ -183,7 +183,7 @@ static int network_read(NetworkContext_t *pNetwork, unsigned char *pMsg, size_t 
 }
 static uint32_t __mqtt_client_get_current_time(void)
 {
-    return (uint32_t)tal_system_get_millisecond();
+    return (uint32_t)core_system_get_millisecond();
 }
 mqtt_client_status_t mqtt_client_init(void *client, const mqtt_client_config_t *config)
 {

@@ -18,7 +18,7 @@
 #include "cJSON.h"
 #include "matop_service.h"
 #include "atop_base.h"
-#include "tal_api.h"
+#include "core_api.h"
 
 #define MATOP_DEFAULT_BUFFER_LEN (128)
 
@@ -89,7 +89,7 @@ static int matop_service_data_receive_cb(void *context, const uint8_t *input, si
         mqtt_atop_message_t *entry = *current;
         if (entry == target_message) {
             *current = entry->next;
-            tal_free(entry);
+            core_free(entry);
         } else {
             current = &entry->next;
         }
@@ -142,7 +142,7 @@ static int matop_service_file_rawdata_receive_cb(void *context, const uint8_t *i
         mqtt_atop_message_t *entry = *current;
         if (entry == target_message) {
             *current = entry->next;
-            tal_free(entry);
+            core_free(entry);
         } else {
             current = &entry->next;
         }
@@ -246,13 +246,13 @@ int matop_serice_yield(matop_context_t *context)
     mqtt_atop_message_t **current;
     for (current = &context->message_list; *current;) {
         mqtt_atop_message_t *entry = *current;
-        if (tal_system_get_millisecond() > entry->timeout) {
+        if (core_system_get_millisecond() > entry->timeout) {
             PR_WARN("Message id %d timeout.", entry->id);
             if (entry->notify_cb) {
                 entry->notify_cb(&(atop_base_response_t){.success = false}, entry->user_data);
             }
             *current = entry->next;
-            tal_free(entry);
+            core_free(entry);
             return OPRT_TIMEOUT;
         } else {
             current = &entry->next;
@@ -301,7 +301,7 @@ int matop_serice_destory(matop_context_t *context)
     for (current = &context->message_list; *current;) {
         mqtt_atop_message_t *entry = *current;
         *current = entry->next;
-        tal_free(entry);
+        core_free(entry);
     }
 
     return OPRT_OK;
@@ -334,7 +334,7 @@ int matop_service_request_async(matop_context_t *context, const mqtt_atop_reques
     matop_context_t *matop = context;
 
     /* handle init */
-    mqtt_atop_message_t *message_handle = tal_malloc(sizeof(mqtt_atop_message_t));
+    mqtt_atop_message_t *message_handle = core_malloc(sizeof(mqtt_atop_message_t));
     if (message_handle == NULL) {
         PR_ERR("response_buffer malloc fail");
         return OPRT_MALLOC_FAILED;
@@ -342,7 +342,7 @@ int matop_service_request_async(matop_context_t *context, const mqtt_atop_reques
     message_handle->next = NULL;
     message_handle->id = ++matop->id_cnt;
     message_handle->timeout =
-        tal_system_get_millisecond() + (request->timeout == 0 ? MATOP_TIMEOUT_MS_DEFAULT : request->timeout);
+        core_system_get_millisecond() + (request->timeout == 0 ? MATOP_TIMEOUT_MS_DEFAULT : request->timeout);
     message_handle->notify_cb = notify_cb;
     message_handle->user_data = user_data;
 
@@ -352,15 +352,15 @@ int matop_service_request_async(matop_context_t *context, const mqtt_atop_reques
     size_t data_len = request->data ? (request->data_len ? request->data_len : strlen(data_ptr)) : strlen(data_ptr);
 
     if (data_len > (size_t)INT_MAX) {
-        tal_free(message_handle);
+        core_free(message_handle);
         return OPRT_INVALID_PARM;
     }
 
-    int posix_time = tal_time_get_posix();
+    int posix_time = core_time_get_posix();
     int base_len = snprintf(NULL, 0, "{\"id\":%d,\"a\":\"%s\",\"t\":%d,\"data\":%.*s", message_handle->id,
                             request->api, posix_time, (int)data_len, data_ptr);
     if (base_len < 0) {
-        tal_free(message_handle);
+        core_free(message_handle);
         return OPRT_COM_ERROR;
     }
 
@@ -368,21 +368,21 @@ int matop_service_request_async(matop_context_t *context, const mqtt_atop_reques
     if (request->version) {
         version_len = snprintf(NULL, 0, ",\"v\":\"%s\"", request->version);
         if (version_len < 0) {
-            tal_free(message_handle);
+            core_free(message_handle);
             return OPRT_COM_ERROR;
         }
     }
 
     size_t request_bufferlen = (size_t)base_len + (size_t)version_len + 2; /* '}' + '\0' */
     if (request_bufferlen < (size_t)base_len) {
-        tal_free(message_handle);
+        core_free(message_handle);
         return OPRT_COM_ERROR;
     }
 
-    char *request_buffer = tal_malloc(request_bufferlen);
+    char *request_buffer = core_malloc(request_bufferlen);
     if (request_buffer == NULL) {
         PR_ERR("response_buffer malloc fail");
-        tal_free(message_handle);
+        core_free(message_handle);
         return OPRT_MALLOC_FAILED;
     }
 
@@ -390,8 +390,8 @@ int matop_service_request_async(matop_context_t *context, const mqtt_atop_reques
     int written = snprintf(request_buffer, request_bufferlen, "{\"id\":%d,\"a\":\"%s\",\"t\":%d,\"data\":%.*s",
                            message_handle->id, request->api, posix_time, (int)data_len, data_ptr);
     if (written < 0 || (size_t)written >= request_bufferlen) {
-        tal_free(request_buffer);
-        tal_free(message_handle);
+        core_free(request_buffer);
+        core_free(message_handle);
         return OPRT_BUFFER_NOT_ENOUGH;
     }
 
@@ -399,16 +399,16 @@ int matop_service_request_async(matop_context_t *context, const mqtt_atop_reques
         int more =
             snprintf(request_buffer + written, request_bufferlen - (size_t)written, ",\"v\":\"%s\"", request->version);
         if (more < 0 || (size_t)more >= request_bufferlen - (size_t)written) {
-            tal_free(request_buffer);
-            tal_free(message_handle);
+            core_free(request_buffer);
+            core_free(message_handle);
             return OPRT_BUFFER_NOT_ENOUGH;
         }
         written += more;
     }
 
     if ((size_t)written + 2 > request_bufferlen) {
-        tal_free(request_buffer);
-        tal_free(message_handle);
+        core_free(request_buffer);
+        core_free(message_handle);
         return OPRT_BUFFER_NOT_ENOUGH;
     }
     request_buffer[written++] = '}';
@@ -417,11 +417,11 @@ int matop_service_request_async(matop_context_t *context, const mqtt_atop_reques
     PR_DEBUG("atop request: %s", request_buffer);
 
     rt = matop_request_send(matop, (const uint8_t *)request_buffer, request_datalen);
-    tal_free(request_buffer);
+    core_free(request_buffer);
 
     if (rt != OPRT_OK) {
         PR_ERR("mqtt_atop_request_send error:%d", rt);
-        tal_free(message_handle);
+        core_free(message_handle);
         return rt;
     }
 
@@ -460,13 +460,13 @@ int matop_service_client_reset(matop_context_t *context)
 
     /* post data */
     size_t buffer_len = 0;
-    char *buffer = tal_malloc(MATOP_DEFAULT_BUFFER_LEN);
+    char *buffer = core_malloc(MATOP_DEFAULT_BUFFER_LEN);
     if (NULL == buffer) {
         PR_ERR("post buffer malloc fail");
         return OPRT_MALLOC_FAILED;
     }
 
-    buffer_len = snprintf(buffer, MATOP_DEFAULT_BUFFER_LEN, "{\"t\":%d}", tal_time_get_posix());
+    buffer_len = snprintf(buffer, MATOP_DEFAULT_BUFFER_LEN, "{\"t\":%d}", core_time_get_posix());
     PR_TRACE("POST JSON:%s", buffer);
 
     /* ATOP service request send */
@@ -478,7 +478,7 @@ int matop_service_client_reset(matop_context_t *context)
                                          .data_len = buffer_len,
                                      },
                                      NULL, context);
-    tal_free(buffer);
+    core_free(buffer);
     return rt;
 }
 
@@ -505,14 +505,14 @@ int matop_service_version_update(matop_context_t *context, const char *versions)
     /* post data */
 #define UPDATE_VERSION_BUFFER_LEN 196
     size_t buffer_len = 0;
-    char *buffer = tal_malloc(UPDATE_VERSION_BUFFER_LEN);
+    char *buffer = core_malloc(UPDATE_VERSION_BUFFER_LEN);
     if (NULL == buffer) {
         PR_ERR("post buffer malloc fail");
         return OPRT_MALLOC_FAILED;
     }
 
     buffer_len =
-        snprintf(buffer, UPDATE_VERSION_BUFFER_LEN, "{\"versions\":\"%s\",\"t\":%d}", versions, tal_time_get_posix());
+        snprintf(buffer, UPDATE_VERSION_BUFFER_LEN, "{\"versions\":\"%s\",\"t\":%d}", versions, core_time_get_posix());
     PR_TRACE("POST JSON:%s", buffer);
 
     /* ATOP service request send */
@@ -524,7 +524,7 @@ int matop_service_version_update(matop_context_t *context, const char *versions)
                                          .data_len = buffer_len,
                                      },
                                      NULL, context);
-    tal_free(buffer);
+    core_free(buffer);
     return rt;
 }
 
@@ -550,14 +550,14 @@ int matop_service_upgrade_status_update(matop_context_t *context, int channel, i
 
     /* post data */
     size_t buffer_len = 0;
-    char *buffer = tal_malloc(MATOP_DEFAULT_BUFFER_LEN);
+    char *buffer = core_malloc(MATOP_DEFAULT_BUFFER_LEN);
     if (NULL == buffer) {
         PR_ERR("post buffer malloc fail");
         return OPRT_MALLOC_FAILED;
     }
 
     buffer_len = snprintf(buffer, MATOP_DEFAULT_BUFFER_LEN, "{\"type\":%d,\"upgradeStatus\":%d,\"t\":%d}", channel,
-                          status, tal_time_get_posix());
+                          status, core_time_get_posix());
     PR_TRACE("POST JSON:%s", buffer);
 
     /* ATOP service request send */
@@ -569,7 +569,7 @@ int matop_service_upgrade_status_update(matop_context_t *context, int channel, i
                                          .data_len = buffer_len,
                                      },
                                      NULL, context);
-    tal_free(buffer);
+    core_free(buffer);
     return rt;
 }
 
@@ -597,13 +597,13 @@ int matop_service_upgrade_info_get(matop_context_t *context, int channel, mqtt_a
 
     /* post data */
     size_t buffer_len = 0;
-    char *buffer = tal_malloc(MATOP_DEFAULT_BUFFER_LEN);
+    char *buffer = core_malloc(MATOP_DEFAULT_BUFFER_LEN);
     if (NULL == buffer) {
         PR_ERR("post buffer malloc fail");
         return OPRT_MALLOC_FAILED;
     }
 
-    buffer_len = snprintf(buffer, MATOP_DEFAULT_BUFFER_LEN, "{\"type\":%d,\"t\":%d}", channel, tal_time_get_posix());
+    buffer_len = snprintf(buffer, MATOP_DEFAULT_BUFFER_LEN, "{\"type\":%d,\"t\":%d}", channel, core_time_get_posix());
     PR_TRACE("POST JSON:%s", buffer);
 
     /* ATOP service request send */
@@ -614,7 +614,7 @@ int matop_service_upgrade_info_get(matop_context_t *context, int channel, mqtt_a
                                                                   .data_len = buffer_len,
                                                                   .timeout = 10000},
                                      notify_cb, user_data);
-    tal_free(buffer);
+    core_free(buffer);
     return rt;
 }
 
@@ -640,13 +640,13 @@ int matop_service_auto_upgrade_info_get(matop_context_t *context, mqtt_atop_resp
 
     /* post data */
     size_t buffer_len = 0;
-    char *buffer = tal_malloc(MATOP_DEFAULT_BUFFER_LEN);
+    char *buffer = core_malloc(MATOP_DEFAULT_BUFFER_LEN);
     if (NULL == buffer) {
         PR_ERR("post buffer malloc fail");
         return OPRT_MALLOC_FAILED;
     }
 
-    buffer_len = snprintf(buffer, MATOP_DEFAULT_BUFFER_LEN, "{\"subId\":null,\"t\":%d}", tal_time_get_posix());
+    buffer_len = snprintf(buffer, MATOP_DEFAULT_BUFFER_LEN, "{\"subId\":null,\"t\":%d}", core_time_get_posix());
     PR_TRACE("POST JSON:%s", buffer);
 
     /* ATOP service request send */
@@ -658,7 +658,7 @@ int matop_service_auto_upgrade_info_get(matop_context_t *context, mqtt_atop_resp
                                          .data_len = buffer_len,
                                      },
                                      notify_cb, user_data);
-    tal_free(buffer);
+    core_free(buffer);
     return rt;
 }
 
@@ -689,7 +689,7 @@ int matop_service_file_download_range(matop_context_t *context, const char *url,
     /* post data */
 #define MATOP_DOWNLOAD_BUFFER_LEN 511
     size_t buffer_len = 0;
-    char *buffer = tal_malloc(MATOP_DOWNLOAD_BUFFER_LEN);
+    char *buffer = core_malloc(MATOP_DOWNLOAD_BUFFER_LEN);
     if (NULL == buffer) {
         PR_ERR("post buffer malloc fail");
         return OPRT_MALLOC_FAILED;
@@ -707,7 +707,7 @@ int matop_service_file_download_range(matop_context_t *context, const char *url,
                                                                   .data_len = buffer_len,
                                                                   .timeout = timeout_ms},
                                      notify_cb, user_data);
-    tal_free(buffer);
+    core_free(buffer);
     return rt;
 }
 
@@ -729,7 +729,7 @@ int matop_service_put_rst_log(matop_context_t *context, int reason)
     int rt = OPRT_OK;
 
 #define RST_BUFFER_MAX (128)
-    char *rst_buffer = tal_malloc(RST_BUFFER_MAX);
+    char *rst_buffer = core_malloc(RST_BUFFER_MAX);
     if (rst_buffer == NULL) {
         PR_ERR("rst_buffer buffer malloc fail");
         return OPRT_MALLOC_FAILED;
@@ -741,14 +741,14 @@ int matop_service_put_rst_log(matop_context_t *context, int reason)
     /* post data */
 #define UPDATE_VERSION_BUFFER_LEN 196
     size_t buffer_len = 0;
-    char *buffer = tal_malloc(UPDATE_VERSION_BUFFER_LEN);
+    char *buffer = core_malloc(UPDATE_VERSION_BUFFER_LEN);
     if (NULL == buffer) {
         PR_ERR("post buffer malloc fail");
-        tal_free(rst_buffer);
+        core_free(rst_buffer);
         return OPRT_MALLOC_FAILED;
     }
 
-    buffer_len = snprintf(buffer, UPDATE_VERSION_BUFFER_LEN, "{%s,\"t\":%d}", rst_buffer, tal_time_get_posix());
+    buffer_len = snprintf(buffer, UPDATE_VERSION_BUFFER_LEN, "{%s,\"t\":%d}", rst_buffer, core_time_get_posix());
     PR_TRACE("POST JSON:%s", buffer);
 
     /* ATOP service request send */
@@ -760,8 +760,8 @@ int matop_service_put_rst_log(matop_context_t *context, int reason)
                                          .data_len = buffer_len,
                                      },
                                      NULL, context);
-    tal_free(buffer);
-    tal_free(rst_buffer);
+    core_free(buffer);
+    core_free(rst_buffer);
     return rt;
 }
 
@@ -790,13 +790,13 @@ int matop_service_dynamic_cfg_get(matop_context_t *context, HTTP_DYNAMIC_CFG_TYP
 
     /* post data */
     size_t buffer_len = 0;
-    char *buffer = tal_malloc(MATOP_DEFAULT_BUFFER_LEN);
+    char *buffer = core_malloc(MATOP_DEFAULT_BUFFER_LEN);
     if (NULL == buffer) {
         PR_ERR("post buffer malloc fail");
         return OPRT_MALLOC_FAILED;
     }
 
-    uint32_t timestamp = tal_time_get_posix();
+    uint32_t timestamp = core_time_get_posix();
 
     switch (type) {
     case HTTP_DYNAMIC_CFG_TZ:
@@ -824,7 +824,7 @@ int matop_service_dynamic_cfg_get(matop_context_t *context, HTTP_DYNAMIC_CFG_TYP
                                          .data_len = buffer_len,
                                      },
                                      notify_cb, user_data);
-    tal_free(buffer);
+    core_free(buffer);
     return rt;
 }
 
@@ -858,7 +858,7 @@ int matop_service_dynamic_cfg_ack(matop_context_t *context, const char *timezone
 
 #define DYNAMIC_CFG_ACK_BUFFER_LEN MATOP_DEFAULT_BUFFER_LEN
     size_t buffer_len = 0;
-    char *buffer = tal_malloc(DYNAMIC_CFG_ACK_BUFFER_LEN);
+    char *buffer = core_malloc(DYNAMIC_CFG_ACK_BUFFER_LEN);
     if (NULL == buffer) {
         PR_ERR("post buffer malloc fail");
         return OPRT_MALLOC_FAILED;
@@ -877,7 +877,7 @@ int matop_service_dynamic_cfg_ack(matop_context_t *context, const char *timezone
                            rateRule_actId);
     }
 
-    snprintf(buffer + offset, DYNAMIC_CFG_ACK_BUFFER_LEN, "],\"t\":%d}", tal_time_get_posix());
+    snprintf(buffer + offset, DYNAMIC_CFG_ACK_BUFFER_LEN, "],\"t\":%d}", core_time_get_posix());
 
     buffer_len = strlen(buffer) + 1;
     PR_TRACE("dynamic cfg ack data:%s", buffer);
@@ -891,7 +891,7 @@ int matop_service_dynamic_cfg_ack(matop_context_t *context, const char *timezone
                                      },
                                      notify_cb, user_data);
 
-    tal_free(buffer);
+    core_free(buffer);
     return rt;
 }
 

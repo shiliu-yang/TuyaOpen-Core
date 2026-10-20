@@ -1,16 +1,16 @@
 /**
  * @file pj_tuyaos_local_ip.c
  * @brief Local IPv4 helper for pj: reports the interface address in network
- * byte order through TAL.
+ * byte order through CORE.
  * @version 1.2
  * @copyright Copyright (c) Tuya Inc.
  *
- * tal_compat_get_sta_ipv4_nbo() reads the address with tal_netif_get_ip()
+ * core_compat_get_sta_ipv4_nbo() reads the address with core_netif_get_ip()
  * when ENABLE_WIRED is set, parses the dotted string, and rejects loopback
  * and unspecified hosts. Without ENABLE_WIRED, or when no usable address is
  * available, it returns -1.
  */
-#include "tal_local_ip.h"
+#include "core_local_ip.h"
 #include "tuya_cloud_types.h"
 #include "tuya_iot_config.h"
 
@@ -18,7 +18,7 @@
 #include <string.h>
 
 #if defined(ENABLE_WIRED) && (ENABLE_WIRED == 1)
-#include "tal_netif.h"
+#include "core_netif.h"
 #endif
 
 /**
@@ -69,11 +69,11 @@ static int __reject_bad_host(uint32_t a)
 }
 
 /**
- * @brief Get station/wired IPv4 in network byte order via TAL
+ * @brief Get station/wired IPv4 in network byte order via CORE
  * @param[out] addr_nbo IPv4 address (network byte order)
  * @return 0 on success, -1 on failure / unavailable / loopback
  */
-int tal_compat_get_sta_ipv4_nbo(unsigned int *addr_nbo)
+int core_compat_get_sta_ipv4_nbo(unsigned int *addr_nbo)
 {
     NW_IP_S ip;
     uint32_t a;
@@ -86,7 +86,7 @@ int tal_compat_get_sta_ipv4_nbo(unsigned int *addr_nbo)
 
 #if defined(ENABLE_WIRED) && (ENABLE_WIRED == 1)
     memset(&ip, 0, sizeof(ip));
-    if (tal_netif_get_ip(&ip) == OPRT_OK && ip.ip[0] != '\0') {
+    if (core_netif_get_ip(&ip) == OPRT_OK && ip.ip[0] != '\0') {
         if (__parse_ipv4_nbo(ip.ip, &a) == 0 && __reject_bad_host(a) == 0) {
             *addr_nbo = (unsigned int)a;
             return 0;

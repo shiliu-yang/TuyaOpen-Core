@@ -9,7 +9,7 @@
 /* Platforms using the SDK-provided mbedtls bring their own mbedtls_hardware_poll. */
 #if !defined(ENABLE_PLATFORM_MBEDTLS)
 
-#include "tal_system.h"
+#include "core_system.h"
 #include "mbedtls/entropy.h"
 
 // Filling one accumulator block clears the entropy_func threshold; asking for more is waste.
@@ -21,7 +21,7 @@ int mbedtls_hardware_poll(void *data, unsigned char *output, size_t len, size_t 
     (void)data;
 
     while (done < want) {
-        uint32_t word = (uint32_t)tal_system_get_random(0xFFFFFFFF);
+        uint32_t word = (uint32_t)core_system_get_random(0xFFFFFFFF);
         size_t   n    = ((want - done) < sizeof(word)) ? (want - done) : sizeof(word);
 
         memcpy(output + done, &word, n);

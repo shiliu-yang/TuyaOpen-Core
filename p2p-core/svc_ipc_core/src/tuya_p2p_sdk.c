@@ -17,7 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "cJSON.h"
-#include "tal_log.h"
+#include "core_log.h"
 #include "tuya_cloud_types.h"
 #include "tuya_error_code.h"
 #include "tuya_iot.h"

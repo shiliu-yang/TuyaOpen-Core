@@ -14,7 +14,7 @@
 #define HTTP_CLIENT_INTERFACE_H
 
 #include "tuya_cloud_types.h"
-#include "tal_memory.h"
+#include "core_memory.h"
 
 /* Response buffer size for one-shot requests (shared by headers and body;
  * coreHTTP v3.1.3 requires the application to provide it) */

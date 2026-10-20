@@ -11,7 +11,7 @@
  *
  * @copyright Copyright (c) 2025 Tuya Inc. All Rights Reserved.
  */
-#include "tal_api.h"
+#include "core_api.h"
 #include "tuya_log.h"
 #include "tuya_error_code.h"
 #include "core_http_client.h"
@@ -175,16 +175,16 @@ static int http_file_download_init(http_download_t *ctx, http_download_config_t 
     PR_DEBUG("UF_PATH: %s", parts.path);
     PR_DEBUG("PORT: %d", parts.port);
     ctx->port = parts.port;
-    ctx->host = tal_malloc(parts.host_len + 1);
+    ctx->host = core_malloc(parts.host_len + 1);
     TUYA_CHECK_NULL_RETURN(ctx->host, OPRT_MALLOC_FAILED);
     memcpy(ctx->host, parts.host, parts.host_len);
     ctx->host[parts.host_len] = 0;
 
-    ctx->path = tal_malloc(parts.path_len + 1);
+    ctx->path = core_malloc(parts.path_len + 1);
     TUYA_CHECK_NULL_RETURN(ctx->path, OPRT_MALLOC_FAILED);
     strcpy(ctx->path, parts.path);
 
-    ctx->buffer = tal_malloc(ctx->config.range_length + 1);
+    ctx->buffer = core_malloc(ctx->config.range_length + 1);
     TUYA_CHECK_NULL_RETURN(ctx->buffer, OPRT_MALLOC_FAILED);
 
     HTTPRequestInfo_t *requestInfo = &ctx->requestInfo;
@@ -199,7 +199,7 @@ static int http_file_download_init(http_download_t *ctx, http_download_config_t 
 
     HTTPRequestHeaders_t *requestHeaders = &ctx->requestHeaders;
     requestHeaders->bufferLen = 512;
-    requestHeaders->pBuffer = tal_malloc(requestHeaders->bufferLen);
+    requestHeaders->pBuffer = core_malloc(requestHeaders->bufferLen);
     TUYA_CHECK_NULL_RETURN(requestHeaders->pBuffer, OPRT_MALLOC_FAILED);
 
     return rt;
@@ -209,7 +209,7 @@ int http_file_download(http_download_config_t *config)
 {
     int rt = OPRT_OK;
 
-    http_download_t *ctx = tal_calloc(1, sizeof(http_download_t));
+    http_download_t *ctx = core_calloc(1, sizeof(http_download_t));
     TUYA_CHECK_NULL_GOTO(ctx, __exit);
     TUYA_CALL_ERR_GOTO(http_file_download_init(ctx, config), __exit);
     /* TLS pre init */
@@ -234,7 +234,7 @@ int http_file_download(http_download_config_t *config)
     ctx->transport.recv = (TransportRecv_t)NetworkTransportRecv;
 
     ctx->state = DL_STATE_NETWORK_CONNECT;
-    TIME_T download_time = tal_time_get_posix();
+    TIME_T download_time = core_time_get_posix();
 
     bool is_completed = false;
 
@@ -319,7 +319,7 @@ int http_file_download(http_download_config_t *config)
                 ctx->received_size += read_size;
             }
             //! reset time
-            download_time = tal_time_get_posix();
+            download_time = core_time_get_posix();
             /* File download complete? */
             if (ctx->received_size >= ctx->file_size) {
                 ctx->state = DL_STATE_COMPLETE;
@@ -329,7 +329,7 @@ int http_file_download(http_download_config_t *config)
 
         case DL_STATE_NETWORK_RECONNECT:
             tuya_transporter_close(network);
-            tal_system_sleep(3000);
+            core_system_sleep(3000);
             ctx->state = DL_STATE_NETWORK_CONNECT;
             break;
 
@@ -341,7 +341,7 @@ int http_file_download(http_download_config_t *config)
             }
             break;
         }
-    } while (((tal_time_get_posix() - download_time) < HTTP_DOWNLOAD_TIMEOUT) && !is_completed);
+    } while (((core_time_get_posix() - download_time) < HTTP_DOWNLOAD_TIMEOUT) && !is_completed);
 
     tuya_transporter_close(network);
     tuya_transporter_destroy(network);
@@ -355,19 +355,19 @@ int http_file_download(http_download_config_t *config)
 __exit:
     if (ctx) {
         if (ctx->host) {
-            tal_free(ctx->host);
+            core_free(ctx->host);
         }
         if (ctx->path) {
-            tal_free(ctx->path);
+            core_free(ctx->path);
         }
         if (ctx->requestHeaders.pBuffer) {
-            tal_free(ctx->requestHeaders.pBuffer);
+            core_free(ctx->requestHeaders.pBuffer);
         }
         if (ctx->response.pBuffer) {
-            tal_free(ctx->response.pBuffer);
+            core_free(ctx->response.pBuffer);
         }
 
-        tal_free(ctx);
+        core_free(ctx);
     }
 
     return rt;

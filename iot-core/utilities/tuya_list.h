@@ -48,7 +48,7 @@ LIST_HEAD name = LIST_HEAD_INIT(name)
  */
 #define NEW_LIST_NODE(type, node) \
 {\
-    node = (type *)tal_malloc(sizeof(type));\
+    node = (type *)core_malloc(sizeof(type));\
 }
 
 /**
@@ -61,7 +61,7 @@ LIST_HEAD name = LIST_HEAD_INIT(name)
     while(!tuya_list_empty(&(p)->list_name)) {\
     posnode = tuya_list_entry((&(p)->list_name)->next, type, list_name);\
     tuya_list_del((&(p)->list_name)->next);\
-    tal_free(posnode);\
+    core_free(posnode);\
     }\
 }
 
@@ -86,7 +86,7 @@ LIST_HEAD name = LIST_HEAD_INIT(name)
 #define DeleteNodeAndFree(pDelNode,list_name)\
 {\
     tuya_list_del(&(pDelNode->list_name));\
-    tal_free(pDelNode);\
+    core_free(pDelNode);\
 }
 
 /**
@@ -104,7 +104,7 @@ LIST_HEAD name = LIST_HEAD_INIT(name)
  */
 #define FreeNode(pDelNode)\
 {\
-    tal_free(pDelNode);\
+    core_free(pDelNode);\
 }
 
 /**

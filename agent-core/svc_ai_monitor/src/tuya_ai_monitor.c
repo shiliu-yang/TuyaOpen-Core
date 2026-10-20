@@ -19,22 +19,22 @@
 #include "gw_intf.h"
 #include "uni_random.h"
 #include "uni_log.h"
-#include "tal_memory.h"
-#include "tal_network.h"
-#include "tal_system.h"
-#include "tal_sw_timer.h"
-#include "tal_network.h"
-#include "tal_mutex.h"
-#include "tal_queue.h"
-#include "tal_thread.h"
+#include "core_memory.h"
+#include "core_network.h"
+#include "core_system.h"
+#include "core_sw_timer.h"
+#include "core_network.h"
+#include "core_mutex.h"
+#include "core_queue.h"
+#include "core_thread.h"
 #include <string.h>
 
 #if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
-#define OS_MALLOC(size)       tal_ex_ram_malloc(size)
-#define OS_FREE(ptr)          tal_ex_ram_free(ptr)
+#define OS_MALLOC(size)       core_ex_ram_malloc(size)
+#define OS_FREE(ptr)          core_ex_ram_free(ptr)
 #else
-#define OS_MALLOC(size)       tal_malloc(size)
-#define OS_FREE(ptr)          tal_free(ptr)
+#define OS_MALLOC(size)       core_malloc(size)
+#define OS_FREE(ptr)          core_free(ptr)
 #endif
 
 // Protocol magic number
@@ -138,7 +138,7 @@ STATIC OPERATE_RET __init_client(ai_monitor_client_t *client, int fd, TUYA_IP_AD
     client->fd             = fd;
     client->addr           = addr;
     client->connected      = TRUE;
-    client->last_ping_time = tal_time_get_posix_ms();
+    client->last_ping_time = core_time_get_posix_ms();
     client->sequence       = 0;
     client->recv_buf_size  = g_ai_monitor_server.config.recv_buf_size;
 
@@ -171,7 +171,7 @@ STATIC VOID __cleanup_client(ai_monitor_client_t *client)
 
     if (client->fd >= 0) {
         tuya_unreg_lan_sock(client->fd);
-        // tal_net_close(client->fd);
+        // core_net_close(client->fd);
         client->fd = -1;
     }
 
@@ -247,7 +247,7 @@ STATIC OPERATE_RET __handle_ping(ai_monitor_client_t *client, uint64_t client_ts
     OPERATE_RET rt = OPRT_OK;
     uint64_t    server_ts;
 
-    server_ts = client->last_ping_time = tal_time_get_posix_ms();
+    server_ts = client->last_ping_time = core_time_get_posix_ms();
     PR_DEBUG("Received ping from client fd=%d, client_ts=%llu", client->fd, client_ts);
 
     // response ai pong
@@ -307,7 +307,7 @@ STATIC OPERATE_RET __handle_event_filter(ai_monitor_client_t *client, AI_EVENT_A
     if (user_data_bitmap & (1ULL << AI_PT_CUSTOM_LOG)) {
         __client_register(client, AI_PT_CUSTOM_LOG);
     } else {
-        tal_log_del_output_term(AI_MONITOR_TAG);
+        core_log_del_output_term(AI_MONITOR_TAG);
     }
 
     return OPRT_OK;
@@ -478,19 +478,19 @@ STATIC VOID __socket_read_handler(int32_t sock)
 
     // FIXME: current only support event type with event type == 0xf000, need to handle other types
     // Receive data
-    int recv_len = tal_net_recv(sock, client->recv_buf + client->recv_len, client->recv_buf_size - client->recv_len);
+    int recv_len = core_net_recv(sock, client->recv_buf + client->recv_len, client->recv_buf_size - client->recv_len);
     if (recv_len <= 0) {
         if (recv_len == 0) {
             PR_INFO("client fd=%d disconnected", sock);
         } else {
-            PR_ERR("recv data failed, errno=%d", tal_net_get_errno());
+            PR_ERR("recv data failed, errno=%d", core_net_get_errno());
         }
 
-        tal_mutex_lock(g_ai_monitor_server.mutex);
+        core_mutex_lock(g_ai_monitor_server.mutex);
         // Cleanup client
         __cleanup_client(client);
         g_ai_monitor_server.client_count--;
-        tal_mutex_unlock(g_ai_monitor_server.mutex);
+        core_mutex_unlock(g_ai_monitor_server.mutex);
         return;
     }
 
@@ -596,31 +596,31 @@ STATIC int __create_server_socket(int port)
     }
 
     /* create listening TCP socket */
-    sockfd = tal_net_socket_create(PROTOCOL_TCP);
+    sockfd = core_net_socket_create(PROTOCOL_TCP);
     if (sockfd < 0) {
         return -1;
     }
 
-    status = tal_net_set_reuse(sockfd);
+    status = core_net_set_reuse(sockfd);
     if (status < 0) {
-        tal_net_close(sockfd);
+        core_net_close(sockfd);
         return -2;
     }
 
     if (tuya_svc_devos_get_state() < DEVOS_STATE_ACTIVATED) {
-        ip_addr = tal_net_str2addr(ip.ip);
+        ip_addr = core_net_str2addr(ip.ip);
         PR_NOTICE("Not actived, use linkage addr[%s][%08x]", ip.ip, ip_addr);
     }
 
-    status = tal_net_bind(sockfd, ip_addr, port);
+    status = core_net_bind(sockfd, ip_addr, port);
     if (status < 0) {
-        tal_net_close(sockfd);
+        core_net_close(sockfd);
         return -3;
     }
 
-    status = tal_net_listen(sockfd, 5);
+    status = core_net_listen(sockfd, 5);
     if (status < 0) {
-        tal_net_close(sockfd);
+        core_net_close(sockfd);
         return -5;
     }
 
@@ -635,8 +635,8 @@ STATIC int __tcp_create_serv_fd(VOID)
         // Create server socket
         rt = __create_server_socket(g_ai_monitor_server.config.port);
         if (rt < 0) {
-            PR_ERR("create server socket failed, ret=%d, errno=%d", rt, tal_net_get_errno());
-            tal_mutex_unlock(g_ai_monitor_server.mutex);
+            PR_ERR("create server socket failed, ret=%d, errno=%d", rt, core_net_get_errno());
+            core_mutex_unlock(g_ai_monitor_server.mutex);
             return OPRT_COM_ERROR;
         }
         PR_DEBUG("Server socket created, fd=%d", rt);
@@ -652,9 +652,9 @@ STATIC int __tcp_create_serv_fd(VOID)
         rt = tuya_reg_lan_sock(sock_info);
         if (rt != OPRT_OK) {
             PR_ERR("register server socket failed: %d", rt);
-            tal_net_close(g_ai_monitor_server.server_fd);
+            core_net_close(g_ai_monitor_server.server_fd);
             g_ai_monitor_server.server_fd = -1;
-            tal_mutex_unlock(g_ai_monitor_server.mutex);
+            core_mutex_unlock(g_ai_monitor_server.mutex);
             return rt;
         }
     }
@@ -669,16 +669,16 @@ STATIC VOID __accept_handler(int32_t server_sock)
     OPERATE_RET    ret  = OPRT_OK;
     TUYA_IP_ADDR_T addr = 0;
 
-    int client_fd = tal_net_accept(server_sock, &addr, NULL);
+    int client_fd = core_net_accept(server_sock, &addr, NULL);
     if (client_fd < 0) {
-        PR_ERR("accept failed %d (errno: %d)", client_fd, tal_net_get_errno());
+        PR_ERR("accept failed %d (errno: %d)", client_fd, core_net_get_errno());
         return;
     }
 
     // Check client limit
     if (g_ai_monitor_server.client_count >= g_ai_monitor_server.config.max_clients) {
         PR_WARN("max clients reached, reject connection");
-        tal_net_close(client_fd);
+        core_net_close(client_fd);
         return;
     }
 
@@ -693,7 +693,7 @@ STATIC VOID __accept_handler(int32_t server_sock)
 
     if (!client) {
         PR_ERR("no free client slot");
-        tal_net_close(client_fd);
+        core_net_close(client_fd);
         return;
     }
 
@@ -701,15 +701,15 @@ STATIC VOID __accept_handler(int32_t server_sock)
     ret = __init_client(client, client_fd, addr);
     if (ret != OPRT_OK) {
         PR_ERR("init client failed: %d", ret);
-        tal_net_close(client_fd);
+        core_net_close(client_fd);
         return;
     }
 
     // set reuse
-    tal_net_set_reuse(client_fd);
+    core_net_set_reuse(client_fd);
 
     // set no block
-    tal_net_set_block(client_fd, FALSE);
+    core_net_set_block(client_fd, FALSE);
 
     // Register socket for monitoring
     sloop_sock_t sock_info = {.sock       = client_fd,
@@ -727,7 +727,7 @@ STATIC VOID __accept_handler(int32_t server_sock)
 
     g_ai_monitor_server.client_count++;
 
-    PR_INFO("client connected, fd=%d, addr=%s, count=%d", client_fd, tal_net_addr2str(addr),
+    PR_INFO("client connected, fd=%d, addr=%s, count=%d", client_fd, core_net_addr2str(addr),
             g_ai_monitor_server.client_count);
 }
 
@@ -823,7 +823,7 @@ STATIC VOID __monitor_tm_cb(TIMER_ID timerID, void *pTimerArg)
     }
 
     // stop timer if server socket created
-    tal_sw_timer_stop(g_ai_monitor_server.timer);
+    core_sw_timer_stop(g_ai_monitor_server.timer);
     PR_DEBUG("Server socket created successfully, stopped timer");
 }
 
@@ -843,20 +843,20 @@ STATIC OPERATE_RET __ai_monitor_start(VOID)
         return OPRT_OK;
     }
 
-    tal_mutex_lock(g_ai_monitor_server.mutex);
-    tal_sw_timer_start(g_ai_monitor_server.timer, 2000, TAL_TIMER_CYCLE);
+    core_mutex_lock(g_ai_monitor_server.mutex);
+    core_sw_timer_start(g_ai_monitor_server.timer, 2000, CORE_TIMER_CYCLE);
 
     rt = tuya_ai_biz_monitor_register(__ai_biz_recv_handler, __ai_biz_send_handler, &g_ai_monitor_server);
     if (rt != OPRT_OK) {
         PR_ERR("set AI biz monitor callback failed: %d", rt);
         tuya_unreg_lan_sock(g_ai_monitor_server.server_fd);
-        // tal_net_close(g_ai_monitor_server.server_fd);
+        // core_net_close(g_ai_monitor_server.server_fd);
         g_ai_monitor_server.server_fd = -1;
-        tal_mutex_unlock(g_ai_monitor_server.mutex);
+        core_mutex_unlock(g_ai_monitor_server.mutex);
         return rt;
     }
     g_ai_monitor_server.running = TRUE;
-    tal_mutex_unlock(g_ai_monitor_server.mutex);
+    core_mutex_unlock(g_ai_monitor_server.mutex);
 
     PR_INFO("AI monitor started, listening on port %d", g_ai_monitor_server.config.port);
     return OPRT_OK;
@@ -905,7 +905,7 @@ OPERATE_RET tuya_ai_monitor_init(CONST ai_monitor_config_t *config)
     }
 
     // Create mutex
-    rt = tal_mutex_create_init(&g_ai_monitor_server.mutex);
+    rt = core_mutex_create_init(&g_ai_monitor_server.mutex);
     if (rt != OPRT_OK) {
         PR_ERR("create mutex failed: %d", rt);
         OS_FREE(g_ai_monitor_server.clients);
@@ -913,11 +913,11 @@ OPERATE_RET tuya_ai_monitor_init(CONST ai_monitor_config_t *config)
     }
 
     // Create timer
-    rt = tal_sw_timer_create(__monitor_tm_cb, NULL, &g_ai_monitor_server.timer);
+    rt = core_sw_timer_create(__monitor_tm_cb, NULL, &g_ai_monitor_server.timer);
     if (rt != OPRT_OK) {
         PR_ERR("create timer failed: %d", rt);
         OS_FREE(g_ai_monitor_server.clients);
-        tal_mutex_release(g_ai_monitor_server.mutex);
+        core_mutex_release(g_ai_monitor_server.mutex);
         return rt;
     }
 
@@ -936,12 +936,12 @@ OPERATE_RET tuya_ai_monitor_init(CONST ai_monitor_config_t *config)
 
 STATIC VOID __session_close_all(VOID)
 {
-    tal_mutex_lock(g_ai_monitor_server.mutex);
+    core_mutex_lock(g_ai_monitor_server.mutex);
 
     // Unregister and close server socket
     if (g_ai_monitor_server.server_fd >= 0) {
         tuya_unreg_lan_sock(g_ai_monitor_server.server_fd);
-        // tal_net_close(g_ai_monitor_server.server_fd);
+        // core_net_close(g_ai_monitor_server.server_fd);
         g_ai_monitor_server.server_fd = -1;
     }
 
@@ -955,9 +955,9 @@ STATIC VOID __session_close_all(VOID)
     g_ai_monitor_server.client_count = 0;
 
     // start timer to create server socket
-    tal_sw_timer_start(g_ai_monitor_server.timer, 2000, TAL_TIMER_CYCLE);
+    core_sw_timer_start(g_ai_monitor_server.timer, 2000, CORE_TIMER_CYCLE);
 
-    tal_mutex_unlock(g_ai_monitor_server.mutex);
+    core_mutex_unlock(g_ai_monitor_server.mutex);
 }
 
 STATIC OPERATE_RET __default_update(AI_STAGE_E stage, VOID *data, AI_SEND_PACKET_T *info)
@@ -996,13 +996,13 @@ STATIC OPERATE_RET __default_write(AI_PACKET_WRITER_T *writer, VOID *buf, uint32
     uint32_t    remaining  = buf_len;
 
     while (remaining > 0) {
-        rt = tal_net_send(cfg->fd, (char *)buf + total_sent, remaining);
+        rt = core_net_send(cfg->fd, (char *)buf + total_sent, remaining);
         if (rt <= 0) {
-            TUYA_ERRNO err = tal_net_get_errno();
+            TUYA_ERRNO err = core_net_get_errno();
             // FIXME: some platforms may return different error codes
             if (err == UNW_EAGAIN || err == UNW_EWOULDBLOCK || err == 11) {
                 // Non-blocking mode, retry
-                tal_system_sleep(50); // Sleep for a short time before retrying
+                core_system_sleep(50); // Sleep for a short time before retrying
                 continue;
             }
             PR_ERR("send data failed, rt=%d, errno=%d", rt, err);
@@ -1030,7 +1030,7 @@ STATIC OPERATE_RET __start_log_server(VOID)
     OPERATE_RET rt = OPRT_OK;
 
     // Register log output term
-    tal_log_add_output_term(AI_MONITOR_TAG, __log_output);
+    core_log_add_output_term(AI_MONITOR_TAG, __log_output);
 
     // create async log recv task
     THREAD_CFG_T thrd_param = {0};
@@ -1041,7 +1041,7 @@ STATIC OPERATE_RET __start_log_server(VOID)
     thrd_param.ex_ram_mode = 1;
 #endif
 
-    rt = tal_thread_create_and_start(&g_ai_monitor_server.log_thread,
+    rt = core_thread_create_and_start(&g_ai_monitor_server.log_thread,
                                      NULL, NULL,
                                      __log_recv_task, NULL,
                                      &thrd_param);

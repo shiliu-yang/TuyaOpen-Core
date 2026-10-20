@@ -10,7 +10,7 @@
 #include "ty_cJSON.h"
 #include "cJSON.h"
 
-#include "tal_api.h"
+#include "core_api.h"
 #include "tuya_iot.h"
 #include "atop_service.h"
 
@@ -20,11 +20,11 @@
 #define DEF_URL_LEN 1024
 
 #if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
-#define HTTP_MEMORY_MALLOC tal_ex_ram_malloc
-#define HTTP_MEMORY_FREE   tal_ex_ram_free
+#define HTTP_MEMORY_MALLOC core_ex_ram_malloc
+#define HTTP_MEMORY_FREE   core_ex_ram_free
 #else
-#define HTTP_MEMORY_MALLOC tal_malloc
-#define HTTP_MEMORY_FREE   tal_free
+#define HTTP_MEMORY_MALLOC core_malloc
+#define HTTP_MEMORY_FREE   core_free
 #endif
 
 /***********************************************************

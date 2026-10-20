@@ -10,8 +10,8 @@
 
 #include "tuya_cloud_types.h"
 
-#include "tal_event_info.h"
-#include "tal_event.h"
+#include "core_event_info.h"
+#include "core_event.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -20,9 +20,9 @@ extern "C" {
 /***********************************************************
 ************************macro define************************
 ***********************************************************/
-#define ty_subscribe_event tal_event_subscribe
-#define ty_unsubscribe_event tal_event_unsubscribe
-#define ty_publish_event tal_event_publish
+#define ty_subscribe_event core_event_subscribe
+#define ty_unsubscribe_event core_event_unsubscribe
+#define ty_publish_event core_event_publish
 
 /***********************************************************
 ***********************typedef define***********************

@@ -30,9 +30,9 @@
 #include "mqtt_client_interface.h"
 #include "cJSON.h"
 #include "mqtt_service.h"
-#include "tal_security.h"
+#include "core_security.h"
 #include "crc32i.h"
-#include "tal_api.h"
+#include "core_api.h"
 #include "tuya_protocol.h"
 #include "dev_evt.h"
 
@@ -62,7 +62,7 @@ static int tuya_mqtt_signature_tool(const tuya_meta_info_t *input, tuya_mqtt_acc
         memcpy(signout->cipherkey, input->localkey, 16);
         snprintf(signout->clientid, sizeof(signout->clientid), "%s", input->devid);
         snprintf(signout->username, sizeof(signout->username), "%s", input->devid);
-        tal_md5_ret((const uint8_t *)input->seckey, strlen(input->seckey), digest);
+        core_md5_ret((const uint8_t *)input->seckey, strlen(input->seckey), digest);
         for (i = 0; i < 8; ++i) {
             snprintf(&signout->password[i * 2], sizeof(signout->password) - (i * 2), "%02x",
                      (unsigned char)digest[i + 4]);
@@ -77,7 +77,7 @@ static int tuya_mqtt_signature_tool(const tuya_meta_info_t *input, tuya_mqtt_acc
         memcpy(signout->cipherkey, input->authkey, 16);
         snprintf(signout->clientid, sizeof(signout->clientid), "acon_%s", input->uuid);
         snprintf(signout->username, sizeof(signout->username), "acon_%s|pv=%s", input->uuid, TUYA_PV23);
-        tal_md5_ret((const uint8_t *)input->authkey, strlen(input->authkey), digest);
+        core_md5_ret((const uint8_t *)input->authkey, strlen(input->authkey), digest);
         for (i = 0; i < 8; ++i) {
             snprintf(&signout->password[i * 2], sizeof(signout->password) - (i * 2), "%02x",
                      (unsigned char)digest[i + 4]);
@@ -132,16 +132,16 @@ int tuya_mqtt_subscribe_message_callback_register(tuya_mqtt_context_t *context, 
     }
 
     /* Intser new handle */
-    mqtt_subscribe_handle_t *newtarget = tal_calloc(1, sizeof(mqtt_subscribe_handle_t));
+    mqtt_subscribe_handle_t *newtarget = core_calloc(1, sizeof(mqtt_subscribe_handle_t));
     if (!newtarget) {
         PR_ERR("malloc error");
         return OPRT_MALLOC_FAILED;
     }
 
     newtarget->topic_length = strlen(topic);
-    newtarget->topic = tal_calloc(1, newtarget->topic_length + 1);
+    newtarget->topic = core_calloc(1, newtarget->topic_length + 1);
     if (!newtarget->topic) {
-        tal_free(newtarget);
+        core_free(newtarget);
         return OPRT_MALLOC_FAILED;
     }
     memcpy(newtarget->topic, topic, newtarget->topic_length);
@@ -187,8 +187,8 @@ int tuya_mqtt_subscribe_message_callback_unregister(tuya_mqtt_context_t *context
         mqtt_subscribe_handle_t *entry = *target;
         if (entry->topic_length == topic_length && !memcmp(topic, entry->topic, topic_length)) {
             *target = entry->next;
-            tal_free(entry->topic);
-            tal_free(entry);
+            core_free(entry->topic);
+            core_free(entry);
         } else {
             target = &entry->next;
         }
@@ -238,7 +238,7 @@ static int tuya_protocol_message_parse_process(tuya_mqtt_context_t *context, con
     cJSON *root = NULL;
     cJSON *json = NULL;
     root = cJSON_Parse((const char *)jsonstr);
-    tal_free(jsonstr);
+    core_free(jsonstr);
     if (NULL == root) {
         PR_ERR("JSON parse error");
         return OPRT_CJSON_PARSE_ERR;
@@ -349,8 +349,8 @@ static void mqtt_client_puback_cb(void *client, uint16_t msgid, void *userdata)
         if (msgid == entry->msgid) {
             entry->cb(OPRT_OK, entry->user_data);
             *next_handle = entry->next;
-            tal_free(entry->payload);
-            tal_free(entry);
+            core_free(entry->payload);
+            core_free(entry);
             break;
         }
     }
@@ -480,7 +480,7 @@ int tuya_mqtt_start(tuya_mqtt_context_t *context)
             PR_WARN("Connection to the MQTT server failed. Retrying "
                     "connection after %hu ms backoff.",
                     (unsigned short)nextRetryBackOff);
-            tal_system_sleep(nextRetryBackOff + 10000);
+            core_system_sleep(nextRetryBackOff + 10000);
         }
         return OPRT_COM_ERROR;
     }
@@ -544,7 +544,7 @@ int tuya_mqtt_protocol_register(tuya_mqtt_context_t *context, uint16_t protocol_
         target = target->next;
     }
 
-    tuya_protocol_handle_t *new_handle = tal_calloc(1, sizeof(tuya_protocol_handle_t));
+    tuya_protocol_handle_t *new_handle = core_calloc(1, sizeof(tuya_protocol_handle_t));
     if (!new_handle) {
         return OPRT_MALLOC_FAILED;
     }
@@ -583,7 +583,7 @@ int tuya_mqtt_protocol_unregister(tuya_mqtt_context_t *context, uint16_t protoco
         tuya_protocol_handle_t *entry = *target;
         if (entry->id == protocol_id && entry->cb == cb) {
             *target = entry->next;
-            tal_free(entry);
+            core_free(entry);
         } else {
             target = &entry->next;
         }
@@ -615,7 +615,7 @@ int tuya_mqtt_protocol_unregister_all(tuya_mqtt_context_t *context)
     while (target) {
         entry = target;
         target = entry->next;
-        tal_free(entry);
+        core_free(entry);
     }
     /* UNLOCK */
 
@@ -657,19 +657,19 @@ int tuya_mqtt_client_publish_common(tuya_mqtt_context_t *context, const char *to
         return OPRT_OK;
     }
 
-    mqtt_publish_handle_t *handle = tal_malloc(sizeof(mqtt_publish_handle_t));
+    mqtt_publish_handle_t *handle = core_malloc(sizeof(mqtt_publish_handle_t));
     TUYA_CHECK_NULL_RETURN(handle, OPRT_MALLOC_FAILED);
     handle->next = NULL;
     handle->msgid = 0;
     handle->topic = (char *)topic;
-    handle->timeout = tal_time_get_posix() + timeout_ms;
+    handle->timeout = core_time_get_posix() + timeout_ms;
     handle->cb = cb;
     handle->user_data = user_data;
     handle->payload_length = payload_length;
     if (payload_length > 0) {
-        handle->payload = tal_malloc(payload_length);
+        handle->payload = core_malloc(payload_length);
         if (handle->payload == NULL) {
-            tal_free(handle);
+            core_free(handle);
             return OPRT_MALLOC_FAILED;
         }
         memcpy(handle->payload, payload, payload_length);
@@ -743,7 +743,7 @@ int tuya_mqtt_protocol_data_publish_with_topic_common(tuya_mqtt_context_t *conte
     /* mqtt client publish */
     ret = tuya_mqtt_client_publish_common(context, (const char *)topic, (const uint8_t *)buffer, buffer_len, cb,
                                           user_data, timeout_ms, async);
-    tal_free(buffer);
+    core_free(buffer);
     return ret;
 }
 
@@ -856,7 +856,7 @@ int tuya_mqtt_loop(tuya_mqtt_context_t *context)
                 PR_WARN("Connection to the MQTT server failed. Retrying "
                         "connection after %hu ms backoff.",
                         (unsigned short)nextRetryBackOff);
-                tal_system_sleep(nextRetryBackOff);
+                core_system_sleep(nextRetryBackOff);
                 return rt;
             }
         }
@@ -869,11 +869,11 @@ int tuya_mqtt_loop(tuya_mqtt_context_t *context)
     while (*next_handle) {
         mqtt_publish_handle_t *entry = *next_handle;
     
-        if (entry->timeout <= tal_time_get_posix()) {
+        if (entry->timeout <= core_time_get_posix()) {
             entry->cb(OPRT_TIMEOUT, entry->user_data);
             *next_handle = entry->next;
-            tal_free(entry->payload);
-            tal_free(entry);
+            core_free(entry->payload);
+            core_free(entry);
             continue;
         }
     
@@ -955,7 +955,7 @@ int tuya_mqtt_upgrade_progress_report(tuya_mqtt_context_t *context, int channel,
         return OPRT_INVALID_PARM;
     }
 
-    uint8_t *data_buf = tal_malloc(128);
+    uint8_t *data_buf = core_malloc(128);
     if (NULL == data_buf) {
         return OPRT_MALLOC_FAILED;
     }
@@ -963,11 +963,11 @@ int tuya_mqtt_upgrade_progress_report(tuya_mqtt_context_t *context, int channel,
     int buffer_size = snprintf((char *)data_buf, 128, "{\"progress\":\"%d\",\"firmwareType\":%d}", percent,
                                channel);
     if (buffer_size < 0 || buffer_size >= 128) {
-        tal_free(data_buf);
+        core_free(data_buf);
         return OPRT_BUFFER_NOT_ENOUGH;
     }
     uint16_t msgid = tuya_mqtt_protocol_data_publish(context, PRO_UPGE_PUSH, data_buf, (uint16_t)buffer_size);
-    tal_free(data_buf);
+    core_free(data_buf);
     if (msgid <= 0) {
         return OPRT_COM_ERROR;
     }

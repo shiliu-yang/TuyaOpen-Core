@@ -1,7 +1,7 @@
 // https://tls.mbed.org/module-level-design-cipher
 #include "cipher_wrapper.h"
-#include "tal_log.h"
-#include "tal_memory.h"
+#include "core_log.h"
+#include "core_memory.h"
 
 int mbedtls_cipher_auth_encrypt_wrapper(const cipher_params_t *input, unsigned char *output, size_t *olen,
                                         unsigned char *tag, size_t tag_len)
@@ -44,7 +44,7 @@ int mbedtls_cipher_auth_encrypt_wrapper(const cipher_params_t *input, unsigned c
         goto EXIT;
     }
 
-    enc_tmpbuf = tal_malloc(input->data_len + tag_len);
+    enc_tmpbuf = core_malloc(input->data_len + tag_len);
     if (enc_tmpbuf == NULL) {
         PR_ERR("malloc enc_tmpbuf failed");
         ret = OPRT_MALLOC_FAILED;
@@ -70,7 +70,7 @@ int mbedtls_cipher_auth_encrypt_wrapper(const cipher_params_t *input, unsigned c
 EXIT:
     mbedtls_cipher_free(&cipher_ctx);
     if (NULL != enc_tmpbuf) {
-        tal_free(enc_tmpbuf);
+        core_free(enc_tmpbuf);
         enc_tmpbuf = NULL;
     }
     return (ret);
@@ -126,7 +126,7 @@ int mbedtls_cipher_auth_decrypt_wrapper(const cipher_params_t *input, unsigned c
     }
 
     /* https://github.com/Mbed-TLS/mbedtls/issues/3665 */
-    dec_tmpbuf = tal_malloc(input->data_len + tag_len);
+    dec_tmpbuf = core_malloc(input->data_len + tag_len);
     if (dec_tmpbuf == NULL) {
         PR_ERR("malloc dec_tmpbuf failed");
         ret = OPRT_MALLOC_FAILED;
@@ -144,7 +144,7 @@ int mbedtls_cipher_auth_decrypt_wrapper(const cipher_params_t *input, unsigned c
 EXIT:
     mbedtls_cipher_free(&cipher_ctx);
     if (NULL != dec_tmpbuf) {
-        tal_free(dec_tmpbuf);
+        core_free(dec_tmpbuf);
         dec_tmpbuf = NULL;
     }
     return (ret);

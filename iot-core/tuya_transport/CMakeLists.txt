@@ -1,6 +1,6 @@
 # Connection service layer: provides TLS-enabled HTTP / MQTT / TLS connection
 # interfaces upward, and depends downward only on the official third_party
-# libraries and tal_system.
+# libraries and core_system.
 # All in-house code is built into this single target: transport primitives
 # (tcp/tls/websocket transporters), http/mqtt wrappers, the TLS session
 # wrapper, and the security algorithms.
@@ -36,8 +36,8 @@ endforeach()
 unset(_tp_official)
 
 # Inject in-house header paths into the official library compile units
-# (transport_interface.h, config headers) along with the TAL header
-# dependencies (tuya_cloud_types.h, tal_memory.h, etc.), keeping third_party
+# (transport_interface.h, config headers) along with the CORE header
+# dependencies (tuya_cloud_types.h, core_memory.h, etc.), keeping third_party
 # as pure official definitions that do not reference in-house directories.
 #
 # mbedtls is injected only when core builds it itself
@@ -45,7 +45,7 @@ unset(_tp_official)
 # (esp-idf host), that target name is a host-side component/bridge target, and
 # injecting core's config directory would make the host's mbedtls consumers
 # (esp_common etc.) pick up core's threading_alt.h (which includes
-# tal_mutex.h) and fail to compile; the host's own mbedtls configuration
+# core_mutex.h) and fail to compile; the host's own mbedtls configuration
 # system (esp_config.h + ROM version of threading_alt.h) is injected by the host.
 foreach(_tp_official corehttp coremqtt)
     if(TARGET ${_tp_official})
@@ -59,7 +59,7 @@ foreach(_tp_official corehttp coremqtt)
         target_include_directories(${_tp_official} INTERFACE
             ${CMAKE_CURRENT_SOURCE_DIR}/config
         )
-        target_link_libraries(${_tp_official} PRIVATE tuyaopen-headers tal_system)
+        target_link_libraries(${_tp_official} PRIVATE tuyaopen-headers core_system)
     endif()
 endforeach()
 unset(_tp_official)
@@ -74,12 +74,12 @@ if(TARGET mbedtls AND NOT CONFIG_ENABLE_PLATFORM_MBEDTLS)
     target_include_directories(mbedtls INTERFACE
         ${CMAKE_CURRENT_SOURCE_DIR}/config
     )
-    target_link_libraries(mbedtls PRIVATE tuyaopen-headers tal_system)
+    target_link_libraries(mbedtls PRIVATE tuyaopen-headers core_system)
 endif()
 
 target_link_libraries(tuya_transport PRIVATE
     tuyaopen-headers
-    tal_system
+    core_system
 )
 # General utilities (crc/random/mix_method/dev_evt, etc.) propagate to
 # consumers with this target as PUBLIC

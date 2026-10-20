@@ -40,21 +40,21 @@
  */
 
 #include "tuya_cloud_types.h"
-#include "tal_api.h"
-#include "tal_event.h"
+#include "core_api.h"
+#include "core_event.h"
 #include "tuya_protocol.h"
 #include "cipher_wrapper.h"
 #include "mbedtls/hkdf.h"
 #include "mbedtls/md.h"
 #include "uni_random.h"
 #include "tuya_lan.h"
-#include "tal_network.h"
+#include "core_network.h"
 #include "mix_method.h"
 #include "lan_sock.h"
 #include "tuya_iot_dp.h"
 #include "crc32i.h"
 #include "cJSON.h"
-#include "tal_network.h"
+#include "core_network.h"
 
 #define SERV_PORT_TCP           6668 // device listens for the APP TCP connection
 #define SERV_PORT_APP_UDP_BCAST 7000 // APP broadcast, device listening port
@@ -153,14 +153,14 @@ static void lan_session_close(lan_session_t *session)
         PR_ERR("close session err");
         return;
     }
-    tal_mutex_lock(lan->mutex);
+    core_mutex_lock(lan->mutex);
     if (session->fd != -1) {
-        tal_event_publish(EVENT_LAN_CLIENT_CLOSE, &session->fd);
+        core_event_publish(EVENT_LAN_CLIENT_CLOSE, &session->fd);
         tuya_unreg_lan_sock(session->fd);
         lan_session_free(session);
         lan->fd_num--;
     }
-    tal_mutex_unlock(lan->mutex);
+    core_mutex_unlock(lan->mutex);
 }
 
 static void lan_sesison_add(int socket, TIME_T time)
@@ -174,7 +174,7 @@ static void lan_sesison_add(int socket, TIME_T time)
         return;
     }
 
-    tal_mutex_lock(lan->mutex);
+    core_mutex_lock(lan->mutex);
     for (i = 0; i < lan->cfg->client_num; i++) {
         if (lan->session[i].active) {
             continue;
@@ -189,7 +189,7 @@ static void lan_sesison_add(int socket, TIME_T time)
         lan->fd_num++;
         break;
     }
-    tal_mutex_unlock(lan->mutex);
+    core_mutex_unlock(lan->mutex);
 }
 
 static void lan_session_fault_set(lan_session_t *session)
@@ -219,7 +219,7 @@ static void lan_session_close_all(void)
     int i;
     PR_DEBUG("close all socket");
 
-    tal_mutex_lock(lan->mutex);
+    core_mutex_lock(lan->mutex);
     if (lan->tcp_serv_fd != -1) {
         tuya_unreg_lan_sock(lan->tcp_serv_fd);
         lan->tcp_serv_fd = -1;
@@ -230,13 +230,13 @@ static void lan_session_close_all(void)
     }
     for (i = 0; i < lan->cfg->client_num; i++) {
         if (lan->session[i].active) {
-            tal_event_publish(EVENT_LAN_CLIENT_CLOSE, &lan->session[i].fd);
+            core_event_publish(EVENT_LAN_CLIENT_CLOSE, &lan->session[i].fd);
             tuya_unreg_lan_sock(lan->session[i].fd);
             lan_session_free(&lan->session[i]);
         }
     }
     lan->fd_num = 0;
-    tal_mutex_unlock(lan->mutex);
+    core_mutex_unlock(lan->mutex);
 }
 
 static void lan_session_time_update(lan_session_t *session, const TIME_T time)
@@ -299,9 +299,9 @@ static int lan_session_active_num_get(void)
     }
 
     int num;
-    tal_mutex_lock(lan->mutex);
+    core_mutex_lock(lan->mutex);
     num = lan->fd_num;
-    tal_mutex_unlock(lan->mutex);
+    core_mutex_unlock(lan->mutex);
 
     PR_TRACE("Curr Socket Num:%d", num);
     return num;
@@ -327,7 +327,7 @@ int lan_msg_gcm_encrpt(uint8_t *data, uint32_t len, uint8_t **ec_data, uint32_t 
         .data_len = len,
     };
 
-    uint8_t *send_buf = tal_malloc(lpv35_frame_buffer_size_get(&frame));
+    uint8_t *send_buf = core_malloc(lpv35_frame_buffer_size_get(&frame));
     if (send_buf == NULL) {
         PR_ERR("send_buf malloc fail");
         return OPRT_MALLOC_FAILED;
@@ -361,7 +361,7 @@ static void lan_app_key_make(void)
     app_key2[13] = 'B';
     app_key2[14] = 'f';
     app_key2[15] = 'n';
-    tal_md5_ret(app_key2, APP_KEY_LEN, app_key_encode);
+    core_md5_ret(app_key2, APP_KEY_LEN, app_key_encode);
     memcpy(app_key2, app_key_encode, APP_KEY_LEN);
 
     app_key3[0] = 'W';
@@ -380,7 +380,7 @@ static void lan_app_key_make(void)
     app_key3[13] = 'm';
     app_key3[14] = 'N';
     app_key3[15] = 'J';
-    tal_md5_ret(app_key3, APP_KEY_LEN, app_key_encode);
+    core_md5_ret(app_key3, APP_KEY_LEN, app_key_encode);
     memcpy(app_key3, app_key_encode, APP_KEY_LEN);
 }
 
@@ -392,15 +392,15 @@ static int lan_tcp_setup_serv_socket(int port)
     int ret = OPRT_OK;
 
     /* create listening TCP socket */
-    fd = tal_net_socket_create(PROTOCOL_TCP);
+    fd = core_net_socket_create(PROTOCOL_TCP);
     if (fd < 0) {
-        PR_ERR("Socket create fail:%d, Port:%d", tal_net_get_errno(), port);
+        PR_ERR("Socket create fail:%d, Port:%d", core_net_get_errno(), port);
         ret = fd;
         goto __exit;
     }
-    ret = tal_net_set_reuse(fd);
-    ret |= tal_net_bind(fd, ip_addr, port);
-    ret |= tal_net_listen(fd, 5);
+    ret = core_net_set_reuse(fd);
+    ret |= core_net_bind(fd, ip_addr, port);
+    ret |= core_net_listen(fd, 5);
     if (OPRT_OK != ret) {
         ret = OPRT_SOCK_ERR;
         goto __exit;
@@ -411,7 +411,7 @@ static int lan_tcp_setup_serv_socket(int port)
 __exit:
     PR_DEBUG("setup lan tcp failed %d!", ret);
     if (fd > 0) {
-        tal_net_close(fd);
+        core_net_close(fd);
     }
 
     return ret;
@@ -425,10 +425,10 @@ static int lan_get_valid_socket_num(lan_mgr_t *lan)
 
     int num = 0;
 
-    tal_mutex_lock(lan->mutex);
+    core_mutex_lock(lan->mutex);
     num = lan->fd_num;
     if (0 == num) {
-        tal_mutex_unlock(lan->mutex);
+        core_mutex_unlock(lan->mutex);
         return 0;
     }
 
@@ -440,7 +440,7 @@ static int lan_get_valid_socket_num(lan_mgr_t *lan)
             }
         }
     }
-    tal_mutex_unlock(lan->mutex);
+    core_mutex_unlock(lan->mutex);
 
     if (fault_cnt >= num) {
         PR_TRACE("socket all falult:%d ", num);
@@ -463,13 +463,13 @@ static int lan_send(lan_session_t *session, uint32_t fr_num, uint32_t fr_type, u
         PR_ERR("session->active == false");
         return OPRT_COM_ERROR;
     }
-    tal_mutex_lock(s_lan_mgr->mutex);
+    core_mutex_lock(s_lan_mgr->mutex);
     if (session->fault == true) {
         PR_ERR("session is error");
-        tal_mutex_unlock(s_lan_mgr->mutex);
+        core_mutex_unlock(s_lan_mgr->mutex);
         return OPRT_SVC_LAN_SOCKET_FAULT;
     }
-    tal_mutex_unlock(s_lan_mgr->mutex);
+    core_mutex_unlock(s_lan_mgr->mutex);
 
     uint8_t *send_buf = NULL;
     uint32_t send_len = 0;
@@ -489,7 +489,7 @@ static int lan_send(lan_session_t *session, uint32_t fr_num, uint32_t fr_type, u
         return OPRT_COM_ERROR;
     }
     int plaintext_len = sizeof(lpv35_plaintext_data_t) + len;
-    lpv35_plaintext_data_t *plaintext_data = tal_malloc(plaintext_len);
+    lpv35_plaintext_data_t *plaintext_data = core_malloc(plaintext_len);
     if (plaintext_data == NULL) {
         PR_ERR("plaintext_data fail");
         return OPRT_MALLOC_FAILED;
@@ -502,26 +502,26 @@ static int lan_send(lan_session_t *session, uint32_t fr_num, uint32_t fr_type, u
                                   .type = fr_type,
                                   .data = (void *)plaintext_data,
                                   .data_len = plaintext_len};
-    send_buf = tal_malloc(lpv35_frame_buffer_size_get(&frame));
+    send_buf = core_malloc(lpv35_frame_buffer_size_get(&frame));
     if (send_buf == NULL) {
         PR_ERR("send_buf malloc fail");
-        tal_free(plaintext_data);
+        core_free(plaintext_data);
         return OPRT_MALLOC_FAILED;
     }
     memset(send_buf, 0, lpv35_frame_buffer_size_get(&frame));
     op_ret = lpv35_frame_serialize(key, 16, &frame, send_buf, (int *)&send_len);
-    tal_free(plaintext_data);
+    core_free(plaintext_data);
     if (op_ret != OPRT_OK) {
         PR_ERR("lpv35_frame_serialize fail:%d", op_ret);
-        tal_free(send_buf);
+        core_free(send_buf);
         return OPRT_COM_ERROR;
     }
-    tal_mutex_lock(s_lan_mgr->mutex);
-    int ret = tal_net_send(session->fd, send_buf, send_len);
+    core_mutex_lock(s_lan_mgr->mutex);
+    int ret = core_net_send(session->fd, send_buf, send_len);
     if (ret <= 0 || ret != send_len) {
-        if ((tal_net_get_errno() == UNW_EINTR) || (tal_net_get_errno() == UNW_EAGAIN)) {
-            tal_system_sleep(100);
-            ret = tal_net_send(session->fd, send_buf, send_len);
+        if ((core_net_get_errno() == UNW_EINTR) || (core_net_get_errno() == UNW_EAGAIN)) {
+            core_system_sleep(100);
+            ret = core_net_send(session->fd, send_buf, send_len);
             if (ret <= 0 || ret != send_len) {
                 op_ret = OPRT_SVC_LAN_SEND_ERR;
             }
@@ -530,12 +530,12 @@ static int lan_send(lan_session_t *session, uint32_t fr_num, uint32_t fr_type, u
         }
     }
 
-    tal_free(send_buf);
+    core_free(send_buf);
     if (op_ret == OPRT_SVC_LAN_SEND_ERR) {
         lan_session_fault_set(session);
-        PR_ERR("ret:%d send_len:%d errno:%d", ret, send_len, tal_net_get_errno());
+        PR_ERR("ret:%d send_len:%d errno:%d", ret, send_len, core_net_get_errno());
     }
-    tal_mutex_unlock(s_lan_mgr->mutex);
+    core_mutex_unlock(s_lan_mgr->mutex);
     return op_ret;
 }
 
@@ -545,14 +545,14 @@ static int lan_setup_udp_serv_socket(int port)
 
     int fd = 0;
 
-    fd = tal_net_socket_create(PROTOCOL_UDP);
+    fd = core_net_socket_create(PROTOCOL_UDP);
     if (fd < 0) {
-        PR_ERR("Socket create fail:%d, Port:%d", tal_net_get_errno(), port);
+        PR_ERR("Socket create fail:%d, Port:%d", core_net_get_errno(), port);
         ret = fd;
         goto __exit;
     }
-    ret = tal_net_set_reuse(fd);
-    ret |= tal_net_bind(fd, TY_IPADDR_ANY, port);
+    ret = core_net_set_reuse(fd);
+    ret |= core_net_bind(fd, TY_IPADDR_ANY, port);
     if (OPRT_OK != ret) {
         ret = OPRT_SOCK_ERR;
         goto __exit;
@@ -562,7 +562,7 @@ static int lan_setup_udp_serv_socket(int port)
 
 __exit:
     if (fd > 0) {
-        tal_net_close(fd);
+        core_net_close(fd);
     }
 
     return ret;
@@ -575,9 +575,9 @@ static void lan_make_udp_packets(uint8_t **out, int *p_olen)
 
     memset(&ip, 0, sizeof(NW_IP_S));
 
-    TUYA_IP_ADDR_T active_ip = tal_network_get_active_ip();
+    TUYA_IP_ADDR_T active_ip = core_network_get_active_ip();
     if (active_ip != 0) {
-        char *ipstr = tal_net_addr2str(active_ip);
+        char *ipstr = core_net_addr2str(active_ip);
         if (ipstr != NULL) {
             strncpy(ip.ip, ipstr, sizeof(ip.ip) - 1);
         }
@@ -598,9 +598,9 @@ static void lan_make_udp_packets(uint8_t **out, int *p_olen)
     }
 
     uint32_t data_len = 256;
-    char *json_buf = tal_malloc(data_len);
+    char *json_buf = core_malloc(data_len);
     if (NULL == json_buf) {
-        PR_ERR("tal_malloc Fail");
+        PR_ERR("core_malloc Fail");
         return;
     }
     memset(json_buf, 0, data_len);
@@ -610,7 +610,7 @@ static void lan_make_udp_packets(uint8_t **out, int *p_olen)
                        lan->iot_client->config.uuid);
     if (ret < 0 || (size_t)ret >= remain) {
         PR_ERR("json_buf overflow when writing ip info");
-        tal_free(json_buf);
+        core_free(json_buf);
         return;
     }
     offset += ret;
@@ -620,7 +620,7 @@ static void lan_make_udp_packets(uint8_t **out, int *p_olen)
                    lan->iot_client->is_activated ? 2 : 0);
     if (ret < 0 || (size_t)ret >= remain) {
         PR_ERR("json_buf overflow when writing active");
-        tal_free(json_buf);
+        core_free(json_buf);
         return;
     }
     offset += ret;
@@ -629,7 +629,7 @@ static void lan_make_udp_packets(uint8_t **out, int *p_olen)
     ret = snprintf(json_buf + offset, remain, ",\"encrypt\":true");
     if (ret < 0 || (size_t)ret >= remain) {
         PR_ERR("json_buf overflow when writing encrypt");
-        tal_free(json_buf);
+        core_free(json_buf);
         return;
     }
     offset += ret;
@@ -638,7 +638,7 @@ static void lan_make_udp_packets(uint8_t **out, int *p_olen)
     ret = snprintf(json_buf + offset, remain, ",\"productKey\":\"%s\"", lan->iot_client->config.productkey);
     if (ret < 0 || (size_t)ret >= remain) {
         PR_ERR("json_buf overflow when writing productKey");
-        tal_free(json_buf);
+        core_free(json_buf);
         return;
     }
     offset += ret;
@@ -647,7 +647,7 @@ static void lan_make_udp_packets(uint8_t **out, int *p_olen)
     ret = snprintf(json_buf + offset, remain, ",\"version\":\"%s\"", TUYA_LPV35);
     if (ret < 0 || (size_t)ret >= remain) {
         PR_ERR("json_buf overflow when writing version");
-        tal_free(json_buf);
+        core_free(json_buf);
         return;
     }
     offset += ret;
@@ -656,7 +656,7 @@ static void lan_make_udp_packets(uint8_t **out, int *p_olen)
     ret = snprintf(json_buf + offset, remain, ",\"sl\":%d", TUYA_SECURITY_LEVEL);
     if (ret < 0 || (size_t)ret >= remain) {
         PR_ERR("json_buf overflow when writing sl");
-        tal_free(json_buf);
+        core_free(json_buf);
         return;
     }
     offset += ret;
@@ -664,7 +664,7 @@ static void lan_make_udp_packets(uint8_t **out, int *p_olen)
 
     if (remain < 2) {
         PR_ERR("json_buf overflow when finalizing");
-        tal_free(json_buf);
+        core_free(json_buf);
         return;
     }
     json_buf[offset++] = '}';
@@ -672,16 +672,16 @@ static void lan_make_udp_packets(uint8_t **out, int *p_olen)
 
     // PR_DEBUG("BufToSend %d %d:%s",data_len, offset, json_buf);
     int plaintext_len = sizeof(lpv35_plaintext_data_t) + strlen(json_buf);
-    lpv35_plaintext_data_t *plaintext_data = tal_malloc(plaintext_len);
+    lpv35_plaintext_data_t *plaintext_data = core_malloc(plaintext_len);
     if (plaintext_data == NULL) {
         PR_ERR("plaintext_data fail");
-        tal_free(json_buf);
+        core_free(json_buf);
         return;
     }
     memset(plaintext_data, 0, plaintext_len);
     plaintext_data->ret_code = 0;
     memcpy(plaintext_data->data, json_buf, strlen(json_buf));
-    tal_free(json_buf);
+    core_free(json_buf);
 
     // lpv3.5 test arch
     lpv35_frame_object_t frame = {
@@ -691,18 +691,18 @@ static void lan_make_udp_packets(uint8_t **out, int *p_olen)
         .data_len = plaintext_len,
     };
 
-    uint8_t *send_buf = tal_malloc(lpv35_frame_buffer_size_get(&frame));
+    uint8_t *send_buf = core_malloc(lpv35_frame_buffer_size_get(&frame));
     if (send_buf == NULL) {
         PR_ERR("send_buf malloc fail");
-        tal_free(plaintext_data);
+        core_free(plaintext_data);
         return;
     }
     memset(send_buf, 0, lpv35_frame_buffer_size_get(&frame));
     op_ret = lpv35_frame_serialize(app_key2, APP_KEY_LEN, &frame, send_buf, p_olen);
-    tal_free(plaintext_data);
+    core_free(plaintext_data);
     if (op_ret != OPRT_OK) {
         PR_ERR("lpv35_frame_serialize fail:%d", op_ret);
-        tal_free(send_buf);
+        core_free(send_buf);
         return;
     }
 
@@ -757,7 +757,7 @@ int tuya_lan_dp_report(char *dpstr)
             }
         }
     }
-    tal_free(out);
+    core_free(out);
 
     return OPRT_OK;
 }
@@ -812,7 +812,7 @@ static void lan_protocol_process(lan_mgr_t *lan, lan_session_t *session, lpv35_f
     FRM_TP_CMD_ERR:
         lan_send(session, frame->sequence, frame->type, 1, (uint8_t *)describe, describe ? strlen(describe) : 0, true);
         if (jsonstr) {
-            tal_free(jsonstr);
+            core_free(jsonstr);
         }
         if (root) {
             cJSON_Delete(root);
@@ -828,14 +828,14 @@ static void lan_protocol_process(lan_mgr_t *lan, lan_session_t *session, lpv35_f
         // randA
         memcpy(session->randA, out, RAND_LEN);
         // hmac randA
-        tal_sha256_mac((const uint8_t *)s_lan_mgr->iot_client->activate.localkey,
+        core_sha256_mac((const uint8_t *)s_lan_mgr->iot_client->activate.localkey,
                        strlen(s_lan_mgr->iot_client->activate.localkey), session->randA, RAND_LEN, session->hmac);
         // make randB
         uni_random_string((char *)(session->randB), RAND_LEN);
         // make frame buffer
-        uint8_t *frame_buffer = tal_malloc(RAND_LEN + HMAC_LEN);
+        uint8_t *frame_buffer = core_malloc(RAND_LEN + HMAC_LEN);
         if (NULL == frame_buffer) {
-            PR_ERR("frame_buffer tal_malloc fail");
+            PR_ERR("frame_buffer core_malloc fail");
             break;
         }
         memset(frame_buffer, 0, RAND_LEN + HMAC_LEN);
@@ -843,7 +843,7 @@ static void lan_protocol_process(lan_mgr_t *lan, lan_session_t *session, lpv35_f
         memcpy(frame_buffer + RAND_LEN, session->hmac, HMAC_LEN);
         // response
         lan_send(session, frame->sequence, FRM_SECURITY_TYPE4, 0, frame_buffer, RAND_LEN + HMAC_LEN, true);
-        tal_free(frame_buffer);
+        core_free(frame_buffer);
         break;
 
     case FRM_SECURITY_TYPE5:
@@ -852,7 +852,7 @@ static void lan_protocol_process(lan_mgr_t *lan, lan_session_t *session, lpv35_f
             break;
         }
         // hmac randB local
-        tal_sha256_mac((const uint8_t *)s_lan_mgr->iot_client->activate.localkey,
+        core_sha256_mac((const uint8_t *)s_lan_mgr->iot_client->activate.localkey,
                        strlen(s_lan_mgr->iot_client->activate.localkey), session->randB, RAND_LEN, session->hmac);
         // verify hmac
         if (memcmp(session->hmac, out, HMAC_LEN) != 0) {
@@ -907,7 +907,7 @@ static void lan_protocol_process(lan_mgr_t *lan, lan_session_t *session, lpv35_f
 
         PR_DEBUG("Send Query To App:%s", tmp_data);
         lan_send(session, frame->sequence, frame->type, 0, (uint8_t *)tmp_data, strlen(tmp_data), true);
-        tal_free(tmp_data);
+        core_free(tmp_data);
         cJSON_Delete(root);
         break;
 
@@ -935,7 +935,7 @@ static void lan_protocol_process(lan_mgr_t *lan, lan_session_t *session, lpv35_f
         if (ext_out != NULL) {
             lan_send(session, frame->sequence, frame->type, (op_ret == OPRT_OK) ? 0 : 1, ext_out, strlen((char *)ext_out),
                      true);
-            tal_free(ext_out);
+            core_free(ext_out);
         } else if (op_ret == OPRT_OK) {
             /* Align OS: success with empty body still ACKs the session */
             lan_send(session, frame->sequence, frame->type, 0, NULL, 0, true);
@@ -959,7 +959,7 @@ static void lan_tcp_client_sock_err(int fd)
     if (session->active != true) {
         return;
     }
-    PR_DEBUG("socket fault, errno:%d", tal_net_get_errno());
+    PR_DEBUG("socket fault, errno:%d", core_net_get_errno());
     lan_session_fault_set(session);
     return;
 }
@@ -983,9 +983,9 @@ static void lan_tcp_client_sock_read(int32_t fd)
     lan->recv_offset = 0;
 
 recv_again:
-    recv_datalen = tal_net_recv(fd, lan->recv_buf + lan->recv_offset, lan->cfg->bufsize - lan->recv_offset);
+    recv_datalen = core_net_recv(fd, lan->recv_buf + lan->recv_offset, lan->cfg->bufsize - lan->recv_offset);
     if (recv_datalen <= 0) {
-        PR_ERR("net recv err fd:%d,errno:%d", fd, tal_net_get_errno());
+        PR_ERR("net recv err fd:%d,errno:%d", fd, core_net_get_errno());
         lan_session_fault_set(session);
         return;
     }
@@ -1029,7 +1029,7 @@ recv_again:
                 PR_ERR("lan data len is out of limit");
                 break;
             }
-            tmp_recv_buf = tal_malloc(frame_len + 1);
+            tmp_recv_buf = core_malloc(frame_len + 1);
             if (NULL == tmp_recv_buf) {
                 PR_ERR("malloc error");
                 break;
@@ -1038,7 +1038,7 @@ recv_again:
             memcpy(tmp_recv_buf, lan->recv_buf + offset, recv_datalen - offset);
             recv_datalen = recv_datalen - offset;
             offset = 0;
-            ret = tal_net_recv_nd_size(session->fd, tmp_recv_buf + recv_datalen, frame_len + 1 - recv_datalen,
+            ret = core_net_recv_nd_size(session->fd, tmp_recv_buf + recv_datalen, frame_len + 1 - recv_datalen,
                                        frame_len - recv_datalen);
             if (ret < 0) {
                 PR_ERR("tuya_hal_net_recv_nd_size error ret:%d", ret);
@@ -1088,7 +1088,7 @@ recv_again:
             ret = lan_send(session, 0, FRM_TP_HB, 0, NULL, 0, false);
             PR_TRACE("lan heart beat:%d", ret);
             offset += frame_len;
-            lan_session_time_update(session, tal_time_get_posix());
+            lan_session_time_update(session, core_time_get_posix());
             continue;
         }
         //! TODO:
@@ -1100,15 +1100,15 @@ recv_again:
         }
         offset += frame_len;
         // update time
-        lan_session_time_update(session, tal_time_get_posix());
+        lan_session_time_update(session, core_time_get_posix());
         lan_protocol_process(lan, session, &frame_out);
         if (frame_out.data) {
-            tal_free(frame_out.data);
+            core_free(frame_out.data);
         }
     }
 
     if (tmp_recv_buf) {
-        tal_free(tmp_recv_buf);
+        core_free(tmp_recv_buf);
     } else if (recv_datalen != offset) {
         PR_DEBUG("recv_datalen:%d, offset:%d", recv_datalen, offset);
         memmove(lan->recv_buf, lan->recv_buf + offset, recv_datalen - offset);
@@ -1124,9 +1124,9 @@ static void lan_tcp_serv_sock_read(int32_t fd)
     int ret = OPRT_OK;
     TUYA_IP_ADDR_T addr = 0;
 
-    int cfd = tal_net_accept(fd, &addr, NULL);
+    int cfd = core_net_accept(fd, &addr, NULL);
     if (cfd < 0) {
-        PR_ERR("accept failed %d (errno: %d)", cfd, tal_net_get_errno());
+        PR_ERR("accept failed %d (errno: %d)", cfd, core_net_get_errno());
         return;
     }
     lan_mgr_t *lan = lan_mgr_get();
@@ -1134,16 +1134,16 @@ static void lan_tcp_serv_sock_read(int32_t fd)
     if (lan_session_active_num_get() >= lan->cfg->client_num) {
         // PR_ERR("out of session limit");
         PR_ERR("out of session limit:0x%x", addr);
-        tal_net_close(cfd);
+        core_net_close(cfd);
         return;
     }
     // set reuse
-    tal_net_set_reuse(cfd);
+    core_net_set_reuse(cfd);
     // set no block
-    tal_net_set_block(cfd, false);
+    core_net_set_block(cfd, false);
 
     // add socket
-    lan_sesison_add(cfd, tal_time_get_posix());
+    lan_sesison_add(cfd, core_time_get_posix());
     PR_DEBUG("new session connect. nums:%d cfd:%d ip:0x%x", lan_session_active_num_get(), cfd, addr);
     // reg cfd to lan sock
     sloop_sock_t sock_info = {.sock = cfd,
@@ -1154,7 +1154,7 @@ static void lan_tcp_serv_sock_read(int32_t fd)
 
     ret = tuya_reg_lan_sock(sock_info);
     if (OPRT_OK != ret) {
-        tal_net_close(cfd);
+        core_net_close(cfd);
         PR_ERR("register lan sock err");
     }
 }
@@ -1213,9 +1213,9 @@ static void lan_udp_serv_sock_read(int32_t fd)
     lan_mgr_t *lan = lan_mgr_get();
 
     memset(lan->recv_buf, 0, s_lan_cfg.bufsize);
-    recv_datalen = tal_net_recvfrom(fd, lan->recv_buf, s_lan_cfg.bufsize, &addr, &port);
+    recv_datalen = core_net_recvfrom(fd, lan->recv_buf, s_lan_cfg.bufsize, &addr, &port);
     if (recv_datalen < 0) {
-        PR_ERR("recvfrom err:%d len:%d", tal_net_get_errno(), recv_datalen);
+        PR_ERR("recvfrom err:%d len:%d", core_net_get_errno(), recv_datalen);
         return;
     }
     // PR_DEBUG("udp recv port:%d,addr:0x%x", port, addr);
@@ -1236,20 +1236,20 @@ static void lan_udp_serv_sock_read(int32_t fd)
     root = cJSON_Parse((char *)frame_out.data);
     if (NULL == root) {
         PR_ERR("Json err");
-        tal_free(frame_out.data);
+        core_free(frame_out.data);
         return;
     }
     if ((NULL == cJSON_GetObjectItem(root, "ip")) || (NULL == cJSON_GetObjectItem(root, "from"))) {
         PR_ERR("json data invaild");
         cJSON_Delete(root);
-        tal_free(frame_out.data);
+        core_free(frame_out.data);
         return;
     }
-    addr_json = tal_net_str2addr(cJSON_GetObjectItem(root, "ip")->valuestring);
+    addr_json = core_net_str2addr(cJSON_GetObjectItem(root, "ip")->valuestring);
     // PR_DEBUG("ip:%s", cJSON_GetObjectItem(root, "ip")->valuestring);
     // PR_DEBUG("addr:0x%x, addr_json:0x%x", addr, addr_json);
     cJSON_Delete(root);
-    tal_free(frame_out.data);
+    core_free(frame_out.data);
 
     int olen = 0;
     uint8_t *send_buf = NULL;
@@ -1257,11 +1257,11 @@ static void lan_udp_serv_sock_read(int32_t fd)
     if (NULL == send_buf) {
         return;
     }
-    int ret = tal_net_send_to(fd, send_buf, olen, addr_json, SERV_PORT_APP_UDP_BCAST);
+    int ret = core_net_send_to(fd, send_buf, olen, addr_json, SERV_PORT_APP_UDP_BCAST);
     if (ret < 0) {
-        if ((tal_net_get_errno() == UNW_EINTR) || (tal_net_get_errno() == UNW_EAGAIN)) {
-            tal_system_sleep(100);
-            ret = tal_net_send_to(fd, send_buf, olen, addr_json, SERV_PORT_APP_UDP_BCAST);
+        if ((core_net_get_errno() == UNW_EINTR) || (core_net_get_errno() == UNW_EAGAIN)) {
+            core_system_sleep(100);
+            ret = core_net_send_to(fd, send_buf, olen, addr_json, SERV_PORT_APP_UDP_BCAST);
             if (ret < 0) {
                 op_ret = OPRT_SVC_LAN_SEND_ERR;
             }
@@ -1269,9 +1269,9 @@ static void lan_udp_serv_sock_read(int32_t fd)
             op_ret = OPRT_SVC_LAN_SEND_ERR;
         }
     }
-    tal_free(send_buf);
+    core_free(send_buf);
     if (op_ret == OPRT_SVC_LAN_SEND_ERR) {
-        PR_ERR("sendto Fail: len:%d ret:%d,errno:%d port:%d", olen, ret, tal_net_get_errno(), SERV_PORT_APP_UDP_BCAST);
+        PR_ERR("sendto Fail: len:%d ret:%d,errno:%d port:%d", olen, ret, core_net_get_errno(), SERV_PORT_APP_UDP_BCAST);
     }
 }
 
@@ -1304,7 +1304,7 @@ static int lan_udp_create_serv_socket(void)
 
     if (OPRT_OK != tuya_reg_lan_sock(udp_sock_info)) {
         PR_ERR("register lan sock err");
-        tal_net_close(s_lan_mgr->udp_serv_fd);
+        core_net_close(s_lan_mgr->udp_serv_fd);
         s_lan_mgr->udp_serv_fd = -1;
         return -2;
     }
@@ -1320,7 +1320,7 @@ static void lan_tcp_serv_sock_pre_select(void)
         lan_session_close_all();
     }
 
-    lan_session_time_check(tal_time_get_posix());
+    lan_session_time_check(core_time_get_posix());
 }
 
 static int lan_tcp_create_serv_socket(lan_mgr_t *lan)
@@ -1339,7 +1339,7 @@ static int lan_tcp_create_serv_socket(lan_mgr_t *lan)
                                   .quit = lan_tcp_serv_sock_quit};
 
     if (OPRT_OK != tuya_reg_lan_sock(tcp_sock_info)) {
-        tal_net_close(lan->tcp_serv_fd);
+        core_net_close(lan->tcp_serv_fd);
         lan->tcp_serv_fd = -1;
         PR_ERR("register lan sock err");
         return -2;
@@ -1366,9 +1366,9 @@ int tuya_lan_init(tuya_iot_client_t *iot_client)
 
     lan_app_key_make();
 
-    s_lan_mgr = tal_malloc(sizeof(lan_mgr_t) + s_lan_cfg.bufsize);
+    s_lan_mgr = core_malloc(sizeof(lan_mgr_t) + s_lan_cfg.bufsize);
     if (NULL == s_lan_mgr) {
-        PR_ERR("tal_malloc fail");
+        PR_ERR("core_malloc fail");
         return OPRT_MALLOC_FAILED;
     }
     memset(s_lan_mgr, 0, sizeof(lan_mgr_t) + s_lan_cfg.bufsize);
@@ -1383,17 +1383,17 @@ int tuya_lan_init(tuya_iot_client_t *iot_client)
     if (OPRT_OK != op_ret) {
         goto __exit;
     }
-    op_ret = tal_mutex_create_init(&s_lan_mgr->mutex);
+    op_ret = core_mutex_create_init(&s_lan_mgr->mutex);
     if (OPRT_OK != op_ret) {
         goto __exit;
     }
-    op_ret = tal_mutex_create_init(&s_lan_mgr->tcp_mutex);
+    op_ret = core_mutex_create_init(&s_lan_mgr->tcp_mutex);
     if (OPRT_OK != op_ret) {
         goto __exit;
     }
 
     uint32_t client_len = sizeof(lan_session_t) * s_lan_mgr->cfg->client_num;
-    s_lan_mgr->session = tal_malloc(client_len);
+    s_lan_mgr->session = core_malloc(client_len);
     if (NULL == s_lan_mgr->session) {
         goto __exit;
     }
@@ -1434,16 +1434,16 @@ int tuya_lan_exit(void)
     }
     lan_session_close_all();
     if (s_lan_mgr->session) {
-        tal_free(s_lan_mgr->session);
+        core_free(s_lan_mgr->session);
         s_lan_mgr->session = NULL;
     }
     if (s_lan_mgr->udp_client_fd >= 0) {
-        tal_net_close(s_lan_mgr->udp_client_fd);
+        core_net_close(s_lan_mgr->udp_client_fd);
         s_lan_mgr->udp_client_fd = -1;
     }
-    tal_mutex_release(s_lan_mgr->mutex);
-    tal_mutex_release(s_lan_mgr->tcp_mutex);
-    tal_free(s_lan_mgr);
+    core_mutex_release(s_lan_mgr->mutex);
+    core_mutex_release(s_lan_mgr->tcp_mutex);
+    core_free(s_lan_mgr);
     s_lan_mgr = NULL;
 
     PR_DEBUG("lan exit");
@@ -1476,14 +1476,14 @@ int tuya_lan_disable(void)
     }
 
     if (s_lan_mgr->udp_client_fd >= 0) {
-        tal_net_close(s_lan_mgr->udp_client_fd);
+        core_net_close(s_lan_mgr->udp_client_fd);
         s_lan_mgr->udp_client_fd = -1;
     }
 
     tuya_sock_loop_disable();
     uint32_t wait_ms = 0;
     while (tuya_sock_loop_is_inited() && wait_ms < 3000) {
-        tal_system_sleep(50);
+        core_system_sleep(50);
         wait_ms += 50;
     }
 

@@ -25,7 +25,7 @@ menu "tuyaopen-core"
         default n
         help
             Build the wired (Ethernet) support: the application-level
-            tal_netif and the wired TKL implementation in port. Maps to
+            core_netif and the wired TKL implementation in port. Maps to
             CONFIG_ENABLE_WIRED.
 
     config ENABLE_BLUETOOTH
@@ -48,7 +48,7 @@ menu "tuyaopen-core"
         default n
         help
             Mount the ex-RAM ops members (.ex_ram_malloc/.ex_ram_free) on the
-            port card and build core's tal_ex_ram_malloc/tal_ex_ram_free.
+            port card and build core's core_ex_ram_malloc/core_ex_ram_free.
             Maps to CONFIG_ENABLE_EXT_RAM.
 
             OFF by default. On Linux the port has no separate external RAM,

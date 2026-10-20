@@ -28,7 +28,7 @@
  * __ai_packet_write(), which enforces AI_MAX_FRAGMENT_LENGTH, encrypts the
  * payload according to AI_PACKET_SECURITY_LEVEL (SL0 none, SL2 ChaCha20,
  * SL3 AES-256-CBC, SL4 AES-256-GCM), signs version-1 packets with
- * tal_sha256_mac, and writes through the caller's writer or the default
+ * core_sha256_mac, and writes through the caller's writer or the default
  * transporter writer. tuya_ai_basic_pkt_send() splits payloads larger than
  * one packet into FRAG_START/ING/END packets; incoming fragments are decrypted
  * per packet and reassembled in tuya_ai_basic_pkt_read(), with sequence
@@ -47,11 +47,11 @@
 #include "gw_intf.h"
 #include "uni_log.h"
 #include "uni_random.h"
-#include "tal_system.h"
-#include "tal_hash.h"
+#include "core_system.h"
+#include "core_hash.h"
 #include "cipher_wrapper.h"
-#include "tal_security.h"
-#include "tal_memory.h"
+#include "core_security.h"
+#include "core_memory.h"
 #include "mqc_app.h"
 #include "tuya_svc_netmgr_linkage.h"
 #include "tuya_ai_protocol.h"
@@ -283,7 +283,7 @@ STATIC VOID __ai_basic_proto_deinit(VOID)
             ai_basic_proto->transporter = NULL;
         }
         if (ai_basic_proto->mutex) {
-            tal_mutex_release(ai_basic_proto->mutex);
+            core_mutex_release(ai_basic_proto->mutex);
             ai_basic_proto->mutex = NULL;
         }
         if (ai_basic_proto->connection_id) {
@@ -299,7 +299,7 @@ STATIC VOID __ai_basic_proto_deinit(VOID)
 
 STATIC VOID __ai_basic_proto_reinit(VOID)
 {
-    tal_mutex_lock(ai_basic_proto->mutex);
+    core_mutex_lock(ai_basic_proto->mutex);
     if (ai_basic_proto->transporter) {
         tuya_transporter_close(ai_basic_proto->transporter);
         tuya_transporter_destroy(ai_basic_proto->transporter);
@@ -323,7 +323,7 @@ STATIC VOID __ai_basic_proto_reinit(VOID)
     memset(ai_basic_proto->decrypt_iv, 0, AI_IV_LEN);
     memset(&ai_basic_proto->recv_frag_mng, 0, SIZEOF(ai_basic_proto->recv_frag_mng));
     memset(&ai_basic_proto->send_frag_mng, 0, SIZEOF(ai_basic_proto->send_frag_mng));
-    tal_mutex_unlock(ai_basic_proto->mutex);
+    core_mutex_unlock(ai_basic_proto->mutex);
     PR_NOTICE("ai proto reinit success");
     return;
 }
@@ -339,7 +339,7 @@ STATIC OPERATE_RET __ai_basic_proto_init(VOID)
         memset(ai_basic_proto, 0, SIZEOF(AI_BASIC_PROTO_T));
         TUYA_CALL_ERR_GOTO(__ai_generate_crypt_key(), EXIT);
         TUYA_CALL_ERR_GOTO(__ai_generate_sign_key(), EXIT);
-        TUYA_CALL_ERR_GOTO(tal_mutex_create_init(&(ai_basic_proto->mutex)), EXIT);
+        TUYA_CALL_ERR_GOTO(core_mutex_create_init(&(ai_basic_proto->mutex)), EXIT);
         ai_basic_proto->sequence_out = 1;
         ai_basic_proto->file_seq = 1;
         ai_basic_proto->text_seq = 1;
@@ -440,7 +440,7 @@ STATIC OPERATE_RET __ai_packet_sign(CHAR_T *buf, UCHAR_T *signature)
         sign_len = SIZEOF(sign_data);
     }
 
-    rt = tal_sha256_mac((UCHAR_T *)sign_key, AI_KEY_LEN, (BYTE_T *)sign_data, sign_len, signature);
+    rt = core_sha256_mac((UCHAR_T *)sign_key, AI_KEY_LEN, (BYTE_T *)sign_data, sign_len, signature);
     if (OPRT_OK != rt) {
         PR_ERR("sign packet failed, rt:%d", rt);
     }
@@ -585,8 +585,8 @@ STATIC OPERATE_RET __ai_encrypt_packet(AI_SEND_PACKET_T *info, CHAR_T *data, UIN
     } else if (sl == AI_PACKET_SL3) {
 #if (AI_PACKET_SECURITY_LEVEL == AI_PACKET_SL3)
         memcpy(output, data, len);
-        data_out_len = tal_pkcs7padding_buffer((UCHAR_T *)output, len);
-        rt = tal_aes256_cbc_encode_raw((BYTE_T *)output, data_out_len, (UCHAR_T *)key, (UCHAR_T *)ai_basic_proto->encrypt_iv, (UCHAR_T *)output);
+        data_out_len = core_pkcs7padding_buffer((UCHAR_T *)output, len);
+        rt = core_aes256_cbc_encode_raw((BYTE_T *)output, data_out_len, (UCHAR_T *)key, (UCHAR_T *)ai_basic_proto->encrypt_iv, (UCHAR_T *)output);
         if (OPRT_OK != rt) {
             PR_ERR("aes128_cbc_encode error:%d", rt);
             return rt;
@@ -651,7 +651,7 @@ STATIC OPERATE_RET __ai_decrypt_packet(CHAR_T *data, UINT_T len, CHAR_T *output,
 #endif
     } else if (sl == AI_PACKET_SL3) {
 #if (AI_PACKET_SECURITY_LEVEL == AI_PACKET_SL3)
-        rt = tal_aes256_cbc_decode_raw((UCHAR_T *)data, len, (UCHAR_T *)key, (UCHAR_T *)ai_basic_proto->decrypt_iv, (UCHAR_T *)output);
+        rt = core_aes256_cbc_decode_raw((UCHAR_T *)data, len, (UCHAR_T *)key, (UCHAR_T *)ai_basic_proto->decrypt_iv, (UCHAR_T *)output);
         if (OPRT_OK != rt) {
             PR_ERR("aes128_cbc_decode error:%d", rt);
             return rt;
@@ -1192,11 +1192,11 @@ STATIC OPERATE_RET tuya_ai_basic_pkt_frag_send(AI_SEND_PACKET_T *info)
         return OPRT_COM_ERROR;
     }
 
-    tal_mutex_lock(ai_basic_proto->mutex);
+    core_mutex_lock(ai_basic_proto->mutex);
     if (!ai_basic_proto->connected) {
         tuya_ai_free_attrs(info);
         __ai_basic_reset_send_frag(info->type);
-        tal_mutex_unlock(ai_basic_proto->mutex);
+        core_mutex_unlock(ai_basic_proto->mutex);
         PR_ERR("ai proto not connected");
         return OPRT_COM_ERROR;
     }
@@ -1208,7 +1208,7 @@ STATIC OPERATE_RET tuya_ai_basic_pkt_frag_send(AI_SEND_PACKET_T *info)
     }
 
     tuya_ai_free_attrs(info);
-    tal_mutex_unlock(ai_basic_proto->mutex);
+    core_mutex_unlock(ai_basic_proto->mutex);
     return rt;
 }
 
@@ -1233,10 +1233,10 @@ OPERATE_RET tuya_ai_basic_pkt_send(AI_SEND_PACKET_T *info)
         return OPRT_COM_ERROR;
     }
 
-    tal_mutex_lock(ai_basic_proto->mutex);
+    core_mutex_lock(ai_basic_proto->mutex);
     if (!ai_basic_proto->connected) {
         tuya_ai_free_attrs(info);
-        tal_mutex_unlock(ai_basic_proto->mutex);
+        core_mutex_unlock(ai_basic_proto->mutex);
         PR_ERR("ai proto not connected");
         return OPRT_COM_ERROR;
     }
@@ -1274,7 +1274,7 @@ OPERATE_RET tuya_ai_basic_pkt_send(AI_SEND_PACKET_T *info)
     }
     tuya_ai_free_attrs(info);
 
-    tal_mutex_unlock(ai_basic_proto->mutex);
+    core_mutex_unlock(ai_basic_proto->mutex);
     return rt;
 }
 
@@ -1736,7 +1736,7 @@ OPERATE_RET tuya_ai_basic_pkt_read(CHAR_T **out, UINT_T *out_len, AI_FRAG_FLAG *
             if ((recv_len == OPRT_RESOURCE_NOT_READY) && (!read_timeout_flag)) {
                 PR_NOTICE("continue read again, because of resource not ready");
                 read_timeout_flag = TRUE;
-                tal_system_sleep(100);
+                core_system_sleep(100);
                 continue;
             }
             recv_len = OPRT_NETWORK_ERROR;
@@ -2040,7 +2040,7 @@ OPERATE_RET tuya_ai_auth_resp(VOID)
 STATIC OPERATE_RET __create_ping_attrs(AI_SEND_PACKET_T *pkt)
 {
     UINT_T attr_idx = 0;
-    UINT64_T ts = tal_time_get_posix_ms();
+    UINT64_T ts = core_time_get_posix_ms();
     pkt->attrs[attr_idx++] = tuya_ai_create_attribute(AI_ATTR_CLIENT_TS, ATTR_PT_U64, &ts, SIZEOF(UINT64_T));
     pkt->count = attr_idx;
     if (!__ai_check_attr_created(pkt)) {
@@ -2088,9 +2088,9 @@ OPERATE_RET tuya_ai_basic_connect(AI_SERVER_CFG_INFO_T *cfg)
     sock_config.bindPort = 50000 + uni_random();
     sock_config.sendTimeoutMs = (AI_SEND_PKT_TIMEOUT * 1000);
 #if defined(ENABLE_IPv6) && (ENABLE_IPv6 == 1)
-    sock_config.bindAddr = tal_net_str2addr((CONST CHAR_T *)ip.nwipstr);
+    sock_config.bindAddr = core_net_str2addr((CONST CHAR_T *)ip.nwipstr);
 #else
-    sock_config.bindAddr = tal_net_str2addr((CONST CHAR_T *)ip.ip);
+    sock_config.bindAddr = core_net_str2addr((CONST CHAR_T *)ip.ip);
 #endif
 
 #if defined(AI_VERSION) && (0x01 == AI_VERSION)
@@ -2411,7 +2411,7 @@ STATIC OPERATE_RET __create_event_attrs(AI_SEND_PACKET_T *pkt, AI_EVENT_ATTR_T *
         pkt->attrs[attr_idx++] = tuya_ai_create_attribute(AI_ATTR_CMD_DATA, ATTR_PT_STR, event->cmd_data, strlen(event->cmd_data));
     }
     if (type == AI_EVENT_END) {
-        UINT64_T ts = tal_time_get_posix_ms();
+        UINT64_T ts = core_time_get_posix_ms();
         pkt->attrs[attr_idx++] = tuya_ai_create_attribute(AI_ATTR_EVENT_TS, ATTR_PT_U64, &ts, SIZEOF(UINT64_T));
     }
     if (event->user_data) {
@@ -2678,11 +2678,11 @@ STATIC OPERATE_RET __default_write(AI_PACKET_WRITER_T *writer, VOID *buf, UINT_T
             current_buf_ptr += rt;
             remaining_len -= rt;
             if (remaining_len > 0) {
-                PR_DEBUG("partial send, sent:%d, total_sent:%d, remaining:%d, err:%d", rt, bytes_sent, remaining_len, tal_net_get_errno());
-                tal_system_sleep(100);
+                PR_DEBUG("partial send, sent:%d, total_sent:%d, remaining:%d, err:%d", rt, bytes_sent, remaining_len, core_net_get_errno());
+                core_system_sleep(100);
             }
         } else {
-            PR_ERR("send to cloud failed, rt:%d, len:%d, err:%d", rt, remaining_len, tal_net_get_errno());
+            PR_ERR("send to cloud failed, rt:%d, len:%d, err:%d", rt, remaining_len, core_net_get_errno());
             return OPRT_COM_ERROR;
         }
     }

@@ -27,8 +27,8 @@
 #include <stdlib.h>
 #endif
 #include <string.h>
-#include "tal_api.h"
-#include "tal_network.h"
+#include "core_api.h"
+#include "core_network.h"
 #include "mbedtls/error.h"
 #include "mbedtls/debug.h"
 #include "mbedtls/net_sockets.h"
@@ -64,7 +64,7 @@ static mbedtls_ctr_drbg_context ty_ctr_drbg;
 static void *__ex_ram_calloc(size_t num, size_t size)
 {
     size_t total = num * size;
-    void *p = tal_ex_ram_malloc(total);
+    void *p = core_ex_ram_malloc(total);
     if (p) {
         memset(p, 0, total);
     }
@@ -81,7 +81,7 @@ static void __tuya_tls_mutex_init(mbedtls_threading_mutex_t *mutex)
         return;
     }
 
-    mutex->is_valid = tal_mutex_create_init(&mutex->mutex) == 0;
+    mutex->is_valid = core_mutex_create_init(&mutex->mutex) == 0;
 }
 
 static void __tuya_tls_mutex_free(mbedtls_threading_mutex_t *mutex)
@@ -89,7 +89,7 @@ static void __tuya_tls_mutex_free(mbedtls_threading_mutex_t *mutex)
     if (mutex == NULL || !mutex->is_valid) {
         return;
     }
-    (void)tal_mutex_release(mutex->mutex);
+    (void)core_mutex_release(mutex->mutex);
     mutex->is_valid = 0;
 }
 
@@ -99,7 +99,7 @@ static int __tuya_tls_mutex_lock(mbedtls_threading_mutex_t *mutex)
         return MBEDTLS_ERR_THREADING_BAD_INPUT_DATA;
     }
 
-    if (tal_mutex_lock(mutex->mutex) != 0) {
+    if (core_mutex_lock(mutex->mutex) != 0) {
         return MBEDTLS_ERR_THREADING_MUTEX_ERROR;
     }
 
@@ -112,7 +112,7 @@ static int __tuya_tls_mutex_unlock(mbedtls_threading_mutex_t *mutex)
         return MBEDTLS_ERR_THREADING_BAD_INPUT_DATA;
     }
 
-    if (tal_mutex_unlock(mutex->mutex) != 0) {
+    if (core_mutex_unlock(mutex->mutex) != 0) {
         return MBEDTLS_ERR_THREADING_MUTEX_ERROR;
     }
 
@@ -126,9 +126,9 @@ static __attribute__((unused)) void *__tuya_tls_calloc(size_t nmemb, size_t size
 {
     size_t mem_size = nmemb * size;
 #if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM)
-    void *ptr = tal_ex_ram_malloc(mem_size);
+    void *ptr = core_ex_ram_malloc(mem_size);
 #else
-    void *ptr = tal_malloc(mem_size);
+    void *ptr = core_malloc(mem_size);
 #endif
     if (ptr != NULL) {
         memset(ptr, 0, mem_size);
@@ -144,15 +144,15 @@ static void __tuya_tls_export_keys(void *p_expkey, mbedtls_ssl_key_export_type t
                                    const unsigned char server_random[32], mbedtls_tls_prf_types tls_prf_type)
 {
     int i = 0;
-    tal_log_print_raw("CLIENT_RANDOM ");
+    core_log_print_raw("CLIENT_RANDOM ");
     for (i = 0; i < 32; i++) {
-        tal_log_print_raw("%02X", client_random[i]);
+        core_log_print_raw("%02X", client_random[i]);
     }
-    tal_log_print_raw(" ");
+    core_log_print_raw(" ");
     for (i = 0; i < 48; i++) {
-        tal_log_print_raw("%02X", secret[i]);
+        core_log_print_raw("%02X", secret[i]);
     }
-    tal_log_print_raw("\n");
+    core_log_print_raw("\n");
 }
 #endif
 
@@ -212,14 +212,14 @@ static int __tuya_tls_socket_send_cb(void *ctx, const unsigned char *buf, size_t
 {
     tuya_mbedtls_context_t *tls_context = (tuya_mbedtls_context_t *)ctx;
 
-    int send_len = tal_net_send(tls_context->socket_fd, buf, len);
+    int send_len = core_net_send(tls_context->socket_fd, buf, len);
     if (send_len < 0) {
-        PR_ERR("__tuya_tls_socket_send_cb errr %d %d", send_len, tal_net_get_errno());
-        if ((tal_net_get_errno() == UNW_EINTR) || (tal_net_get_errno() == UNW_EAGAIN)) {
-            tal_system_sleep(100);
-            send_len = tal_net_send(tls_context->socket_fd, buf, len);
+        PR_ERR("__tuya_tls_socket_send_cb errr %d %d", send_len, core_net_get_errno());
+        if ((core_net_get_errno() == UNW_EINTR) || (core_net_get_errno() == UNW_EAGAIN)) {
+            core_system_sleep(100);
+            send_len = core_net_send(tls_context->socket_fd, buf, len);
             if (send_len < 0) {
-                PR_ERR("__tuya_tls_socket_send_cb errr %d %d", send_len, tal_net_get_errno());
+                PR_ERR("__tuya_tls_socket_send_cb errr %d %d", send_len, core_net_get_errno());
             }
         }
     }
@@ -231,24 +231,24 @@ static int __tuya_tls_socket_recv_cb(void *ctx, unsigned char *buf, size_t len)
 {
     tuya_mbedtls_context_t *tls_context = (tuya_mbedtls_context_t *)ctx;
 
-    int non_block = tal_net_get_nonblock(tls_context->socket_fd);
+    int non_block = core_net_get_nonblock(tls_context->socket_fd);
     if (non_block == 0) {
-        tal_net_set_block(tls_context->socket_fd, FALSE);
+        core_net_set_block(tls_context->socket_fd, FALSE);
     }
 
     TUYA_FD_SET_T readfds;
     memset(&readfds, 0, sizeof(TUYA_FD_SET_T));
-    tal_net_fd_set(tls_context->socket_fd, &readfds);
+    core_net_fd_set(tls_context->socket_fd, &readfds);
     int activefds_cnt =
-        tal_net_select(tls_context->socket_fd + 1, &readfds, NULL, NULL, tls_context->overtime_s * 1000);
+        core_net_select(tls_context->socket_fd + 1, &readfds, NULL, NULL, tls_context->overtime_s * 1000);
     if (activefds_cnt <= 0) {
-        tal_net_set_block(tls_context->socket_fd, 1 - non_block);
+        core_net_set_block(tls_context->socket_fd, 1 - non_block);
         PR_ERR("select fail.%d", activefds_cnt);
         return -100 + activefds_cnt;
     }
 
-    int rv = tal_net_recv(tls_context->socket_fd, buf, len);
-    tal_net_set_block(tls_context->socket_fd, 1 - non_block);
+    int rv = core_net_recv(tls_context->socket_fd, buf, len);
+    core_net_set_block(tls_context->socket_fd, 1 - non_block);
 
     return rv;
 }
@@ -396,9 +396,9 @@ OPERATE_RET tuya_tls_init(void)
                               __tuya_tls_mutex_unlock);
 
 #if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM)
-    op_ret = mbedtls_platform_set_calloc_free(__ex_ram_calloc, tal_ex_ram_free);
+    op_ret = mbedtls_platform_set_calloc_free(__ex_ram_calloc, core_ex_ram_free);
 #else
-    op_ret = mbedtls_platform_set_calloc_free(tal_calloc, tal_free);
+    op_ret = mbedtls_platform_set_calloc_free(core_calloc, core_free);
 #endif
     if (op_ret != 0) {
         PR_ERR("mbedtls_platform_set_calloc_free Fail. %x", op_ret);
@@ -444,9 +444,9 @@ tuya_tls_hander *tuya_tls_connect_create(void)
 {
     OPERATE_RET ret = OPRT_OK;
 #if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM)
-    tuya_mbedtls_context_t *p_tls_conn = tal_ex_ram_malloc(sizeof(tuya_mbedtls_context_t));
+    tuya_mbedtls_context_t *p_tls_conn = core_ex_ram_malloc(sizeof(tuya_mbedtls_context_t));
 #else
-    tuya_mbedtls_context_t *p_tls_conn = tal_malloc(sizeof(tuya_mbedtls_context_t));
+    tuya_mbedtls_context_t *p_tls_conn = core_malloc(sizeof(tuya_mbedtls_context_t));
 #endif
     if (p_tls_conn == NULL) {
         PR_ERR("tuya_tls_connect_create Fail. %d", OPRT_MALLOC_FAILED);
@@ -454,13 +454,13 @@ tuya_tls_hander *tuya_tls_connect_create(void)
     }
     memset(p_tls_conn, 0, sizeof(tuya_mbedtls_context_t));
 
-    ret = tal_mutex_create_init(&p_tls_conn->mutex);
+    ret = core_mutex_create_init(&p_tls_conn->mutex);
     if (ret != OPRT_OK) {
         PR_ERR("mutex create Fail. %d", ret);
         goto __err_exit;
     }
 
-    ret = tal_mutex_create_init(&p_tls_conn->read_mutex);
+    ret = core_mutex_create_init(&p_tls_conn->read_mutex);
     if (ret != OPRT_OK) {
         PR_ERR("read_mutex create Fail. %d", ret);
         goto __err_exit;
@@ -470,13 +470,13 @@ tuya_tls_hander *tuya_tls_connect_create(void)
 
 __err_exit:
     if (p_tls_conn->mutex) {
-        tal_mutex_release(p_tls_conn->mutex);
+        core_mutex_release(p_tls_conn->mutex);
     }
 
 #if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM)
-    tal_ex_ram_free(p_tls_conn);
+    core_ex_ram_free(p_tls_conn);
 #else
-    tal_free(p_tls_conn);
+    core_free(p_tls_conn);
 #endif
 
     return NULL;
@@ -497,13 +497,13 @@ void tuya_tls_connect_destroy(tuya_tls_hander p_tls_hander)
     }
     PR_DEBUG("tuya_tls_connect_destroy.");
     tuya_mbedtls_context_t *tls_context = (tuya_mbedtls_context_t *)p_tls_hander;
-    tal_mutex_release(tls_context->mutex);
-    tal_mutex_release(tls_context->read_mutex);
+    core_mutex_release(tls_context->mutex);
+    core_mutex_release(tls_context->read_mutex);
 
 #if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM)
-    tal_ex_ram_free(p_tls_hander);
+    core_ex_ram_free(p_tls_hander);
 #else
-    tal_free(p_tls_hander);
+    core_free(p_tls_hander);
 #endif
 }
 
@@ -648,11 +648,11 @@ OPERATE_RET tuya_tls_connect(tuya_tls_hander p_tls_handler, char *hostname, int 
     /* BIO default config */
     tls_context->socket_fd  = socket_fd;
     tls_context->overtime_s = overtime_s;
-    tal_net_set_timeout(tls_context->socket_fd, overtime_s * 1000, TRANS_SEND);
+    core_net_set_timeout(tls_context->socket_fd, overtime_s * 1000, TRANS_SEND);
     mbedtls_ssl_set_bio(p_ssl_ctx, tls_context, __tuya_tls_socket_send_cb, __tuya_tls_socket_recv_cb, NULL);
     PR_DEBUG("socket fd is set. set to inner send/recv to handshake");
 
-    TIME_T cur_time = tal_time_get_posix();
+    TIME_T cur_time = core_time_get_posix();
 
     while ((op_ret = mbedtls_ssl_handshake(p_ssl_ctx)) != 0) {
         if (op_ret == MBEDTLS_ERR_X509_CERT_VERIFY_FAILED) {
@@ -670,7 +670,7 @@ OPERATE_RET tuya_tls_connect(tuya_tls_hander p_tls_handler, char *hostname, int 
         }
         if ((op_ret != MBEDTLS_ERR_SSL_WANT_READ && op_ret != MBEDTLS_ERR_SSL_WANT_WRITE &&
              op_ret != (MBEDTLS_ERR_SSL_CRYPTO_IN_PROGRESS)) ||
-            (tal_time_get_posix() >= (cur_time + TLS_HANDSHAKE_TIMEOUT))) {
+            (core_time_get_posix() >= (cur_time + TLS_HANDSHAKE_TIMEOUT))) {
             PR_ERR("mbedtls_ssl_handshake returned 0x%x", -op_ret);
             break;
         }
@@ -733,7 +733,7 @@ int tuya_tls_write(tuya_tls_hander tls_handler, uint8_t *buf, uint32_t len)
     size_t                  written_len = 0;
 
     OPERATE_RET mu_ret = OPRT_OK;
-    mu_ret             = tal_mutex_lock(tls_context->mutex);
+    mu_ret             = core_mutex_lock(tls_context->mutex);
     if (OPRT_OK != mu_ret) {
         PR_ERR("tuya_hal_mutex_lock err %d", mu_ret);
         return mu_ret;
@@ -751,18 +751,18 @@ int tuya_tls_write(tuya_tls_hander tls_handler, uint8_t *buf, uint32_t len)
         }
 
         // PR_ERR("mbedtls_ssl_write returned %d errno %d", ret,
-        // tal_net_get_errno());
-        mu_ret = tal_mutex_unlock(tls_context->mutex);
+        // core_net_get_errno());
+        mu_ret = core_mutex_unlock(tls_context->mutex);
         if (OPRT_OK != mu_ret) {
-            PR_ERR("tal_mutex_lock err %d", mu_ret);
+            PR_ERR("core_mutex_lock err %d", mu_ret);
             return mu_ret;
         }
         return ret;
     }
 
-    mu_ret = tal_mutex_unlock(tls_context->mutex);
+    mu_ret = core_mutex_unlock(tls_context->mutex);
     if (OPRT_OK != mu_ret) {
-        PR_ERR("tal_mutex_lock err %d", mu_ret);
+        PR_ERR("core_mutex_lock err %d", mu_ret);
         return mu_ret;
     }
     return written_len;
@@ -789,9 +789,9 @@ int tuya_tls_read(tuya_tls_hander tls_handler, uint8_t *buf, uint32_t len)
     }
 
     tuya_mbedtls_context_t *tls_context = (tuya_mbedtls_context_t *)tls_handler;
-    tal_mutex_lock(tls_context->read_mutex);
+    core_mutex_lock(tls_context->read_mutex);
     int value = mbedtls_ssl_read(&(tls_context->ssl_ctx), buf, len);
-    tal_mutex_unlock(tls_context->read_mutex);
+    core_mutex_unlock(tls_context->read_mutex);
 
     return value;
 }
@@ -817,7 +817,7 @@ OPERATE_RET tuya_tls_disconnect(tuya_tls_hander tls_handler)
 
     tuya_mbedtls_context_t *tls_context = (tuya_mbedtls_context_t *)tls_handler;
     // wait for tls read quit,then free tls memory
-    mu_ret = tal_mutex_lock(tls_context->read_mutex);
+    mu_ret = core_mutex_lock(tls_context->read_mutex);
     if (OPRT_OK != mu_ret) {
         PR_ERR("read_mutex lock err %d", mu_ret);
     }
@@ -828,7 +828,7 @@ OPERATE_RET tuya_tls_disconnect(tuya_tls_hander tls_handler)
     mbedtls_ssl_free(p_ssl_ctx);
     mbedtls_ssl_config_free(p_conf_ctx);
 
-    mu_ret = tal_mutex_unlock(tls_context->read_mutex);
+    mu_ret = core_mutex_unlock(tls_context->read_mutex);
     if (OPRT_OK != mu_ret) {
         PR_ERR("read_mutex unlock err %d", mu_ret);
     }

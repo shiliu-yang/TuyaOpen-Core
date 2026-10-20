@@ -6,14 +6,14 @@
  * @copyright Copyright (c) Tuya Inc.
  */
 #include "local_store.h"
-#include "tal_fs.h"
-#include "tal_log.h"
-#include "tal_memory.h"
-#include "tal_mutex.h"
-#include "tal_semaphore.h"
-#include "tal_thread.h"
-#include "tal_system.h"
-#include "tal_time_service.h"
+#include "core_fs.h"
+#include "core_log.h"
+#include "core_memory.h"
+#include "core_mutex.h"
+#include "core_semaphore.h"
+#include "core_thread.h"
+#include "core_system.h"
+#include "core_time_service.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -167,7 +167,7 @@ static OPERATE_RET __path_join(const char *parent, const char *child, char *out,
     return OPRT_OK;
 }
 
-/* tal_fs_is_exist("/sdcard") fails even when FAT is mounted; never mkdir a mount root */
+/* core_fs_is_exist("/sdcard") fails even when FAT is mounted; never mkdir a mount root */
 static BOOL_T __is_fs_mount_root(const char *path)
 {
     return (path != NULL && strcmp(path, "/sdcard") == 0) ? TRUE : FALSE;
@@ -184,18 +184,18 @@ static OPERATE_RET __mkdir_one(const char *path)
     if (strcmp(path, ".") == 0 || __is_fs_mount_root(path)) {
         return OPRT_OK;
     }
-    (void)tal_fs_is_exist(path, &exists);
+    (void)core_fs_is_exist(path, &exists);
     if (exists) {
         return OPRT_OK;
     }
-    rt = tal_fs_mkdir(path);
+    rt = core_fs_mkdir(path);
     if (rt != 0) {
         exists = FALSE;
-        (void)tal_fs_is_exist(path, &exists);
+        (void)core_fs_is_exist(path, &exists);
         if (exists) {
             return OPRT_OK;
         }
-        TAL_PR_ERR("tal_fs_mkdir %s failed: %d", path, rt);
+        CORE_PR_ERR("core_fs_mkdir %s failed: %d", path, rt);
         return OPRT_COM_ERROR;
     }
     return OPRT_OK;
@@ -247,9 +247,9 @@ static OPERATE_RET __ts_to_ymd(uint32_t ts, uint32_t *y, uint32_t *m, uint32_t *
     OPERATE_RET rt;
 
     memset(&tm, 0, sizeof(tm));
-    rt = tal_time_get_local_time_custom((TIME_T)ts, &tm);
+    rt = core_time_get_local_time_custom((TIME_T)ts, &tm);
     if (rt != OPRT_OK) {
-        rt = tal_time_get(&tm);
+        rt = core_time_get(&tm);
         if (rt != OPRT_OK) {
             return rt;
         }
@@ -354,7 +354,7 @@ OPERATE_RET local_store_make_rec_path(const char *filename, char *out, uint32_t 
     if (rt != OPRT_OK) {
         return rt;
     }
-    rt = __ts_to_ymd((uint32_t)tal_time_get_posix(), &y, &m, &d);
+    rt = __ts_to_ymd((uint32_t)core_time_get_posix(), &y, &m, &d);
     if (rt != OPRT_OK) {
         return rt;
     }
@@ -390,9 +390,9 @@ OPERATE_RET local_store_commit(const char *tmp_path, const char *final_path)
     if (tmp_path == NULL || final_path == NULL) {
         return OPRT_INVALID_PARM;
     }
-    rt = tal_fs_rename(tmp_path, final_path);
+    rt = core_fs_rename(tmp_path, final_path);
     if (rt != 0) {
-        TAL_PR_ERR("local_store_commit rename %s -> %s failed: %d", tmp_path, final_path, rt);
+        CORE_PR_ERR("local_store_commit rename %s -> %s failed: %d", tmp_path, final_path, rt);
         return OPRT_COM_ERROR;
     }
     return OPRT_OK;
@@ -434,16 +434,16 @@ OPERATE_RET local_store_index_append(uint32_t start_ts, uint32_t end_ts, uint16_
     if (n < 0 || (uint32_t)n >= sizeof(line)) {
         return OPRT_BUFFER_NOT_ENOUGH;
     }
-    fp = tal_fopen(idx_path, "a");
+    fp = core_fopen(idx_path, "a");
     if (fp == NULL) {
-        TAL_PR_ERR("open index %s failed", idx_path);
+        CORE_PR_ERR("open index %s failed", idx_path);
         return OPRT_FILE_OPEN_FAILED;
     }
-    if (tal_fwrite((void *)line, n, fp) != n) {
-        tal_fclose(fp);
+    if (core_fwrite((void *)line, n, fp) != n) {
+        core_fclose(fp);
         return OPRT_FILE_WRITE_FAILED;
     }
-    tal_fclose(fp);
+    core_fclose(fp);
     return OPRT_OK;
 }
 
@@ -462,15 +462,15 @@ static OPERATE_RET __index_scan(uint32_t year, uint32_t month, uint32_t day, LS_
     if (rt != OPRT_OK) {
         return rt;
     }
-    (void)tal_fs_is_exist(idx_path, &exists);
+    (void)core_fs_is_exist(idx_path, &exists);
     if (!exists) {
         return OPRT_OK;
     }
-    fp = tal_fopen(idx_path, "r");
+    fp = core_fopen(idx_path, "r");
     if (fp == NULL) {
         return OPRT_FILE_OPEN_FAILED;
     }
-    while (tal_fgets(line, (int)sizeof(line), fp) != NULL) {
+    while (core_fgets(line, (int)sizeof(line), fp) != NULL) {
         if (line[0] == '#' || line[0] == '\n' || line[0] == '\0') {
             continue;
         }
@@ -487,7 +487,7 @@ static OPERATE_RET __index_scan(uint32_t year, uint32_t month, uint32_t day, LS_
             break;
         }
     }
-    tal_fclose(fp);
+    core_fclose(fp);
     return OPRT_OK;
 }
 
@@ -686,26 +686,26 @@ static OPERATE_RET __remove_dir_files(const char *dir_path)
     char path[LOCAL_STORE_PATH_MAX];
     BOOL_T is_dir = FALSE;
 
-    if (tal_dir_open(dir_path, &dir) != 0) {
+    if (core_dir_open(dir_path, &dir) != 0) {
         return OPRT_FILE_OPEN_FAILED;
     }
-    while (tal_dir_read(dir, &info) == 0 && info != NULL) {
-        if (tal_dir_name(info, &name) != 0 || name == NULL) {
+    while (core_dir_read(dir, &info) == 0 && info != NULL) {
+        if (core_dir_name(info, &name) != 0 || name == NULL) {
             continue;
         }
         if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) {
             continue;
         }
         is_dir = FALSE;
-        (void)tal_dir_is_directory(info, &is_dir);
+        (void)core_dir_is_directory(info, &is_dir);
         if (is_dir) {
             continue;
         }
         if (__path_join(dir_path, name, path, sizeof(path)) == OPRT_OK) {
-            (void)tal_fs_remove(path);
+            (void)core_fs_remove(path);
         }
     }
-    tal_dir_close(dir);
+    core_dir_close(dir);
     return OPRT_OK;
 }
 
@@ -719,7 +719,7 @@ OPERATE_RET local_store_remove_day(uint32_t year, uint32_t month, uint32_t day)
     if (rt != OPRT_OK) {
         return rt;
     }
-    (void)tal_fs_is_exist(day_path, &exists);
+    (void)core_fs_is_exist(day_path, &exists);
     if (!exists) {
         return OPRT_NOT_FOUND;
     }
@@ -727,11 +727,11 @@ OPERATE_RET local_store_remove_day(uint32_t year, uint32_t month, uint32_t day)
     if (rt != OPRT_OK) {
         return rt;
     }
-    if (tal_fs_remove(day_path) != 0) {
-        TAL_PR_WARN("local_store rmdir %s failed", day_path);
+    if (core_fs_remove(day_path) != 0) {
+        CORE_PR_WARN("local_store rmdir %s failed", day_path);
         return OPRT_COM_ERROR;
     }
-    TAL_PR_NOTICE("local_store removed day %s", day_path);
+    CORE_PR_NOTICE("local_store removed day %s", day_path);
     return OPRT_OK;
 }
 
@@ -778,11 +778,11 @@ static OPERATE_RET __for_each_day(LS_DAY_CB cb, void *ctx)
     if (__rec_base(rec_base, sizeof(rec_base)) != OPRT_OK) {
         return OPRT_COM_ERROR;
     }
-    if (tal_dir_open(rec_base, &dir) != 0) {
+    if (core_dir_open(rec_base, &dir) != 0) {
         return OPRT_FILE_OPEN_FAILED;
     }
-    while (tal_dir_read(dir, &info) == 0 && info != NULL) {
-        if (tal_dir_name(info, &name) != 0 || name == NULL) {
+    while (core_dir_read(dir, &info) == 0 && info != NULL) {
+        if (core_dir_name(info, &name) != 0 || name == NULL) {
             continue;
         }
         if (!__parse_day_name(name, &y, &m, &d)) {
@@ -792,7 +792,7 @@ static OPERATE_RET __for_each_day(LS_DAY_CB cb, void *ctx)
             break;
         }
     }
-    tal_dir_close(dir);
+    core_dir_close(dir);
     return OPRT_OK;
 }
 
@@ -825,7 +825,7 @@ static int32_t __today_days(void)
 {
     uint32_t y, m, d;
 
-    if (__ts_to_ymd((uint32_t)tal_time_get_posix(), &y, &m, &d) != OPRT_OK) {
+    if (__ts_to_ymd((uint32_t)core_time_get_posix(), &y, &m, &d) != OPRT_OK) {
         return 0;
     }
     return __days_from_civil(y, m, d);
@@ -879,15 +879,15 @@ static OPERATE_RET __idx_write(const char *media_path, const LS_IDX_ENT_T *ents,
     if (__idx_path_of(media_path, path, sizeof(path)) != OPRT_OK) {
         return OPRT_COM_ERROR;
     }
-    fp = tal_fopen(path, "wb");
+    fp = core_fopen(path, "wb");
     if (fp == NULL) {
         return OPRT_FILE_OPEN_FAILED;
     }
-    if (bytes > 0 && tal_fwrite((void *)ents, bytes, fp) != bytes) {
-        tal_fclose(fp);
+    if (bytes > 0 && core_fwrite((void *)ents, bytes, fp) != bytes) {
+        core_fclose(fp);
         return OPRT_FILE_WRITE_FAILED;
     }
-    tal_fclose(fp);
+    core_fclose(fp);
     return OPRT_OK;
 }
 
@@ -901,12 +901,12 @@ static uint32_t __idx_read(const char *media_path, LS_IDX_ENT_T *ents, uint32_t 
     if (__idx_path_of(media_path, path, sizeof(path)) != OPRT_OK) {
         return 0;
     }
-    fp = tal_fopen(path, "rb");
+    fp = core_fopen(path, "rb");
     if (fp == NULL) {
         return 0;
     }
-    n = tal_fread(ents, (int32_t)(cap * sizeof(LS_IDX_ENT_T)), fp);
-    tal_fclose(fp);
+    n = core_fread(ents, (int32_t)(cap * sizeof(LS_IDX_ENT_T)), fp);
+    core_fclose(fp);
     if (n <= 0) {
         return 0;
     }
@@ -918,7 +918,7 @@ static void __idx_remove(const char *media_path)
     char path[LOCAL_STORE_PATH_MAX];
 
     if (__idx_path_of(media_path, path, sizeof(path)) == OPRT_OK) {
-        (void)tal_fs_remove(path);
+        (void)core_fs_remove(path);
     }
 }
 
@@ -939,7 +939,7 @@ static void __reader_fill(LOCAL_STORE_READER_T *rd)
         rd->used = 0;
     }
     while (!rd->eof && rd->valid < LS_READ_BYTES) {
-        n = tal_fread(rd->buf + rd->valid, (int32_t)(LS_READ_BYTES - rd->valid), rd->fp);
+        n = core_fread(rd->buf + rd->valid, (int32_t)(LS_READ_BYTES - rd->valid), rd->fp);
         if (n <= 0) {
             rd->eof = TRUE;
             break;
@@ -950,7 +950,7 @@ static void __reader_fill(LOCAL_STORE_READER_T *rd)
 
 static void __reader_reposition(LOCAL_STORE_READER_T *rd, uint64_t off)
 {
-    (void)tal_fseek(rd->fp, (int64_t)off, SEEK_SET);
+    (void)core_fseek(rd->fp, (int64_t)off, SEEK_SET);
     rd->base = off;
     rd->valid = 0;
     rd->used = 0;
@@ -964,20 +964,20 @@ LOCAL_STORE_READER_T *local_store_reader_open(const char *path)
     if (path == NULL || strlen(path) >= LOCAL_STORE_PATH_MAX) {
         return NULL;
     }
-    rd = (LOCAL_STORE_READER_T *)tal_malloc(sizeof(*rd));
+    rd = (LOCAL_STORE_READER_T *)core_malloc(sizeof(*rd));
     if (rd == NULL) {
         return NULL;
     }
     memset(rd, 0, sizeof(*rd));
     rd->buf = (uint8_t *)Malloc(LS_READ_BYTES);
     if (rd->buf == NULL) {
-        tal_free(rd);
+        core_free(rd);
         return NULL;
     }
-    rd->fp = tal_fopen(path, "rb");
+    rd->fp = core_fopen(path, "rb");
     if (rd->fp == NULL) {
         Free(rd->buf);
-        tal_free(rd);
+        core_free(rd);
         return NULL;
     }
     snprintf(rd->path, sizeof(rd->path), "%s", path);
@@ -990,12 +990,12 @@ void local_store_reader_close(LOCAL_STORE_READER_T *rd)
         return;
     }
     if (rd->fp != NULL) {
-        tal_fclose(rd->fp);
+        core_fclose(rd->fp);
     }
     if (rd->buf != NULL) {
         Free(rd->buf);
     }
-    tal_free(rd);
+    core_free(rd);
 }
 
 OPERATE_RET local_store_reader_next(LOCAL_STORE_READER_T *rd, LOCAL_STORE_FRAME_HDR_T *hdr, const uint8_t **payload)
@@ -1015,7 +1015,7 @@ OPERATE_RET local_store_reader_next(LOCAL_STORE_READER_T *rd, LOCAL_STORE_FRAME_
     if (h.size == 0 || h.size > LS_MAX_FRAME || (h.type != LOCAL_STORE_FRAME_VIDEO_P &&
                                                  h.type != LOCAL_STORE_FRAME_VIDEO_I &&
                                                  h.type != LOCAL_STORE_FRAME_AUDIO)) {
-        TAL_PR_ERR("reader: bad frame hdr type=%u size=%u at %llu", h.type, h.size,
+        CORE_PR_ERR("reader: bad frame hdr type=%u size=%u at %llu", h.type, h.size,
                    (unsigned long long)(rd->base + rd->used));
         return OPRT_COM_ERROR;
     }
@@ -1045,7 +1045,7 @@ OPERATE_RET local_store_reader_seek(LOCAL_STORE_READER_T *rd, uint32_t rel_ms)
     if (rd == NULL) {
         return OPRT_INVALID_PARM;
     }
-    ents = (LS_IDX_ENT_T *)tal_malloc(LS_IDX_MAX * sizeof(LS_IDX_ENT_T));
+    ents = (LS_IDX_ENT_T *)core_malloc(LS_IDX_MAX * sizeof(LS_IDX_ENT_T));
     if (ents != NULL) {
         cnt = __idx_read(rd->path, ents, LS_IDX_MAX);
         for (i = 0; i < cnt; i++) {
@@ -1055,7 +1055,7 @@ OPERATE_RET local_store_reader_seek(LOCAL_STORE_READER_T *rd, uint32_t rel_ms)
                 break;
             }
         }
-        tal_free(ents);
+        core_free(ents);
         if (cnt > 0) {
             __reader_reposition(rd, target_off);
             return OPRT_OK;
@@ -1097,16 +1097,16 @@ static BOOL_T __media_last_rel_ms(const char *path, uint32_t *rel_ms)
     LS_IDX_ENT_T *ents;
     uint32_t cnt;
 
-    ents = (LS_IDX_ENT_T *)tal_malloc(LS_IDX_MAX * sizeof(LS_IDX_ENT_T));
+    ents = (LS_IDX_ENT_T *)core_malloc(LS_IDX_MAX * sizeof(LS_IDX_ENT_T));
     if (ents != NULL) {
         cnt = __idx_read(path, ents, LS_IDX_MAX);
         if (cnt > 0) {
             ent = ents[cnt - 1];
-            tal_free(ents);
+            core_free(ents);
             *rel_ms = ent.rel_ms;
             return TRUE;
         }
-        tal_free(ents);
+        core_free(ents);
     }
     rd = local_store_reader_open(path);
     if (rd == NULL) {
@@ -1171,11 +1171,11 @@ static BOOL_T __recover_day_cb(uint32_t y, uint32_t m, uint32_t d, void *ctx)
     if (__index_scan(y, m, d, __starts_cb, c) != OPRT_OK) {
         return TRUE;
     }
-    if (__day_dir(y, m, d, day_path, sizeof(day_path)) != OPRT_OK || tal_dir_open(day_path, &dir) != 0) {
+    if (__day_dir(y, m, d, day_path, sizeof(day_path)) != OPRT_OK || core_dir_open(day_path, &dir) != 0) {
         return TRUE;
     }
-    while (tal_dir_read(dir, &info) == 0 && info != NULL) {
-        if (tal_dir_name(info, &name) != 0 || name == NULL) {
+    while (core_dir_read(dir, &info) == 0 && info != NULL) {
+        if (core_dir_name(info, &name) != 0 || name == NULL) {
             continue;
         }
         if (!__leaf_start_ts(name, &start) || __starts_has(c, start)) {
@@ -1185,16 +1185,16 @@ static BOOL_T __recover_day_cb(uint32_t y, uint32_t m, uint32_t d, void *ctx)
             continue;
         }
         if (!__media_last_rel_ms(path, &rel_ms)) {
-            TAL_PR_WARN("local_store recover: drop empty %s", path);
-            (void)tal_fs_remove(path);
+            CORE_PR_WARN("local_store recover: drop empty %s", path);
+            (void)core_fs_remove(path);
             __idx_remove(path);
             continue;
         }
         if (local_store_index_append(start, start + rel_ms / 1000u + 1u, 0, name) == OPRT_OK) {
-            TAL_PR_NOTICE("local_store recover: indexed %s (%u s)", path, rel_ms / 1000u + 1u);
+            CORE_PR_NOTICE("local_store recover: indexed %s (%u s)", path, rel_ms / 1000u + 1u);
         }
     }
-    tal_dir_close(dir);
+    core_dir_close(dir);
     return TRUE;
 }
 
@@ -1202,13 +1202,13 @@ static void __recover_all(void)
 {
     LS_STARTS_CTX_T c;
 
-    c.starts = (uint32_t *)tal_malloc(LS_START_TS_CAP * sizeof(uint32_t));
+    c.starts = (uint32_t *)core_malloc(LS_START_TS_CAP * sizeof(uint32_t));
     if (c.starts == NULL) {
         return;
     }
     c.cnt = 0;
     (void)__for_each_day(__recover_day_cb, &c);
-    tal_free(c.starts);
+    core_free(c.starts);
 }
 
 OPERATE_RET local_store_init(void)
@@ -1234,7 +1234,7 @@ OPERATE_RET local_store_init(void)
     s_inited = TRUE;
     __prune_keep_days();
     __recover_all();
-    TAL_PR_NOTICE("local_store init ok, root=%s keep_days=%d", LOCAL_STORE_ROOT, (int)LOCAL_STORE_KEEP_DAYS);
+    CORE_PR_NOTICE("local_store init ok, root=%s keep_days=%d", LOCAL_STORE_ROOT, (int)LOCAL_STORE_KEEP_DAYS);
     return OPRT_OK;
 }
 
@@ -1325,20 +1325,20 @@ static OPERATE_RET __stage_flush(void)
         s_stage_used = 0;
         return OPRT_OK;
     }
-    t0 = tal_system_get_millisecond();
-    n = tal_fwrite(s_stage, (int32_t)s_stage_used, s_fp);
+    t0 = core_system_get_millisecond();
+    n = core_fwrite(s_stage, (int32_t)s_stage_used, s_fp);
     if (n != (int32_t)s_stage_used) {
-        TAL_PR_WARN("local_store write %u got %d, pruning oldest day", s_stage_used, n);
+        CORE_PR_WARN("local_store write %u got %d, pruning oldest day", s_stage_used, n);
         if (__prune_oldest()) {
-            n = tal_fwrite(s_stage, (int32_t)s_stage_used, s_fp);
+            n = core_fwrite(s_stage, (int32_t)s_stage_used, s_fp);
         }
     }
-    dt = tal_system_get_millisecond() - t0;
+    dt = core_system_get_millisecond() - t0;
     if (dt > s_stat.write_max_ms) {
         s_stat.write_max_ms = dt;
     }
     if (n != (int32_t)s_stage_used) {
-        TAL_PR_ERR("local_store write failed want=%u got=%d, closing %s", s_stage_used, n, s_path);
+        CORE_PR_ERR("local_store write failed want=%u got=%d, closing %s", s_stage_used, n, s_path);
         __seg_abort_after_error();
         return OPRT_FILE_WRITE_FAILED;
     }
@@ -1354,16 +1354,16 @@ static void __file_sync(void)
     if (s_fp == NULL) {
         return;
     }
-    (void)tal_fflush(s_fp);
-    (void)tal_fsync(tal_fileno(s_fp));
+    (void)core_fflush(s_fp);
+    (void)core_fsync(core_fileno(s_fp));
     (void)__idx_write(s_path, s_idx, s_idx_cnt);
     s_dirty = FALSE;
-    s_last_sync_ms = tal_system_get_millisecond();
+    s_last_sync_ms = core_system_get_millisecond();
 }
 
 static void __maybe_sync(void)
 {
-    uint32_t now = tal_system_get_millisecond();
+    uint32_t now = core_system_get_millisecond();
 
     if (s_fp == NULL || (s_stage_used == 0 && !s_dirty)) {
         return;
@@ -1390,20 +1390,20 @@ static void __seg_close(void)
         return;
     }
     __file_sync();
-    tal_fclose(s_fp);
+    core_fclose(s_fp);
     s_fp = NULL;
 
     if (s_file_bytes == 0) {
-        TAL_PR_WARN("local_store rec discard empty %s", s_path);
-        (void)tal_fs_remove(s_path);
+        CORE_PR_WARN("local_store rec discard empty %s", s_path);
+        (void)core_fs_remove(s_path);
         __idx_remove(s_path);
     } else {
         end_ts = s_file_start + s_last_rel_ms / 1000u + 1u;
         rt = local_store_index_append(s_file_start, end_ts, 0, s_leaf);
         if (rt != OPRT_OK) {
-            TAL_PR_ERR("local_store rec index_append failed: %d", rt);
+            CORE_PR_ERR("local_store rec index_append failed: %d", rt);
         } else {
-            TAL_PR_NOTICE("local_store rec stop %s bytes=%llu keys=%u [%u,%u]", s_path,
+            CORE_PR_NOTICE("local_store rec stop %s bytes=%llu keys=%u [%u,%u]", s_path,
                           (unsigned long long)s_file_bytes, s_idx_cnt, s_file_start, end_ts);
         }
     }
@@ -1438,15 +1438,15 @@ static void __seg_open(uint32_t start_sec)
     if (__path_join(day_path, s_leaf, s_path, sizeof(s_path)) != OPRT_OK) {
         goto fail;
     }
-    s_fp = tal_fopen(s_path, "wb");
+    s_fp = core_fopen(s_path, "wb");
     if (s_fp == NULL) {
-        TAL_PR_WARN("local_store rec open %s failed, pruning oldest day", s_path);
+        CORE_PR_WARN("local_store rec open %s failed, pruning oldest day", s_path);
         if (__prune_oldest()) {
-            s_fp = tal_fopen(s_path, "wb");
+            s_fp = core_fopen(s_path, "wb");
         }
     }
     if (s_fp == NULL) {
-        TAL_PR_ERR("local_store rec open failed: %s", s_path);
+        CORE_PR_ERR("local_store rec open failed: %s", s_path);
         goto fail;
     }
     s_file_start = start_sec;
@@ -1455,9 +1455,9 @@ static void __seg_open(uint32_t start_sec)
     s_last_rel_ms = 0;
     s_stage_used = 0;
     s_dirty = FALSE;
-    s_last_sync_ms = tal_system_get_millisecond();
+    s_last_sync_ms = core_system_get_millisecond();
     s_stat.segments++;
-    TAL_PR_NOTICE("local_store rec start %s", s_path);
+    CORE_PR_NOTICE("local_store rec start %s", s_path);
     return;
 
 fail:
@@ -1490,15 +1490,15 @@ static void __rec_worker(void *arg)
     s_alive = TRUE;
 
     while (s_run || s_ring_used > 0) {
-        tal_mutex_lock(s_lock);
+        core_mutex_lock(s_lock);
         if (!__ring_peek(&h)) {
-            tal_mutex_unlock(s_lock);
-            now = tal_system_get_millisecond();
+            core_mutex_unlock(s_lock);
+            now = core_system_get_millisecond();
             if (s_stage_used > 0 && now - s_last_data_ms >= LS_IDLE_FLUSH_MS) {
                 (void)__stage_flush();
             }
             __maybe_sync();
-            (void)tal_semaphore_wait(s_wake, LS_WAIT_MS);
+            (void)core_semaphore_wait(s_wake, LS_WAIT_MS);
             continue;
         }
         __ring_read(NULL, sizeof(h));
@@ -1507,19 +1507,19 @@ static void __rec_worker(void *arg)
             uint32_t start = 0;
 
             __ring_read((uint8_t *)&start, sizeof(start));
-            tal_mutex_unlock(s_lock);
+            core_mutex_unlock(s_lock);
             __seg_close();
             __seg_open(start);
             continue;
         }
         if (s_fp == NULL || h.len < sizeof(fh)) {
             __ring_read(NULL, h.len);
-            tal_mutex_unlock(s_lock);
+            core_mutex_unlock(s_lock);
             s_stat.frames_dropped++;
             continue;
         }
         __ring_read((uint8_t *)&fh, sizeof(fh));
-        tal_mutex_unlock(s_lock);
+        core_mutex_unlock(s_lock);
 
         remaining = h.len - (uint32_t)sizeof(fh);
         s_last_rel_ms = (uint32_t)(fh.timestamp - (uint64_t)s_file_start * 1000ULL);
@@ -1531,9 +1531,9 @@ static void __rec_worker(void *arg)
         __stage_put(&fh, sizeof(fh));
         while (remaining > 0) {
             if (s_fp == NULL) {
-                tal_mutex_lock(s_lock);
+                core_mutex_lock(s_lock);
                 __ring_read(NULL, remaining);
-                tal_mutex_unlock(s_lock);
+                core_mutex_unlock(s_lock);
                 s_stat.frames_dropped++;
                 break;
             }
@@ -1546,13 +1546,13 @@ static void __rec_worker(void *arg)
             if (n > remaining) {
                 n = remaining;
             }
-            tal_mutex_lock(s_lock);
+            core_mutex_lock(s_lock);
             __ring_read(s_stage + s_stage_used, n);
-            tal_mutex_unlock(s_lock);
+            core_mutex_unlock(s_lock);
             s_stage_used += n;
             remaining -= n;
         }
-        s_last_data_ms = tal_system_get_millisecond();
+        s_last_data_ms = core_system_get_millisecond();
         __maybe_sync();
     }
 
@@ -1566,10 +1566,10 @@ static void __rec_worker(void *arg)
 /* Kept for the process lifetime: the capture thread reaches s_lock and s_ring without holding anything. */
 static OPERATE_RET __rec_alloc_once(void)
 {
-    if (s_lock == NULL && tal_mutex_create_init(&s_lock) != OPRT_OK) {
+    if (s_lock == NULL && core_mutex_create_init(&s_lock) != OPRT_OK) {
         return OPRT_COM_ERROR;
     }
-    if (s_wake == NULL && tal_semaphore_create_init(&s_wake, 0, 1) != OPRT_OK) {
+    if (s_wake == NULL && core_semaphore_create_init(&s_wake, 0, 1) != OPRT_OK) {
         return OPRT_COM_ERROR;
     }
     if (s_ring == NULL) {
@@ -1600,7 +1600,7 @@ OPERATE_RET local_store_rec_start(const char *leaf_prefix, uint32_t seg_sec)
         (void)local_store_rec_stop();
     }
     if (s_alive) {
-        TAL_PR_ERR("local_store rec start refused: previous writer still draining");
+        CORE_PR_ERR("local_store rec start refused: previous writer still draining");
         return OPRT_RESOURCE_NOT_READY;
     }
     rt = local_store_init();
@@ -1615,7 +1615,7 @@ OPERATE_RET local_store_rec_start(const char *leaf_prefix, uint32_t seg_sec)
     snprintf(s_prefix, sizeof(s_prefix), "%s", leaf_prefix);
     s_seg_sec = (seg_sec == 0) ? LS_SEG_DFLT_SEC : seg_sec;
 
-    tal_mutex_lock(s_lock);
+    core_mutex_lock(s_lock);
     s_ring_head = 0;
     s_ring_tail = 0;
     s_ring_used = 0;
@@ -1630,10 +1630,10 @@ OPERATE_RET local_store_rec_start(const char *leaf_prefix, uint32_t seg_sec)
     s_file_bytes = 0;
     s_last_rel_ms = 0;
     s_dirty = FALSE;
-    s_last_data_ms = tal_system_get_millisecond();
+    s_last_data_ms = core_system_get_millisecond();
     memset(&s_stat, 0, sizeof(s_stat));
     s_stat.ring_cap = LS_STAGE_BYTES;
-    tal_mutex_unlock(s_lock);
+    core_mutex_unlock(s_lock);
 
     memset(&cfg, 0, sizeof(cfg));
     cfg.stackDepth = LS_THREAD_STACK;
@@ -1644,15 +1644,15 @@ OPERATE_RET local_store_rec_start(const char *leaf_prefix, uint32_t seg_sec)
 #endif
     s_run = TRUE;
     s_alive = FALSE;
-    if (tal_thread_create_and_start(&s_worker, NULL, NULL, __rec_worker, NULL, &cfg) != OPRT_OK) {
+    if (core_thread_create_and_start(&s_worker, NULL, NULL, __rec_worker, NULL, &cfg) != OPRT_OK) {
         s_run = FALSE;
         s_worker = NULL;
         return OPRT_COM_ERROR;
     }
-    tal_mutex_lock(s_lock);
+    core_mutex_lock(s_lock);
     s_accept = TRUE;
-    tal_mutex_unlock(s_lock);
-    TAL_PR_NOTICE("local_store rec armed prefix=%s seg=%us ring=%uKB chunk=%uKB", s_prefix, s_seg_sec,
+    core_mutex_unlock(s_lock);
+    CORE_PR_NOTICE("local_store rec armed prefix=%s seg=%us ring=%uKB chunk=%uKB", s_prefix, s_seg_sec,
                   LS_STAGE_BYTES / 1024u, LS_WRITE_BYTES / 1024u);
     return OPRT_OK;
 }
@@ -1672,23 +1672,23 @@ static OPERATE_RET __rec_put_frame(uint32_t type, const uint8_t *data, uint32_t 
     if (s_lock == NULL || !s_accept) {
         return OPRT_RESOURCE_NOT_READY;
     }
-    now_sec = (uint32_t)tal_time_get_posix();
+    now_sec = (uint32_t)core_time_get_posix();
 
-    tal_mutex_lock(s_lock);
+    core_mutex_lock(s_lock);
     if (!s_accept) {
-        tal_mutex_unlock(s_lock);
+        core_mutex_unlock(s_lock);
         return OPRT_RESOURCE_NOT_READY;
     }
     if (is_key && (!s_seg_open || s_force_cut || now_sec >= s_seg_start + s_seg_sec)) {
         cut = TRUE;
     }
     if (!s_seg_open && !cut) {
-        tal_mutex_unlock(s_lock);
+        core_mutex_unlock(s_lock);
         return OPRT_OK;
     }
     if (s_wait_key && !cut && !is_key) {
         s_stat.frames_dropped++;
-        tal_mutex_unlock(s_lock);
+        core_mutex_unlock(s_lock);
         return OPRT_OK;
     }
     need = (uint32_t)sizeof(LS_REC_HDR_T) + (uint32_t)sizeof(fh) + len;
@@ -1700,7 +1700,7 @@ static OPERATE_RET __rec_put_frame(uint32_t type, const uint8_t *data, uint32_t 
         if (is_video) {
             s_wait_key = TRUE;
         }
-        tal_mutex_unlock(s_lock);
+        core_mutex_unlock(s_lock);
         return OPRT_BUFFER_NOT_ENOUGH;
     }
     if (cut) {
@@ -1720,8 +1720,8 @@ static OPERATE_RET __rec_put_frame(uint32_t type, const uint8_t *data, uint32_t 
     }
     s_stat.frames_in++;
     s_stat.ring_used = s_ring_used;
-    tal_mutex_unlock(s_lock);
-    (void)tal_semaphore_post(s_wake);
+    core_mutex_unlock(s_lock);
+    (void)core_semaphore_post(s_wake);
     return OPRT_OK;
 }
 
@@ -1740,30 +1740,30 @@ OPERATE_RET local_store_rec_stop(void)
     uint32_t waited = 0;
 
     if (s_lock != NULL) {
-        tal_mutex_lock(s_lock);
+        core_mutex_lock(s_lock);
         s_accept = FALSE;
         s_seg_open = FALSE;
-        tal_mutex_unlock(s_lock);
+        core_mutex_unlock(s_lock);
     }
     if (!s_run && s_worker == NULL) {
         return OPRT_OK;
     }
     s_run = FALSE;
     if (s_wake != NULL) {
-        (void)tal_semaphore_post(s_wake);
+        (void)core_semaphore_post(s_wake);
     }
     while (s_alive && waited < LS_STOP_WAIT_MS) {
-        tal_system_sleep(10);
+        core_system_sleep(10);
         waited += 10;
     }
     if (s_worker != NULL) {
-        tal_thread_delete(s_worker);
+        core_thread_delete(s_worker);
         s_worker = NULL;
     }
     if (s_alive) {
-        TAL_PR_ERR("local_store rec worker still draining after %u ms, it closes the segment itself", waited);
+        CORE_PR_ERR("local_store rec worker still draining after %u ms, it closes the segment itself", waited);
     }
-    TAL_PR_NOTICE("local_store rec stopped: in=%u drop=%u seg=%u err=%u wmax=%ums bytes=%llu", s_stat.frames_in,
+    CORE_PR_NOTICE("local_store rec stopped: in=%u drop=%u seg=%u err=%u wmax=%ums bytes=%llu", s_stat.frames_in,
                   s_stat.frames_dropped, s_stat.segments, s_stat.write_errors, s_stat.write_max_ms,
                   (unsigned long long)s_stat.bytes_written);
     return OPRT_OK;
@@ -1781,7 +1781,7 @@ uint32_t local_store_rec_elapsed_sec(void)
     if (!s_run || !s_seg_open || s_seg_start == 0) {
         return 0;
     }
-    now = tal_time_get_posix();
+    now = core_time_get_posix();
     if (now <= (TIME_T)s_seg_start) {
         return 0;
     }
@@ -1916,7 +1916,7 @@ static void __annexb_fill(LS_ANNEXB_T *a)
     a->valid = keep;
     a->used = 0;
     while (!a->eof && a->valid < LS_SEED_BUF) {
-        n = tal_fread(a->buf + a->valid, (int32_t)(LS_SEED_BUF - a->valid), a->fin);
+        n = core_fread(a->buf + a->valid, (int32_t)(LS_SEED_BUF - a->valid), a->fin);
         if (n <= 0) {
             a->eof = TRUE;
             break;
@@ -1953,13 +1953,13 @@ static int __annexb_read_au(LS_ANNEXB_T *a, BOOL_T *is_key, uint32_t *start, uin
 static BOOL_T __annexb_open(LS_ANNEXB_T *a, const char *src_path)
 {
     memset(a, 0, sizeof(*a));
-    a->fin = tal_fopen(src_path, "rb");
+    a->fin = core_fopen(src_path, "rb");
     if (a->fin == NULL) {
         return FALSE;
     }
     a->buf = (uint8_t *)Malloc(LS_SEED_BUF);
     if (a->buf == NULL) {
-        tal_fclose(a->fin);
+        core_fclose(a->fin);
         a->fin = NULL;
         return FALSE;
     }
@@ -1969,7 +1969,7 @@ static BOOL_T __annexb_open(LS_ANNEXB_T *a, const char *src_path)
 static void __annexb_close(LS_ANNEXB_T *a)
 {
     if (a->fin != NULL) {
-        tal_fclose(a->fin);
+        core_fclose(a->fin);
     }
     if (a->buf != NULL) {
         Free(a->buf);
@@ -2018,9 +2018,9 @@ OPERATE_RET local_store_seed_h264(const char *src_path, const char *leaf, uint32
     if (duration_sec == 0) {
         duration_sec = 60;
     }
-    (void)tal_fs_is_exist(src_path, &src_exists);
+    (void)core_fs_is_exist(src_path, &src_exists);
     if (!src_exists) {
-        TAL_PR_ERR("seed src missing: %s", src_path);
+        CORE_PR_ERR("seed src missing: %s", src_path);
         return OPRT_FILE_OPEN_FAILED;
     }
     rt = local_store_init();
@@ -2040,7 +2040,7 @@ OPERATE_RET local_store_seed_h264(const char *src_path, const char *leaf, uint32
         snprintf(media_leaf + stem, sizeof(media_leaf) - stem, "%s", LS_MEDIA_EXT);
     }
 
-    now = tal_time_get_posix();
+    now = core_time_get_posix();
     if (now < (TIME_T)duration_sec) {
         start_ts = 1;
         end_ts = duration_sec;
@@ -2053,7 +2053,7 @@ OPERATE_RET local_store_seed_h264(const char *src_path, const char *leaf, uint32
         lc.found = FALSE;
         (void)__index_scan(y, m, d, __leaf_cb, &lc);
         if (lc.found) {
-            TAL_PR_NOTICE("local_store seed skip, leaf indexed: %s", media_leaf);
+            CORE_PR_NOTICE("local_store seed skip, leaf indexed: %s", media_leaf);
             return OPRT_OK;
         }
     }
@@ -2062,9 +2062,9 @@ OPERATE_RET local_store_seed_h264(const char *src_path, const char *leaf, uint32
     if (rt != OPRT_OK) {
         return rt;
     }
-    (void)tal_fs_is_exist(dst, &dst_exists);
+    (void)core_fs_is_exist(dst, &dst_exists);
     if (dst_exists) {
-        (void)tal_fs_remove(dst);
+        (void)core_fs_remove(dst);
     }
 
     if (!__annexb_open(&a, src_path)) {
@@ -2075,22 +2075,22 @@ OPERATE_RET local_store_seed_h264(const char *src_path, const char *leaf, uint32
     }
     __annexb_close(&a);
     if (total_au == 0) {
-        TAL_PR_ERR("seed: no access unit in %s", src_path);
+        CORE_PR_ERR("seed: no access unit in %s", src_path);
         return OPRT_COM_ERROR;
     }
 
     if (!__annexb_open(&a, src_path)) {
         return OPRT_FILE_OPEN_FAILED;
     }
-    fout = tal_fopen(dst, "wb");
-    idx = (LS_IDX_ENT_T *)tal_malloc(LS_IDX_MAX * sizeof(LS_IDX_ENT_T));
+    fout = core_fopen(dst, "wb");
+    idx = (LS_IDX_ENT_T *)core_malloc(LS_IDX_MAX * sizeof(LS_IDX_ENT_T));
     if (fout == NULL || idx == NULL) {
         __annexb_close(&a);
         if (fout != NULL) {
-            tal_fclose(fout);
+            core_fclose(fout);
         }
         if (idx != NULL) {
-            tal_free(idx);
+            core_free(idx);
         }
         return OPRT_FILE_OPEN_FAILED;
     }
@@ -2107,8 +2107,8 @@ OPERATE_RET local_store_seed_h264(const char *src_path, const char *leaf, uint32
             idx[idx_cnt].off = (uint32_t)off;
             idx_cnt++;
         }
-        n = tal_fwrite(&fh, (int32_t)sizeof(fh), fout);
-        if (n != (int32_t)sizeof(fh) || tal_fwrite(a.buf + au_start, (int32_t)au_len, fout) != (int32_t)au_len) {
+        n = core_fwrite(&fh, (int32_t)sizeof(fh), fout);
+        if (n != (int32_t)sizeof(fh) || core_fwrite(a.buf + au_start, (int32_t)au_len, fout) != (int32_t)au_len) {
             rt = OPRT_FILE_WRITE_FAILED;
             break;
         }
@@ -2116,20 +2116,20 @@ OPERATE_RET local_store_seed_h264(const char *src_path, const char *leaf, uint32
         i++;
     }
     __annexb_close(&a);
-    tal_fclose(fout);
+    core_fclose(fout);
     if (rt != OPRT_OK) {
-        tal_free(idx);
-        (void)tal_fs_remove(dst);
+        core_free(idx);
+        (void)core_fs_remove(dst);
         return rt;
     }
     (void)__idx_write(dst, idx, idx_cnt);
-    tal_free(idx);
+    core_free(idx);
 
     rt = local_store_index_append(start_ts, end_ts, 0, media_leaf);
     if (rt != OPRT_OK) {
-        TAL_PR_ERR("seed index_append failed: %d", rt);
+        CORE_PR_ERR("seed index_append failed: %d", rt);
         return rt;
     }
-    TAL_PR_NOTICE("local_store seed ok %s frames=%u keys=%u [%u,%u]", dst, total_au, idx_cnt, start_ts, end_ts);
+    CORE_PR_NOTICE("local_store seed ok %s frames=%u keys=%u [%u,%u]", dst, total_au, idx_cnt, start_ts, end_ts);
     return OPRT_OK;
 }

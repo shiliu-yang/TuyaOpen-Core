@@ -8,10 +8,10 @@
 #include "tuya_mqtt_dispatch.h"
 
 #include "tuya_iot.h"
-#include "tal_api.h"
+#include "core_api.h"
 #include "tuya_slist.h"
 
-#include "tal_event_info.h"
+#include "core_event_info.h"
 
 /***********************************************************
 ************************macro define************************
@@ -110,7 +110,7 @@ static void __mqtt_event_workq_callback(void *data)
         goto cleanup;
     }
 
-    tal_mutex_lock(mgr->mutex);
+    core_mutex_lock(mgr->mutex);
 
     // Traverse all nodes and invoke callbacks whose type_name matches reqType
     const char *req_type_str = req_type ? req_type->valuestring : NULL;
@@ -127,7 +127,7 @@ static void __mqtt_event_workq_callback(void *data)
         }
     }
 
-    tal_mutex_unlock(mgr->mutex);
+    core_mutex_unlock(mgr->mutex);
 
     PR_DEBUG("mqtt dispatch << done");
 
@@ -163,8 +163,8 @@ static void __mqtt_event_callback(tuya_protocol_event_t *event)
     ev_copy->root_json = event->root_json ? cJSON_Duplicate(event->root_json, 1) : NULL;
     ev_copy->data      = event->data      ? cJSON_Duplicate(event->data,      1) : NULL;
 
-    if (tal_workq_schedule(WORKQ_SYSTEM, __mqtt_event_workq_callback, ev_copy) != OPRT_OK) {
-        PR_ERR("tal_workq_schedule failed");
+    if (core_workq_schedule(WORKQ_SYSTEM, __mqtt_event_workq_callback, ev_copy) != OPRT_OK) {
+        PR_ERR("core_workq_schedule failed");
         cJSON_Delete(ev_copy->root_json);
         cJSON_Delete(ev_copy->data);
         Free(ev_copy);
@@ -196,16 +196,16 @@ OPERATE_RET tuya_mqtt_dispatch_init(void)
         TUYA_MQTT_DISPATCH_MGR_T *mgr = &sg_mqtt_dispatch_mgr[i];
         INIT_SLIST_HEAD(&mgr->head);
         INIT_SLIST_HEAD(&mgr->tail);
-        rt = tal_mutex_create_init(&mgr->mutex);
+        rt = core_mutex_create_init(&mgr->mutex);
         if (rt != OPRT_OK) {
-            PR_ERR("tal_mutex_create_init failed:%d", rt);
+            PR_ERR("core_mutex_create_init failed:%d", rt);
             tuya_mqtt_dispatch_deinit();
             return OPRT_COM_ERROR;
         }
         PR_DEBUG("tuya_mqtt_dispatch_init success:%d", mgr->protocol_id);
     }
 
-    return tal_event_subscribe(EVENT_MQTT_CONNECTED, "tuya_mqtt_dispatch", __mqtt_dispatch_init_cb,
+    return core_event_subscribe(EVENT_MQTT_CONNECTED, "tuya_mqtt_dispatch", __mqtt_dispatch_init_cb,
         SUBSCRIBE_TYPE_ONETIME);
 }
 
@@ -215,7 +215,7 @@ OPERATE_RET tuya_mqtt_dispatch_deinit(void)
         TUYA_MQTT_DISPATCH_MGR_T *mgr = &sg_mqtt_dispatch_mgr[i];
 
         if (mgr->mutex) {
-            tal_mutex_lock(mgr->mutex);
+            core_mutex_lock(mgr->mutex);
         }
     
         SLIST_HEAD *pos = NULL;
@@ -227,8 +227,8 @@ OPERATE_RET tuya_mqtt_dispatch_deinit(void)
         }
 
         if (mgr->mutex) {
-            tal_mutex_unlock(mgr->mutex);
-            tal_mutex_release(mgr->mutex);
+            core_mutex_unlock(mgr->mutex);
+            core_mutex_release(mgr->mutex);
             mgr->mutex = NULL;
         }
     }
@@ -265,7 +265,7 @@ OPERATE_RET tuya_mqtt_dispatch_register(uint16_t protocol_id, const char *type_n
     }
 
     // 3. Append the new node to the tail of mgr
-    tal_mutex_lock(mgr->mutex);
+    core_mutex_lock(mgr->mutex);
 
     if (tuya_slist_empty(&mgr->head)) {
         // Empty list: head and tail both point to the new node
@@ -277,7 +277,7 @@ OPERATE_RET tuya_mqtt_dispatch_register(uint16_t protocol_id, const char *type_n
         mgr->tail.next = &new_node->node;
     }
 
-    tal_mutex_unlock(mgr->mutex);
+    core_mutex_unlock(mgr->mutex);
 
     // 4. Log the new node info for debugging
     PR_DEBUG("dispatch register: protocol_id=%d type_name=%s desc=%s", protocol_id, type_name, desc);

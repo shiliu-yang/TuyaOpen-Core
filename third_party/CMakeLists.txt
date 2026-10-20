@@ -62,8 +62,8 @@ if(NOT CONFIG_ENABLE_PLATFORM_MBEDTLS)
         PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/mbedtls/library
     )
     target_compile_definitions(mbedtls PUBLIC MBEDTLS_CONFIG_FILE=\"tuya_tls_config.h\")
-    # threading_alt.h (THREADING_ALT implementation of the trimmed config) pulls in TAL headers such as tal_mutex
-    target_link_libraries(mbedtls PRIVATE tuyaopen-headers tal_system)
+    # threading_alt.h (THREADING_ALT implementation of the trimmed config) pulls in CORE headers such as core_mutex
+    target_link_libraries(mbedtls PRIVATE tuyaopen-headers core_system)
     unset(_mbedtls_srcs)
 else()
     message(STATUS "Using mbedtls from platform")

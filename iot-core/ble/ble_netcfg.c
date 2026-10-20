@@ -14,8 +14,8 @@
  *
  */
 
-#include "tal_api.h"
-#include "tal_event_info.h"
+#include "core_api.h"
+#include "core_event_info.h"
 #include "ble_mgr.h"
 #include "tuya_register_center.h"
 #include "ble_channel.h"

@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2026 Tuya Inc.
  *
- * pjlib OS profile for TuyaOpen — unified LINUX host + MCU (TAL/TKL).
+ * pjlib OS profile for TuyaOpen — unified LINUX host + MCU (CORE/TKL).
  * Socket backend differs (POSIX vs lwIP); OS core is always os_core_tuyaos.c.
  */
 #ifndef __PJ_COMPAT_OS_TUYAOS_H__
@@ -29,9 +29,9 @@
 #define PJ_HAS_WINSOCK2_H 0
 
 /*
- * Sockets go through TAL on every target (sock_tal.c, sock_select_tal.c,
+ * Sockets go through CORE on every target (sock_tal.c, sock_select_tal.c,
  * addr_resolv_tal.c, ip_helper_tal.c), so pjlib pulls in no BSD socket
- * headers and needs no chip network stack on the include path. TAL picks
+ * headers and needs no chip network stack on the include path. CORE picks
  * the POSIX or TKL backend underneath.
  */
 #define PJ_HAS_ARPA_INET_H    0

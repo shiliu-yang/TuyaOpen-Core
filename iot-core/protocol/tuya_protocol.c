@@ -20,7 +20,7 @@
 
 #include <inttypes.h>
 #include "tuya_protocol.h"
-#include "tal_api.h"
+#include "core_api.h"
 #include "crc32i.h"
 #include "mix_method.h"
 #include "uni_random.h"
@@ -99,7 +99,7 @@ static OPERATE_RET __parse_data_with_pv23(const DP_CMD_TYPE_E cmd, const uint8_t
     uint8_t *ad_data = (uint8_t *)(data + 0);
     uint32_t data_len = len - PV23_EXCEPT_DATA_LEN;
     size_t ec_len = 0;
-    uint8_t *ec_data = tal_malloc(data_len + 1);
+    uint8_t *ec_data = core_malloc(data_len + 1);
     TUYA_CHECK_NULL_RETURN(ec_data, OPRT_MALLOC_FAILED);
 
     // decrypt data
@@ -117,7 +117,7 @@ static OPERATE_RET __parse_data_with_pv23(const DP_CMD_TYPE_E cmd, const uint8_t
     if (op_ret != OPRT_OK) {
         PR_ERR("mbedtls_cipher_auth_decrypt_wrapper:0x%x", -op_ret);
         *out_data = NULL;
-        tal_free(ec_data);
+        core_free(ec_data);
         return op_ret;
     }
 
@@ -146,7 +146,7 @@ static OPERATE_RET __parse_data_with_lpv35(const DP_CMD_TYPE_E cmd, const uint8_
     uint8_t *ec_data = NULL;
     uint32_t ec_len = len - DATA_OFFSET_22_32;
 
-    ec_data = tal_malloc(ec_len + 1);
+    ec_data = core_malloc(ec_len + 1);
     TUYA_CHECK_NULL_RETURN(ec_data, OPRT_MALLOC_FAILED);
     memcpy(ec_data, data + DATA_OFFSET_22_32, ec_len);
 
@@ -233,22 +233,22 @@ static OPERATE_RET __pack_data_with_cmd_pv23(const DP_CMD_TYPE_E cmd, const char
     PR_TRACE("To:%d src:%s pro:%d num:%d", cmd, src, pro, num);
     // make json data
     int len = strlen(src) + 60;
-    out = tal_malloc(len);
+    out = core_malloc(len);
     if (NULL == out) {
-        PR_ERR("tal_malloc Fails %d", len);
+        PR_ERR("core_malloc Fails %d", len);
         return OPRT_MALLOC_FAILED;
     }
 
     int ret = snprintf(out + offset, len - offset, "{\"protocol\":%" PRIu32 ",\"t\":%" PRIu32 ",\"data\":%s", pro,
-                       (uint32_t)tal_time_get_posix(), src);
+                       (uint32_t)core_time_get_posix(), src);
     if (ret < 0 || ret >= len - offset) {
-        tal_free(out);
+        core_free(out);
         return OPRT_BUFFER_NOT_ENOUGH;
     }
     offset += ret;
 
     if (offset > len - 2) {
-        tal_free(out);
+        core_free(out);
         return OPRT_BUFFER_NOT_ENOUGH;
     }
     out[offset++] = '}';
@@ -257,9 +257,9 @@ static OPERATE_RET __pack_data_with_cmd_pv23(const DP_CMD_TYPE_E cmd, const char
     PR_TRACE("After Pack:%s offset:%d", out, offset);
 
     // make pack data
-    uint8_t *buf = tal_malloc(offset + PV23_EXCEPT_DATA_LEN);
+    uint8_t *buf = core_malloc(offset + PV23_EXCEPT_DATA_LEN);
     if (buf == NULL) {
-        tal_free(out);
+        core_free(out);
         return OPRT_MALLOC_FAILED;
     }
     memset(buf, 0, offset + PV23_EXCEPT_DATA_LEN);
@@ -295,10 +295,10 @@ static OPERATE_RET __pack_data_with_cmd_pv23(const DP_CMD_TYPE_E cmd, const char
                                                                           .data_len = strlen(out)},
                                                  buf + PV23_DATA_OFFSET, &encrypt_olen, buf + PV23_DATA_OFFSET + offset,
                                                  PV23_TAG_LEN);
-    tal_free(out);
+    core_free(out);
     if (op_ret != OPRT_OK) {
         PR_ERR("mbedtls_cipher_auth_encrypt_wrapper:0x%x", -op_ret);
-        tal_free(buf);
+        core_free(buf);
         return op_ret;
     }
 
@@ -323,22 +323,22 @@ static OPERATE_RET __pack_data_with_cmd_lpv35(const DP_CMD_TYPE_E cmd, const cha
 
     // make json data
     int len = strlen(src) + 60;
-    out = tal_malloc(len);
+    out = core_malloc(len);
     if (NULL == out) {
-        PR_ERR("tal_malloc Fails %d", len);
+        PR_ERR("core_malloc Fails %d", len);
         return OPRT_MALLOC_FAILED;
     }
 
     int ret = snprintf(out + offset, len - offset, "{\"protocol\":%" PRIu32 ",\"t\":%" PRIu32 ",\"data\":%s", pro,
-                       (uint32_t)tal_time_get_posix(), src);
+                       (uint32_t)core_time_get_posix(), src);
     if (ret < 0 || ret >= len - offset) {
-        tal_free(out);
+        core_free(out);
         return OPRT_BUFFER_NOT_ENOUGH;
     }
     offset += ret;
 
     if (offset > len - 2) {
-        tal_free(out);
+        core_free(out);
         return OPRT_BUFFER_NOT_ENOUGH;
     }
     out[offset++] = '}';
@@ -347,16 +347,16 @@ static OPERATE_RET __pack_data_with_cmd_lpv35(const DP_CMD_TYPE_E cmd, const cha
     PR_TRACE("After Pack:%s offset:%d", out, offset);
 
     // make pack data
-    uint8_t *buf = tal_malloc(DATA_OFFSET_22_32 + offset + 16);
+    uint8_t *buf = core_malloc(DATA_OFFSET_22_32 + offset + 16);
     if (buf == NULL) {
-        tal_free(out);
+        core_free(out);
         return OPRT_MALLOC_FAILED;
     }
     memset(buf, 0, DATA_OFFSET_22_32 + offset + 16);
 
     // not aes data
     memcpy(buf + DATA_OFFSET_22_32, out, offset);
-    tal_free(out);
+    core_free(out);
 
     *pack_out = buf;
     *out_len = (DATA_OFFSET_22_32 + offset);
@@ -626,7 +626,7 @@ OPERATE_RET lpv35_frame_parse(const uint8_t *key, int key_len, const uint8_t *in
     memcpy(&ad, input + LPV35_FRAME_HEAD_SIZE, sizeof(lpv35_additional_data_t));
 
     // decrypt data
-    output->data = tal_malloc(output->data_len + 1);
+    output->data = core_malloc(output->data_len + 1);
     TUYA_CHECK_NULL_RETURN(output->data, OPRT_MALLOC_FAILED);
     memset(output->data, 0, output->data_len + 1);
     size_t decrypt_olen = 0;
@@ -642,7 +642,7 @@ OPERATE_RET lpv35_frame_parse(const uint8_t *key, int key_len, const uint8_t *in
                                                  output->data, &decrypt_olen, tag, LPV35_FRAME_TAG_SIZE);
     if (op_ret != OPRT_OK) {
         PR_ERR("mbedtls_cipher_auth_decrypt_wrapper:0x%x", -op_ret);
-        tal_free(output->data);
+        core_free(output->data);
         output->data = NULL;
         return op_ret;
     }

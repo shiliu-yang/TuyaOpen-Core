@@ -9,10 +9,10 @@
  * - Payload lives in a 1600-byte block
  */
 #include "tuya_mbuf.h"
-#include "tal_mutex.h"
-#include "tal_memory.h"
+#include "core_mutex.h"
+#include "core_memory.h"
 #include "tuya_cloud_types.h"
-#include "tal_log.h"
+#include "core_log.h"
 #include <stdint.h>
 #include <string.h>
 
@@ -25,12 +25,12 @@
 
 /* Prefer external RAM when ENABLE_EXT_RAM */
 #if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
-#define TUYA_MBUF_MALLOC(s) tal_ex_ram_malloc(s)
-#define TUYA_MBUF_FREE(p) tal_ex_ram_free(p)
+#define TUYA_MBUF_MALLOC(s) core_ex_ram_malloc(s)
+#define TUYA_MBUF_FREE(p) core_ex_ram_free(p)
 static void *__mbuf_ex_ram_calloc(size_t n, size_t s)
 {
     size_t total = n * s;
-    void *p = tal_ex_ram_malloc(total);
+    void *p = core_ex_ram_malloc(total);
     if (p) {
         memset(p, 0, total);
     }
@@ -38,9 +38,9 @@ static void *__mbuf_ex_ram_calloc(size_t n, size_t s)
 }
 #define TUYA_MBUF_CALLOC(n, s) __mbuf_ex_ram_calloc(n, s)
 #else
-#define TUYA_MBUF_MALLOC(s) tal_malloc(s)
-#define TUYA_MBUF_CALLOC(n, s) tal_calloc(n, s)
-#define TUYA_MBUF_FREE(p) tal_free(p)
+#define TUYA_MBUF_MALLOC(s) core_malloc(s)
+#define TUYA_MBUF_CALLOC(n, s) core_calloc(n, s)
+#define TUYA_MBUF_FREE(p) core_free(p)
 #endif
 
 /* ---------------------------------------------------------------------------
@@ -81,7 +81,7 @@ tuya_mbuf_queue_t *tuya_mbuf_queue_create(int total_size, tuya_mem_pool_t *pool)
     q->pool = pool;
     q->head[0] = q->head;
     q->head[1] = q->head;
-    if (tal_mutex_create_init(&q->lock) != OPRT_OK) {
+    if (core_mutex_create_init(&q->lock) != OPRT_OK) {
         TUYA_MBUF_FREE(q);
         return NULL;
     }
@@ -104,7 +104,7 @@ void tuya_mbuf_queue_destroy(tuya_mbuf_queue_t *q)
                (long long)q->total_bytes_in, (long long)q->total_bytes_out);
     }
     q->close_flag = 1;
-    tal_mutex_release(q->lock);
+    core_mutex_release(q->lock);
     TUYA_MBUF_FREE(q);
 }
 
@@ -118,9 +118,9 @@ void tuya_mbuf_queue_close(tuya_mbuf_queue_t *q)
     if (q == NULL) {
         return;
     }
-    tal_mutex_lock(q->lock);
+    core_mutex_lock(q->lock);
     q->close_flag = 1;
-    tal_mutex_unlock(q->lock);
+    core_mutex_unlock(q->lock);
 }
 
 /**
@@ -135,9 +135,9 @@ int tuya_mbuf_queue_get_status(tuya_mbuf_queue_t *q)
     if (q == NULL) {
         return -1;
     }
-    tal_mutex_lock(q->lock);
+    core_mutex_lock(q->lock);
     st = q->close_flag;
-    tal_mutex_unlock(q->lock);
+    core_mutex_unlock(q->lock);
     return st;
 }
 
@@ -153,12 +153,12 @@ int tuya_mbuf_queue_get_free_size(tuya_mbuf_queue_t *q)
     if (q == NULL) {
         return 0;
     }
-    tal_mutex_lock(q->lock);
+    core_mutex_lock(q->lock);
     free_sz = q->total_size - q->used_size;
     if (free_sz < 0) {
         free_sz = 0;
     }
-    tal_mutex_unlock(q->lock);
+    core_mutex_unlock(q->lock);
     return free_sz;
 }
 
@@ -174,9 +174,9 @@ int tuya_mbuf_queue_get_used_size(tuya_mbuf_queue_t *q)
     if (q == NULL) {
         return 0;
     }
-    tal_mutex_lock(q->lock);
+    core_mutex_lock(q->lock);
     used = q->used_size;
-    tal_mutex_unlock(q->lock);
+    core_mutex_unlock(q->lock);
     return used;
 }
 
@@ -196,14 +196,14 @@ tuya_mbuf_t *tuya_mbuf_alloc(tuya_mbuf_queue_t *q, int size)
     if (q == NULL || size <= 0 || size > TUYA_MBUF_HUGE_SIZE) {
         return NULL;
     }
-    tal_mutex_lock(q->lock);
+    core_mutex_lock(q->lock);
     if (q->close_flag || (q->used_size + charge) > q->total_size) {
-        tal_mutex_unlock(q->lock);
+        core_mutex_unlock(q->lock);
         return NULL;
     }
     q->used_size += charge;
     q->total_bytes_in += charge;
-    tal_mutex_unlock(q->lock);
+    core_mutex_unlock(q->lock);
 
     m = (tuya_mbuf_t *)TUYA_MBUF_CALLOC(1, sizeof(*m));
     buf = (char *)TUYA_MBUF_MALLOC((size_t)TUYA_MBUF_HUGE_SIZE);
@@ -214,9 +214,9 @@ tuya_mbuf_t *tuya_mbuf_alloc(tuya_mbuf_queue_t *q, int size)
         if (buf != NULL) {
             TUYA_MBUF_FREE(buf);
         }
-        tal_mutex_lock(q->lock);
+        core_mutex_lock(q->lock);
         q->used_size -= charge;
-        tal_mutex_unlock(q->lock);
+        core_mutex_unlock(q->lock);
         return NULL;
     }
     m->mbuf_queue = q;
@@ -263,12 +263,12 @@ void tuya_mbuf_free(tuya_mbuf_t *m)
     TUYA_MBUF_FREE(m->base);
     TUYA_MBUF_FREE(m);
     if (q != NULL) {
-        tal_mutex_lock(q->lock);
+        core_mutex_lock(q->lock);
         q->used_size -= charge;
         if (q->used_size < 0) {
             q->used_size = 0;
         }
         q->total_bytes_out += charge;
-        tal_mutex_unlock(q->lock);
+        core_mutex_unlock(q->lock);
     }
 }

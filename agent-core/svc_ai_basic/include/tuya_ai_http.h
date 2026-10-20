@@ -27,7 +27,7 @@
 #include "tuya_ai_client.h"
 #include "tuya_ai_biz.h"
 
-/** Length in bytes of device secret key used for AI media AES-GCM (must match tal_aes_gcm_* key_len). */
+/** Length in bytes of device secret key used for AI media AES-GCM (must match core_aes_gcm_* key_len). */
 #define TUYA_AI_SECRET_KEY_LEN (16)
 
 /**

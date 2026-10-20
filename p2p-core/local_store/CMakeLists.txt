@@ -13,5 +13,5 @@ target_include_directories(local_store
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 target_compile_options(local_store PRIVATE ${_p2p_warn_opts})
-target_link_libraries(local_store PRIVATE tuyaopen-headers tal_system)
+target_link_libraries(local_store PRIVATE tuyaopen-headers core_system)
 unset(_local_store_srcs)

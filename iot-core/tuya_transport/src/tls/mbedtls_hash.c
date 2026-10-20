@@ -1,19 +1,19 @@
 /**
  * @file mbedtls_hash.c
- * @brief TAL hash primitives backed by mbedtls: SHA-1, SHA-224, SHA-256 and
+ * @brief CORE hash primitives backed by mbedtls: SHA-1, SHA-224, SHA-256 and
  * MD5, in streaming (create/update/finish) and one-shot forms.
  *
  * Each family exposes context create/free, start/update/finish and a one-shot
- * helper (tal_sha256_ret, tal_md5_ret, tal_sha1_ret). This file is the backend
- * behind tal_hash.c.
+ * helper (core_sha256_ret, core_md5_ret, core_sha1_ret). This file is the backend
+ * behind core_hash.c.
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *
  */
 
 #include "tuya_iot_config.h"
-#include "tal_memory.h"
-#include "tal_hash.h"
+#include "core_memory.h"
+#include "core_hash.h"
 #include "mbedtls/sha256.h"
 #include "mbedtls/md5.h"
 #include "mbedtls/sha1.h"
@@ -27,11 +27,11 @@
  *
  * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
  */
-OPERATE_RET tal_sha256_create_init(TAL_HASH_HANDLE *ctx)
+OPERATE_RET core_sha256_create_init(CORE_HASH_HANDLE *ctx)
 {
     mbedtls_sha256_context *mbedtls_ctx;
 
-    mbedtls_ctx = (mbedtls_sha256_context *)tal_malloc(sizeof(mbedtls_sha256_context));
+    mbedtls_ctx = (mbedtls_sha256_context *)core_malloc(sizeof(mbedtls_sha256_context));
     if (mbedtls_ctx) {
         mbedtls_sha256_init(mbedtls_ctx);
     } else {
@@ -52,11 +52,11 @@ OPERATE_RET tal_sha256_create_init(TAL_HASH_HANDLE *ctx)
  *
  * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
  */
-OPERATE_RET tal_sha256_free(TAL_HASH_HANDLE ctx)
+OPERATE_RET core_sha256_free(CORE_HASH_HANDLE ctx)
 {
     if (ctx != NULL) {
         mbedtls_sha256_free((mbedtls_sha256_context *)ctx);
-        tal_free(ctx);
+        core_free(ctx);
     }
 
     return OPRT_OK;
@@ -74,7 +74,7 @@ OPERATE_RET tal_sha256_free(TAL_HASH_HANDLE ctx)
  *
  * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
  */
-OPERATE_RET tal_sha256_starts_ret(TAL_HASH_HANDLE ctx, int32_t is224)
+OPERATE_RET core_sha256_starts_ret(CORE_HASH_HANDLE ctx, int32_t is224)
 {
 
     if (mbedtls_sha256_starts((mbedtls_sha256_context *)ctx, is224) != 0)
@@ -96,7 +96,7 @@ OPERATE_RET tal_sha256_starts_ret(TAL_HASH_HANDLE ctx, int32_t is224)
  *
  * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
  */
-OPERATE_RET tal_sha256_update_ret(TAL_HASH_HANDLE ctx, const uint8_t *input, size_t ilen)
+OPERATE_RET core_sha256_update_ret(CORE_HASH_HANDLE ctx, const uint8_t *input, size_t ilen)
 {
     if (mbedtls_sha256_update((mbedtls_sha256_context *)ctx, input, ilen) != 0)
         return OPRT_COM_ERROR;
@@ -116,7 +116,7 @@ OPERATE_RET tal_sha256_update_ret(TAL_HASH_HANDLE ctx, const uint8_t *input, siz
  *
  * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
  */
-OPERATE_RET tal_sha256_finish_ret(TAL_HASH_HANDLE ctx, uint8_t output[32])
+OPERATE_RET core_sha256_finish_ret(CORE_HASH_HANDLE ctx, uint8_t output[32])
 {
     if (mbedtls_sha256_finish((mbedtls_sha256_context *)ctx, output) != 0)
         return OPRT_COM_ERROR;
@@ -133,11 +133,11 @@ OPERATE_RET tal_sha256_finish_ret(TAL_HASH_HANDLE ctx, uint8_t output[32])
  *
  * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
  */
-OPERATE_RET tal_md5_create_init(TAL_HASH_HANDLE *ctx)
+OPERATE_RET core_md5_create_init(CORE_HASH_HANDLE *ctx)
 {
     mbedtls_md5_context *mbedtls_ctx;
 
-    mbedtls_ctx = (mbedtls_md5_context *)tal_malloc(sizeof(mbedtls_md5_context));
+    mbedtls_ctx = (mbedtls_md5_context *)core_malloc(sizeof(mbedtls_md5_context));
     if (mbedtls_ctx) {
         mbedtls_md5_init(mbedtls_ctx);
     } else {
@@ -158,11 +158,11 @@ OPERATE_RET tal_md5_create_init(TAL_HASH_HANDLE *ctx)
  *
  * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
  */
-OPERATE_RET tal_md5_free(TAL_HASH_HANDLE ctx)
+OPERATE_RET core_md5_free(CORE_HASH_HANDLE ctx)
 {
     if (ctx != NULL) {
         mbedtls_md5_free((mbedtls_md5_context *)ctx);
-        tal_free(ctx);
+        core_free(ctx);
     }
 
     return OPRT_OK;
@@ -178,7 +178,7 @@ OPERATE_RET tal_md5_free(TAL_HASH_HANDLE ctx)
  *
  * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
  */
-OPERATE_RET tal_md5_starts_ret(TAL_HASH_HANDLE ctx)
+OPERATE_RET core_md5_starts_ret(CORE_HASH_HANDLE ctx)
 {
     if (mbedtls_md5_starts((mbedtls_md5_context *)ctx) != 0)
         return OPRT_COM_ERROR;
@@ -199,7 +199,7 @@ OPERATE_RET tal_md5_starts_ret(TAL_HASH_HANDLE ctx)
  *
  * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
  */
-OPERATE_RET tal_md5_update_ret(TAL_HASH_HANDLE ctx, const uint8_t *input, size_t ilen)
+OPERATE_RET core_md5_update_ret(CORE_HASH_HANDLE ctx, const uint8_t *input, size_t ilen)
 {
     if (mbedtls_md5_update((mbedtls_md5_context *)ctx, input, ilen) != 0)
         return OPRT_COM_ERROR;
@@ -219,7 +219,7 @@ OPERATE_RET tal_md5_update_ret(TAL_HASH_HANDLE ctx, const uint8_t *input, size_t
  *
  * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
  */
-OPERATE_RET tal_md5_finish_ret(TAL_HASH_HANDLE ctx, uint8_t output[16])
+OPERATE_RET core_md5_finish_ret(CORE_HASH_HANDLE ctx, uint8_t output[16])
 {
     if (mbedtls_md5_finish((mbedtls_md5_context *)ctx, output) != 0)
         return OPRT_COM_ERROR;
@@ -236,11 +236,11 @@ OPERATE_RET tal_md5_finish_ret(TAL_HASH_HANDLE ctx, uint8_t output[16])
  *
  * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
  */
-OPERATE_RET tal_sha1_create_init(TAL_HASH_HANDLE *ctx)
+OPERATE_RET core_sha1_create_init(CORE_HASH_HANDLE *ctx)
 {
     mbedtls_sha1_context *mbedtls_ctx;
 
-    mbedtls_ctx = (mbedtls_sha1_context *)tal_malloc(sizeof(mbedtls_sha1_context));
+    mbedtls_ctx = (mbedtls_sha1_context *)core_malloc(sizeof(mbedtls_sha1_context));
     if (mbedtls_ctx) {
         mbedtls_sha1_init(mbedtls_ctx);
     } else {
@@ -261,11 +261,11 @@ OPERATE_RET tal_sha1_create_init(TAL_HASH_HANDLE *ctx)
  *
  * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
  */
-OPERATE_RET tal_sha1_free(TAL_HASH_HANDLE ctx)
+OPERATE_RET core_sha1_free(CORE_HASH_HANDLE ctx)
 {
     if (ctx != NULL) {
         mbedtls_sha1_free((mbedtls_sha1_context *)ctx);
-        tal_free(ctx);
+        core_free(ctx);
     }
 
     return OPRT_OK;
@@ -281,7 +281,7 @@ OPERATE_RET tal_sha1_free(TAL_HASH_HANDLE ctx)
  *
  * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
  */
-OPERATE_RET tal_sha1_starts_ret(TAL_HASH_HANDLE ctx)
+OPERATE_RET core_sha1_starts_ret(CORE_HASH_HANDLE ctx)
 {
     if (mbedtls_sha1_starts((mbedtls_sha1_context *)ctx) != 0)
         return OPRT_COM_ERROR;
@@ -302,7 +302,7 @@ OPERATE_RET tal_sha1_starts_ret(TAL_HASH_HANDLE ctx)
  *
  * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
  */
-OPERATE_RET tal_sha1_update_ret(TAL_HASH_HANDLE ctx, const uint8_t *input, size_t ilen)
+OPERATE_RET core_sha1_update_ret(CORE_HASH_HANDLE ctx, const uint8_t *input, size_t ilen)
 {
     if (mbedtls_sha1_update((mbedtls_sha1_context *)ctx, input, ilen) != 0)
         return OPRT_COM_ERROR;
@@ -322,7 +322,7 @@ OPERATE_RET tal_sha1_update_ret(TAL_HASH_HANDLE ctx, const uint8_t *input, size_
  *
  * @return OPRT_OK on success. Others on error, please refer to tuya_error_code.h
  */
-OPERATE_RET tal_sha1_finish_ret(TAL_HASH_HANDLE ctx, uint8_t output[20])
+OPERATE_RET core_sha1_finish_ret(CORE_HASH_HANDLE ctx, uint8_t output[20])
 {
     if (mbedtls_sha1_finish((mbedtls_sha1_context *)ctx, (unsigned char *)output) != 0)
         return OPRT_COM_ERROR;

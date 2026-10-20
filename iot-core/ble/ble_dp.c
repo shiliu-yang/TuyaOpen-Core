@@ -11,7 +11,7 @@
  *
  */
 
-#include "tal_api.h"
+#include "core_api.h"
 #include "ble_protocol.h"
 #include "ble_trsmitr.h"
 #include "ble_dp.h"
@@ -89,8 +89,8 @@ void free_klv_list(klv_node_s *list)
     do {
         next_node = node->next;
         // free(node);
-        tal_free((uint8_t *)(node->data));
-        tal_free((uint8_t *)node);
+        core_free((uint8_t *)(node->data));
+        core_free((uint8_t *)node);
         node = next_node;
     } while (node);
 }
@@ -116,7 +116,7 @@ klv_node_s *make_klv_list(klv_node_s *list, uint8_t id, dp_type type, void *data
     }
 
     if (len > 0) {
-        p_data = tal_malloc(len);
+        p_data = core_malloc(len);
         if (NULL == p_data) {
             goto err_ret;
         }
@@ -125,15 +125,15 @@ klv_node_s *make_klv_list(klv_node_s *list, uint8_t id, dp_type type, void *data
 
     tuya_change_bt_dp_tlv(type, p_data, &len);
 
-    node = (klv_node_s *)tal_malloc(sizeof(klv_node_s));
+    node = (klv_node_s *)core_malloc(sizeof(klv_node_s));
     if (NULL == node) {
         goto err_ret;
     }
     memset(node, 0, sizeof(klv_node_s));
     if (len > 0) {
-        node->data = tal_malloc(len);
+        node->data = core_malloc(len);
         if (node->data == NULL) {
-            tal_free((uint8_t *)node);
+            core_free((uint8_t *)node);
             goto err_ret;
         }
     }
@@ -156,13 +156,13 @@ klv_node_s *make_klv_list(klv_node_s *list, uint8_t id, dp_type type, void *data
         }
     }
     node->next = list;
-    tal_free(p_data);
+    core_free(p_data);
     return node;
 
 err_ret:
     PR_ERR("input err");
     free_klv_list(list);
-    tal_free(p_data);
+    core_free(p_data);
     return NULL;
 }
 
@@ -196,7 +196,7 @@ OPERATE_RET klvlist_2_data(klv_node_s *list, uint8_t **data, uint32_t *len, uint
         node = node->next;
     }
 
-    unsigned char *mk_data = (unsigned char *)tal_malloc(mk_data_len);
+    unsigned char *mk_data = (unsigned char *)core_malloc(mk_data_len);
     if (NULL == mk_data) {
         return OPRT_MALLOC_FAILED;
     }
@@ -278,7 +278,7 @@ OPERATE_RET data_2_klvlist(uint8_t *data, uint32_t len, klv_node_s **list)
             }
         }
 
-        node = (klv_node_s *)tal_malloc(sizeof(klv_node_s));
+        node = (klv_node_s *)core_malloc(sizeof(klv_node_s));
         if (NULL == node) {
             free_klv_list(klv_list);
             return OPRT_MALLOC_FAILED;
@@ -295,16 +295,16 @@ OPERATE_RET data_2_klvlist(uint8_t *data, uint32_t len, klv_node_s **list)
         }
 
         if (node->len > 0) {
-            node->data = tal_malloc(node->len + 1);
+            node->data = core_malloc(node->len + 1);
             if (node->data == NULL) {
-                tal_free((uint8_t *)node);
+                core_free((uint8_t *)node);
                 free_klv_list(klv_list);
                 return OPRT_MALLOC_FAILED;
             }
 
             if ((len - offset) < node->len) { // is remain data len enougn?
-                tal_free(node->data);
-                tal_free((uint8_t *)node);
+                core_free(node->data);
+                core_free((uint8_t *)node);
                 free_klv_list(klv_list);
                 return OPRT_COM_ERROR;
             }
@@ -419,7 +419,7 @@ OPERATE_RET ty_bt_dp_data_report(klv_node_s *p_node, uint32_t time_stamp)
 
     type = (NULL != p_time_stamp) ? FRM_DP_STAT_REPORT_WITH_TIME_V4 : FRM_DP_STAT_REPORT_V4;
     ret = __dp_data_report_data(type, p_new_data, new_data_len);
-    tal_free(p_new_data);
+    core_free(p_new_data);
     return ret;
 }
 
@@ -429,7 +429,7 @@ static __attribute__((unused)) klv_node_s *__get_response_query_dp_data(const ui
     klv_node_s *p_node = NULL;
     dp_schema_t *schema = tuya_iot_client_get()->schema;
 
-    tal_mutex_lock(schema->mutex);
+    core_mutex_lock(schema->mutex);
     for (i = 0; i < num; i++) {
         int id = dpid[i];
         dp_type new_type = 0;
@@ -480,7 +480,7 @@ static __attribute__((unused)) klv_node_s *__get_response_query_dp_data(const ui
         }
         p_node = make_klv_list(p_node, dpnode->desc.id, new_type, new_data, new_len);
     }
-    tal_mutex_unlock(schema->mutex);
+    core_mutex_unlock(schema->mutex);
     return p_node;
 }
 
@@ -488,7 +488,7 @@ uint32_t __dp_get_time_stamp(dp_obj_t *dp_data, const uint32_t cnt)
 {
     // time_stamp:0 indicates the current time.
     if (NULL == dp_data || 0 == cnt || 0 == dp_data[0].time_stamp) {
-        return tal_time_get_posix();
+        return core_time_get_posix();
     }
     // In the Bluetooth protocol, timestamps are not assigned to each DP
     // individually; therefore, when packaging DPs, only the timestamp of the
@@ -573,7 +573,7 @@ static int ble_dp_req(ble_packet_t *req, void *priv_data)
         snprintf(dp_id_str, 5, "%d", p_tmp->id);
         switch (p_tmp->type) {
         case DT_RAW: {
-            char *p_base64 = tal_malloc(p_tmp->len / 3 * 4 + 5);
+            char *p_base64 = core_malloc(p_tmp->len / 3 * 4 + 5);
             if (NULL == p_base64) {
                 PR_ERR("malloc base64 failed, len:%d", p_tmp->len);
                 ret = OPRT_MALLOC_FAILED;
@@ -581,7 +581,7 @@ static int ble_dp_req(ble_packet_t *req, void *priv_data)
             }
             tuya_base64_encode(p_tmp->data, p_base64, p_tmp->len);
             cJSON_AddStringToObject(p_dps, dp_id_str, p_base64);
-            tal_free(p_base64);
+            core_free(p_base64);
             break;
         }
         case DT_BOOL: {
@@ -682,7 +682,7 @@ static int ble_dp_query(ble_packet_t *req, void *priv_data)
         PR_DEBUG("schema null");
         return OPRT_INVALID_PARM;
     }
-    tal_mutex_lock(schema->mutex);
+    core_mutex_lock(schema->mutex);
     for (i = 0; i < schema->num; i++) {
         dp_node_t *dpnode = &(schema->node[i]);
         if (dpnode->desc.mode == M_WR) {
@@ -735,7 +735,7 @@ static int ble_dp_query(ble_packet_t *req, void *priv_data)
         }
 
     } /* end of for */
-    tal_mutex_unlock(schema->mutex);
+    core_mutex_unlock(schema->mutex);
 
     if (p_node != NULL) {
         uint16_t type = FRM_DP_STAT_REPORT_V4;
@@ -745,7 +745,7 @@ static int ble_dp_query(ble_packet_t *req, void *priv_data)
         klvlist_2_data(p_node, &p_new_data, &new_data_len, NULL, TRUE, 0);
         free_klv_list(p_node);
         __dp_data_report_data(type, p_new_data, new_data_len);
-        tal_free(p_new_data);
+        core_free(p_new_data);
     }
 
     return OPRT_OK;

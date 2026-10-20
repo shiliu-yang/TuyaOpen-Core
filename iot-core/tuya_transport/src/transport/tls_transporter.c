@@ -20,12 +20,12 @@
  */
 
 #include "tuya_error_code.h"
-#include "tal_log.h"
+#include "core_log.h"
 #include "tuya_transporter.h"
 #include "tcp_transporter.h"
 #include "tls_transporter.h"
-#include "tal_network.h"
-#include "tal_memory.h"
+#include "core_network.h"
+#include "core_memory.h"
 #include "tuya_tls.h"
 
 typedef struct tls_transporter_inter_t {
@@ -259,7 +259,7 @@ OPERATE_RET tuya_tls_transporter_ctrl(tuya_transporter_t t, uint32_t cmd, void *
 tuya_transporter_t tuya_tls_transporter_create(void)
 {
 
-    tuya_tls_transporter_t t = tal_malloc(sizeof(struct tls_transporter_inter_t));
+    tuya_tls_transporter_t t = core_malloc(sizeof(struct tls_transporter_inter_t));
     if (t == NULL) {
         PR_ERR("websocket transporter malloc fail");
         return NULL;
@@ -305,7 +305,7 @@ OPERATE_RET tuya_tls_transporter_destroy(tuya_transporter_t transporter)
 
     tuya_tcp_transporter_destroy(t->tcp_transporter);
     if (t) {
-        tal_free(t);
+        core_free(t);
     }
 
     return OPRT_OK;

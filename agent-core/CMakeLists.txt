@@ -48,7 +48,7 @@ target_link_libraries(tuya_ai_service PRIVATE
     tuyaopen-headers
     libcjson
     tuya_transport
-    tal_system
+    core_system
     tuya_cloud_service
 )
 unset(_ai_srcs)

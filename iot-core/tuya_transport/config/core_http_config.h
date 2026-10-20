@@ -13,7 +13,7 @@
 #ifndef _CORE_HTTP_CONFIG_
 #define _CORE_HTTP_CONFIG_
 
-#include "tal_memory.h"
+#include "core_memory.h"
 
 /**
  * @brief Maximum size, in bytes, of headers allowed from the server.
@@ -34,11 +34,11 @@
 
 
 #if defined(ENABLE_EXT_RAM)&&(ENABLE_EXT_RAM==1)
-#define HTTP_MALLOC                                 tal_ex_ram_malloc
-#define HTTP_FREE                                   tal_ex_ram_free
+#define HTTP_MALLOC                                 core_ex_ram_malloc
+#define HTTP_FREE                                   core_ex_ram_free
 #else
-#define HTTP_MALLOC                                 tal_malloc
-#define HTTP_FREE                                   tal_free
+#define HTTP_MALLOC                                 core_malloc
+#define HTTP_FREE                                   core_free
 #endif
 /**
  * @brief The HTTP header "User-Agent" value.
@@ -52,6 +52,6 @@
  */
 #define HTTP_USER_AGENT_VALUE    "TUYA_IOT_SDK"
 
-#include "tal_api.h"
+#include "core_api.h"
 
 #endif /* ifndef CORE_HTTP_CONFIG_DEFAULTS_ */

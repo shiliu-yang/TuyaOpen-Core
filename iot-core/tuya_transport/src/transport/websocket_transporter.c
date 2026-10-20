@@ -23,7 +23,7 @@
  */
 
 #include "tuya_cloud_types.h"
-#include "tal_log.h"
+#include "core_log.h"
 #include "tuya_transporter.h"
 #include "tuya_tls.h"
 #include "tls_transporter.h"
@@ -130,9 +130,9 @@ OPERATE_RET websocket_transporter_read(tuya_transporter_t t, uint8_t *buf, int l
         return OPRT_TIMEOUT;
     }
 
-    tal_mutex_lock(wst->mutex);
+    core_mutex_lock(wst->mutex);
     int read_len = websocket_client_read(wst->ws_client, buf, len);
-    tal_mutex_unlock(wst->mutex);
+    core_mutex_unlock(wst->mutex);
     PR_TRACE("websocket read len:%d, return len:%d", len, read_len);
     return read_len;
 }
@@ -262,7 +262,7 @@ tuya_transporter_t tuya_websocket_transporter_create()
                               websocket_transporter_poll_read, NULL, tuya_websocket_transporter_destroy,
                               websocket_transporter_ctrl);
 
-    tal_mutex_create_init(&t->mutex);
+    core_mutex_create_init(&t->mutex);
 
     return &t->base;
 }
@@ -286,7 +286,7 @@ OPERATE_RET tuya_websocket_transporter_destroy(tuya_transporter_t transporter)
         wst->ws_client = NULL;
     }
     if (wst->mutex) {
-        tal_mutex_release(wst->mutex);
+        core_mutex_release(wst->mutex);
         wst->mutex = NULL;
     }
     if (wst->path) {
