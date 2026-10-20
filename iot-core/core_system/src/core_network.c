@@ -3,7 +3,7 @@
  * @brief CORE network utilities: active-address tracking and socket operations
  * through the platform ops instance.
  *
- * core_network_get_active_ops() returns core_network_ops_platform (defined by the
+ * core_network_get_ops() returns core_network_ops_platform (defined by the
  * port); the active IPv4 address is kept in a local static and pushed by the
  * link owner on link events. Every socket operation -- fd_set helpers, select,
  * non-blocking mode, create/connect/bind/listen/accept, send/recv,
@@ -21,17 +21,17 @@
 #include "core_network.h"
 #include "dev_evt.h"
 
-/* Standard platform ops instance (defined in the port's port_network.c; .ops
- * points to that port's port_net_* implementations) */
+/* Standard platform ops card (defined in the port's port_network.c; the members
+ * point to that port's port_net_* implementations) */
 extern CORE_NETWORK_OPS_T core_network_ops_platform;
 
 /* Active link source address: pushed by the link owner (application/port
  * layer) on link events */
 static TUYA_IP_ADDR_T s_active_ipaddr = 0;
 
-CORE_NETWORK_SOCKET_OPS_T *core_network_get_active_ops(void)
+CORE_NETWORK_OPS_T *core_network_get_ops(void)
 {
-    return &core_network_ops_platform.ops;
+    return &core_network_ops_platform;
 }
 
 OPERATE_RET core_network_set_active_ip(TUYA_IP_ADDR_T ipaddr)
@@ -56,13 +56,13 @@ TUYA_IP_ADDR_T core_network_get_active_ip(void)
  * This macro simplifies the repetitive pattern of getting network ops,
  * checking if the operation exists, and calling it with parameters.
  *
- * @param op_name: The operation name in CORE_NETWORK_SOCKET_OPS_T struct
+ * @param op_name: The operation name in CORE_NETWORK_OPS_T struct
  * @param default_ret: Default return value if operation is not available
  * @param ...: Parameters to pass to the operation function
  */
 #define CORE_NET_EXEC_OP(op_name, default_ret, ...)                                                                     \
     do {                                                                                                               \
-        CORE_NETWORK_SOCKET_OPS_T *ops = core_network_get_active_ops();                                                         \
+        CORE_NETWORK_OPS_T *ops = core_network_get_ops();                                                         \
         if (NULL != ops && ops->op_name) {                                                                             \
             return ops->op_name(__VA_ARGS__);                                                                          \
         }                                                                                                              \
@@ -73,12 +73,12 @@ TUYA_IP_ADDR_T core_network_get_active_ip(void)
 /**
  * @brief Macro to execute network operation that returns void
  *
- * @param op_name: The operation name in CORE_NETWORK_SOCKET_OPS_T struct
+ * @param op_name: The operation name in CORE_NETWORK_OPS_T struct
  * @param ...: Parameters to pass to the operation function
  */
 #define CORE_NET_EXEC_OP_VOID(op_name, ...)                                                                             \
     do {                                                                                                               \
-        CORE_NETWORK_SOCKET_OPS_T *ops = core_network_get_active_ops();                                                         \
+        CORE_NETWORK_OPS_T *ops = core_network_get_ops();                                                         \
         if (NULL != ops && ops->op_name) {                                                                             \
             ops->op_name(__VA_ARGS__);                                                                                 \
         }                                                                                                              \
@@ -325,7 +325,7 @@ TUYA_ERRNO core_net_connect(const int fd, const TUYA_IP_ADDR_T addr, const uint1
     /* Notify ULP around the TCP connect so it can keep the device awake for the
      * duration (covers TLS/HTTP/MQTT/ATOP socket setup - they all land here). */
     TUYA_ERRNO rt = -1;
-    CORE_NETWORK_SOCKET_OPS_T *ops = core_network_get_active_ops();
+    CORE_NETWORK_OPS_T *ops = core_network_get_ops();
     if (NULL != ops && ops->connect) {
         tuya_dev_evt_notify(DEV_EVT_TCP_CONNECT, ACTION_BEFORE, NULL);
         rt = ops->connect(fd, addr, port);
@@ -686,7 +686,7 @@ OPERATE_RET core_net_gethostbyname(const char *domain, TUYA_IP_ADDR_T *addr)
     }
 
     /* Notify ULP around the DNS lookup so it can keep the device awake for it. */
-    CORE_NETWORK_SOCKET_OPS_T *dns_ops = core_network_get_active_ops();
+    CORE_NETWORK_OPS_T *dns_ops = core_network_get_ops();
     if (NULL != dns_ops && dns_ops->gethostbyname) {
         OPERATE_RET rt = OPRT_OK;
         tuya_dev_evt_notify(DEV_EVT_DNS_LOOKUP, ACTION_BEFORE, NULL);
