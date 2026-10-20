@@ -114,7 +114,7 @@ TUYA_ERRNO core_net_get_errno(void)
     int sys_err = errno;
     int i = 0;
 
-    for (i = 0; i < sizeof(unw_errno_trans) / sizeof(unw_errno_trans[0]); i++) {
+    for (i = 0; i < (int)(sizeof(unw_errno_trans) / sizeof(unw_errno_trans[0])); i++) {
         if (unw_errno_trans[i].sys_err == sys_err) {
             return unw_errno_trans[i].priv_err;
         }
@@ -582,6 +582,11 @@ int core_net_recv_nd_size(const int fd, void *buf, const uint32_t buf_size, cons
     while (rd_size < nd_size) {
         ret = recv(fd, ((uint8_t *)buf + rd_size), nd_size - rd_size, 0);
         if (ret <= 0) {
+            if (0 == ret) {
+                /* Peer closed. errno may still hold a stale EAGAIN/EINTR from an
+                 * earlier call; do not spin on it. */
+                break;
+            }
             TUYA_ERRNO err = core_net_get_errno();
             if ((UNW_EWOULDBLOCK == err) || (UNW_EINTR == err) || (UNW_EAGAIN == err)) {
                 core_system_sleep(10); /* 10ms retry pause */

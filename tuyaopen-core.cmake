@@ -104,7 +104,7 @@ endforeach()
 #   handling (such as esp-idf components)
 # - Variable TUYAOPEN_CORE_LIBS: GNU/Clang hosts use it to put the core libraries
 #   and the port into the same --start-group and resolve the circular references
-#   between CORE/cloud services and the TKL (under CMake 3.16 raw flags and
+#   between core services and the port (under CMake 3.16 raw flags and
 #   INTERFACE targets interleave incorrectly; a variable list preserves the order):
 #   target_link_libraries(app PRIVATE
 #       -Wl,--start-group ${TUYAOPEN_CORE_LIBS} $<TARGET_FILE:tuyaopen-port> -Wl,--end-group
