@@ -8,9 +8,11 @@
 # target_link_libraries; as an esp-idf component this must resolve to esp-idf's
 # mbedtls component target, which requires that component to be processed first
 # (an explicit dependency edge -- alphabetical processing order is not
-# guaranteed). This root file is only used by esp-idf builds; host CMake builds
-# include tuyaopen-core.cmake directly and are unaffected.
-idf_component_register(SRCS "" INCLUDE_DIRS "" REQUIRES mbedtls)
+# guaranteed). REQUIRES lwip: core_network.c includes the port's
+# core_network_platform.h, which pulls in lwip/sockets.h. This root file is only
+# used by esp-idf builds; host CMake builds include tuyaopen-core.cmake directly
+# and are unaffected.
+idf_component_register(SRCS "" INCLUDE_DIRS "" REQUIRES mbedtls lwip)
 
 include(${CMAKE_CURRENT_LIST_DIR}/tuyaopen-core.cmake)
 

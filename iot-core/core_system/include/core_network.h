@@ -3,11 +3,11 @@
  * @brief CORE network utilities: IPv4 address constants, fd-set helpers, socket
  *        operations, address conversion and the active source address.
  *
- * The socket functions dispatch through the CORE_NETWORK_OPS_T table
- * returned by core_network_get_ops() (the port's
- * core_network_ops_platform instance). core_network_set_active_ip and
- * core_network_get_active_ip record the source address outbound sockets bind
- * to; 0 means no link is up and callers must not bind.
+ * The socket functions call the platform socket API directly; the platform
+ * difference is provided by the port's core_network_platform.h. The active
+ * source address set by core_network_set_active_ip and read by
+ * core_network_get_active_ip is recorded locally; 0 means no link is up and
+ * callers must not bind.
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *
@@ -520,15 +520,6 @@ OPERATE_RET core_net_setsockopt(const int fd, const TUYA_OPT_LEVEL level, const 
  */
 OPERATE_RET core_net_getsockopt(const int fd, const TUYA_OPT_LEVEL level, const TUYA_OPT_NAME optname, void *optval,
                                int *optlen);
-
-#include "core_network_ops.h"
-
-/**
- * @brief Get the platform network ops card
- *
- * @return pointer to the platform ops card, never NULL (defined in the port)
- */
-CORE_NETWORK_OPS_T *core_network_get_ops(void);
 
 /**
  * @brief Record the source address outbound sockets should bind to

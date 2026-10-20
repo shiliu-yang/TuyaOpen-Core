@@ -1,16 +1,12 @@
 /**
  * @file core_network.c
- * @brief CORE network utilities: active-address tracking and socket operations
- * through the platform ops instance.
+ * @brief CORE network utilities: active-address tracking and socket operations.
  *
- * core_network_get_ops() returns core_network_ops_platform (defined by the
- * port); the active IPv4 address is kept in a local static and pushed by the
- * link owner on link events. Every socket operation -- fd_set helpers, select,
- * non-blocking mode, create/connect/bind/listen/accept, send/recv,
- * setsockopt options and address conversion -- resolves that ops instance and
- * forwards to the matching member, reporting OPRT_COM_ERROR when the member is
- * absent. Protocol-level types and the socket operation table come from
- * core_network_ops.h.
+ * The socket calls go directly to the platform socket API. The platform
+ * difference (POSIX on LINUX, lwIP on ESP32) is confined to the port-provided
+ * core_network_platform.h header, so this file contains no ops table and no
+ * platform #if. The active IPv4 address is kept in a local static and pushed
+ * by the link owner on link events.
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *
@@ -19,20 +15,13 @@
 #include "core_api.h"
 
 #include "core_network.h"
+#include "core_network_platform.h"
+#include "core_system.h"
 #include "dev_evt.h"
-
-/* Standard platform ops card (defined in the port's port_network.c; the members
- * point to that port's port_net_* implementations) */
-extern CORE_NETWORK_OPS_T core_network_ops_platform;
 
 /* Active link source address: pushed by the link owner (application/port
  * layer) on link events */
 static TUYA_IP_ADDR_T s_active_ipaddr = 0;
-
-CORE_NETWORK_OPS_T *core_network_get_ops(void)
-{
-    return &core_network_ops_platform;
-}
 
 OPERATE_RET core_network_set_active_ip(TUYA_IP_ADDR_T ipaddr)
 {
@@ -47,54 +36,64 @@ TUYA_IP_ADDR_T core_network_get_active_ip(void)
 }
 
 /***********************************************************
-************************macro define************************
-***********************************************************/
-
-/**
- * @brief Macro to execute network operation with error handling
- *
- * This macro simplifies the repetitive pattern of getting network ops,
- * checking if the operation exists, and calling it with parameters.
- *
- * @param op_name: The operation name in CORE_NETWORK_OPS_T struct
- * @param default_ret: Default return value if operation is not available
- * @param ...: Parameters to pass to the operation function
- */
-#define CORE_NET_EXEC_OP(op_name, default_ret, ...)                                                                     \
-    do {                                                                                                               \
-        CORE_NETWORK_OPS_T *ops = core_network_get_ops();                                                         \
-        if (NULL != ops && ops->op_name) {                                                                             \
-            return ops->op_name(__VA_ARGS__);                                                                          \
-        }                                                                                                              \
-        PR_ERR("Network operation %s not available", #op_name);                                                        \
-        return default_ret;                                                                                            \
-    } while (0)
-
-/**
- * @brief Macro to execute network operation that returns void
- *
- * @param op_name: The operation name in CORE_NETWORK_OPS_T struct
- * @param ...: Parameters to pass to the operation function
- */
-#define CORE_NET_EXEC_OP_VOID(op_name, ...)                                                                             \
-    do {                                                                                                               \
-        CORE_NETWORK_OPS_T *ops = core_network_get_ops();                                                         \
-        if (NULL != ops && ops->op_name) {                                                                             \
-            ops->op_name(__VA_ARGS__);                                                                                 \
-        }                                                                                                              \
-    } while (0)
-
-/***********************************************************
 ***********************typedef define***********************
 ***********************************************************/
+
+typedef struct NETWORK_ERRNO_TRANS {
+    int sys_err;
+    int priv_err;
+} NETWORK_ERRNO_TRANS_S;
+
+static const NETWORK_ERRNO_TRANS_S unw_errno_trans[] = {{EINTR, UNW_EINTR},
+                                                 {EBADF, UNW_EBADF},
+                                                 {EAGAIN, UNW_EAGAIN},
+                                                 {EFAULT, UNW_EFAULT},
+                                                 {EBUSY, UNW_EBUSY},
+                                                 {EINVAL, UNW_EINVAL},
+                                                 {ENFILE, UNW_ENFILE},
+                                                 {EMFILE, UNW_EMFILE},
+                                                 {ENOSPC, UNW_ENOSPC},
+                                                 {EPIPE, UNW_EPIPE},
+                                                 {EWOULDBLOCK, UNW_EWOULDBLOCK},
+                                                 {ENOTSOCK, UNW_ENOTSOCK},
+                                                 {ENOPROTOOPT, UNW_ENOPROTOOPT},
+                                                 {EADDRINUSE, UNW_EADDRINUSE},
+                                                 {EADDRNOTAVAIL, UNW_EADDRNOTAVAIL},
+                                                 {ENETDOWN, UNW_ENETDOWN},
+                                                 {ENETUNREACH, UNW_ENETUNREACH},
+                                                 {ENETRESET, UNW_ENETRESET},
+                                                 {ECONNRESET, UNW_ECONNRESET},
+                                                 {ENOBUFS, UNW_ENOBUFS},
+                                                 {EISCONN, UNW_EISCONN},
+                                                 {ENOTCONN, UNW_ENOTCONN},
+                                                 {ETIMEDOUT, UNW_ETIMEDOUT},
+                                                 {ECONNREFUSED, UNW_ECONNREFUSED},
+                                                 {EHOSTDOWN, UNW_EHOSTDOWN},
+                                                 {EHOSTUNREACH, UNW_EHOSTUNREACH},
+                                                 {ENOMEM, UNW_ENOMEM},
+                                                 {EMSGSIZE, UNW_EMSGSIZE}};
 
 /***********************************************************
 ********************function declaration********************
 ***********************************************************/
 
-/***********************************************************
-***********************variable define**********************
-***********************************************************/
+static void __core_net_fill_sockaddr(struct sockaddr_in *sin, TUYA_IP_ADDR_T addr, uint16_t port)
+{
+    memset(sin, 0, sizeof(*sin));
+    sin->sin_family = AF_INET;
+    sin->sin_port = htons(port);
+    sin->sin_addr.s_addr = htonl(addr);
+}
+
+static void __core_net_extract_addr_port(const struct sockaddr_in *sin, TUYA_IP_ADDR_T *addr, uint16_t *port)
+{
+    if (addr) {
+        *addr = ntohl(sin->sin_addr.s_addr);
+    }
+    if (port) {
+        *port = ntohs(sin->sin_port);
+    }
+}
 
 /***********************************************************
 ***********************function define**********************
@@ -112,7 +111,16 @@ TUYA_IP_ADDR_T core_network_get_active_ip(void)
  */
 TUYA_ERRNO core_net_get_errno(void)
 {
-    CORE_NET_EXEC_OP(get_errno, -100);
+    int sys_err = errno;
+    int i = 0;
+
+    for (i = 0; i < sizeof(unw_errno_trans) / sizeof(unw_errno_trans[0]); i++) {
+        if (unw_errno_trans[i].sys_err == sys_err) {
+            return unw_errno_trans[i].priv_err;
+        }
+    }
+
+    return -100 - sys_err;
 }
 
 /**
@@ -132,7 +140,9 @@ OPERATE_RET core_net_fd_set(int fd, TUYA_FD_SET_T *fds)
         return -3000 + fd;
     }
 
-    CORE_NET_EXEC_OP(fd_set, OPRT_COM_ERROR, fd, fds);
+    FD_SET(fd, CORE_NET_NATIVE_FD_SET(fds));
+
+    return OPRT_OK;
 }
 
 /**
@@ -152,7 +162,9 @@ OPERATE_RET core_net_fd_clear(int fd, TUYA_FD_SET_T *fds)
         return -3000 + fd;
     }
 
-    CORE_NET_EXEC_OP(fd_clear, OPRT_COM_ERROR, fd, fds);
+    FD_CLR(fd, CORE_NET_NATIVE_FD_SET(fds));
+
+    return OPRT_OK;
 }
 
 /**
@@ -171,7 +183,7 @@ OPERATE_RET core_net_fd_isset(int fd, TUYA_FD_SET_T *fds)
         return -3000 + fd;
     }
 
-    CORE_NET_EXEC_OP(fd_isset, OPRT_COM_ERROR, fd, fds);
+    return FD_ISSET(fd, CORE_NET_NATIVE_FD_SET(fds)) ? 1 : 0;
 }
 
 /**
@@ -190,7 +202,9 @@ OPERATE_RET core_net_fd_zero(TUYA_FD_SET_T *fds)
         return -1;
     }
 
-    CORE_NET_EXEC_OP(fd_zero, OPRT_COM_ERROR, fds);
+    FD_ZERO(CORE_NET_NATIVE_FD_SET(fds));
+
+    return OPRT_OK;
 }
 
 /**
@@ -209,7 +223,16 @@ OPERATE_RET core_net_fd_zero(TUYA_FD_SET_T *fds)
 int core_net_select(const int maxfd, TUYA_FD_SET_T *readfds, TUYA_FD_SET_T *writefds, TUYA_FD_SET_T *errorfds,
                    const uint32_t ms_timeout)
 {
-    CORE_NET_EXEC_OP(select, -1, maxfd, readfds, writefds, errorfds, ms_timeout);
+    if (maxfd <= 0) {
+        return maxfd;
+    }
+
+    /* ms_timeout == 0 means wait forever (wall-clock timeout is NULL). */
+    struct timeval timeout = {ms_timeout / 1000, (ms_timeout % 1000) * 1000};
+    struct timeval *tmp = ms_timeout ? &timeout : NULL;
+
+    return select(maxfd, CORE_NET_NATIVE_FD_SET(readfds), CORE_NET_NATIVE_FD_SET(writefds),
+                  CORE_NET_NATIVE_FD_SET(errorfds), tmp);
 }
 
 /**
@@ -227,7 +250,7 @@ int core_net_get_nonblock(const int fd)
         return -3000 + fd;
     }
 
-    CORE_NET_EXEC_OP(get_nonblock, 0, fd);
+    return ((fcntl(fd, F_GETFL, 0) & O_NONBLOCK) == O_NONBLOCK) ? 1 : 0;
 }
 
 /**
@@ -247,7 +270,22 @@ OPERATE_RET core_net_set_block(const int fd, const BOOL_T block)
         return -3000 + fd;
     }
 
-    CORE_NET_EXEC_OP(set_block, OPRT_COM_ERROR, fd, block);
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags < 0) {
+        return OPRT_COM_ERROR;
+    }
+
+    if (block) {
+        flags &= (~O_NONBLOCK);
+    } else {
+        flags |= O_NONBLOCK;
+    }
+
+    if (fcntl(fd, F_SETFL, flags) < 0) {
+        return OPRT_COM_ERROR;
+    }
+
+    return OPRT_OK;
 }
 
 /**
@@ -266,7 +304,7 @@ TUYA_ERRNO core_net_close(const int fd)
         return -3000 + fd;
     }
 
-    CORE_NET_EXEC_OP(close, -1, fd);
+    return close(fd);
 }
 
 /**
@@ -287,7 +325,7 @@ TUYA_ERRNO core_net_shutdown(const int fd, const int how)
         return -3000 + fd;
     }
 
-    CORE_NET_EXEC_OP(shutdown, -1, fd, how);
+    return shutdown(fd, how);
 }
 
 /**
@@ -301,7 +339,13 @@ TUYA_ERRNO core_net_shutdown(const int fd, const int how)
  */
 int core_net_socket_create(const TUYA_PROTOCOL_TYPE_E type)
 {
-    CORE_NET_EXEC_OP(socket_create, -1, type);
+    if (PROTOCOL_TCP == type) {
+        return socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+    } else if (PROTOCOL_RAW == type) {
+        return socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
+    }
+
+    return socket(AF_INET, SOCK_DGRAM, 0);
 }
 
 /**
@@ -322,17 +366,15 @@ TUYA_ERRNO core_net_connect(const int fd, const TUYA_IP_ADDR_T addr, const uint1
         return -3000 + fd;
     }
 
+    struct sockaddr_in sock_addr;
+    __core_net_fill_sockaddr(&sock_addr, addr, port);
+
     /* Notify ULP around the TCP connect so it can keep the device awake for the
      * duration (covers TLS/HTTP/MQTT/ATOP socket setup - they all land here). */
-    TUYA_ERRNO rt = -1;
-    CORE_NETWORK_OPS_T *ops = core_network_get_ops();
-    if (NULL != ops && ops->connect) {
-        tuya_dev_evt_notify(DEV_EVT_TCP_CONNECT, ACTION_BEFORE, NULL);
-        rt = ops->connect(fd, addr, port);
-        tuya_dev_evt_notify(DEV_EVT_TCP_CONNECT, ACTION_AFTER, NULL);
-        return rt;
-    }
-    PR_ERR("Network operation connect not available");
+    tuya_dev_evt_notify(DEV_EVT_TCP_CONNECT, ACTION_BEFORE, NULL);
+    TUYA_ERRNO rt = connect(fd, (struct sockaddr *)&sock_addr, sizeof(sock_addr));
+    tuya_dev_evt_notify(DEV_EVT_TCP_CONNECT, ACTION_AFTER, NULL);
+
     return rt;
 }
 
@@ -354,7 +396,7 @@ TUYA_ERRNO core_net_connect_raw(const int fd, void *p_socket_addr, const int len
         return -3000 + fd;
     }
 
-    CORE_NET_EXEC_OP(connect_raw, -1, fd, p_socket_addr, len);
+    return connect(fd, (struct sockaddr *)p_socket_addr, len);
 }
 
 /**
@@ -375,7 +417,17 @@ TUYA_ERRNO core_net_bind(const int fd, const TUYA_IP_ADDR_T addr, const uint16_t
         return -3000 + fd;
     }
 
-    CORE_NET_EXEC_OP(bind, -1, fd, addr, port);
+    struct sockaddr_in sock_addr;
+    __core_net_fill_sockaddr(&sock_addr, addr, port);
+
+    TUYA_ERRNO ret = bind(fd, (struct sockaddr *)&sock_addr, sizeof(sock_addr));
+    if ((0 == ret) && (addr != TY_IPADDR_ANY)) {
+        if (0 != core_net_platform_bind_interface(fd, addr)) {
+            PR_DEBUG("bind interface for 0x%08x failed", addr);
+        }
+    }
+
+    return ret;
 }
 
 /**
@@ -395,7 +447,7 @@ TUYA_ERRNO core_net_listen(const int fd, const int backlog)
         return -3000 + fd;
     }
 
-    CORE_NET_EXEC_OP(listen, -1, fd, backlog);
+    return listen(fd, backlog);
 }
 
 /**
@@ -416,7 +468,16 @@ int core_net_accept(const int fd, TUYA_IP_ADDR_T *addr, uint16_t *port)
         return -3000 + fd;
     }
 
-    CORE_NET_EXEC_OP(accept, -1, fd, addr, port);
+    struct sockaddr_in sock_addr;
+    socklen_t len = sizeof(sock_addr);
+    int ret = accept(fd, (struct sockaddr *)&sock_addr, &len);
+    if (ret < 0) {
+        return -1;
+    }
+
+    __core_net_extract_addr_port(&sock_addr, addr, port);
+
+    return ret;
 }
 
 /**
@@ -437,7 +498,7 @@ TUYA_ERRNO core_net_send(const int fd, const void *buf, const uint32_t nbytes)
         return -3000 + fd;
     }
 
-    CORE_NET_EXEC_OP(send, -1, fd, buf, nbytes);
+    return send(fd, buf, nbytes, 0);
 }
 
 /**
@@ -461,7 +522,10 @@ TUYA_ERRNO core_net_send_to(const int fd, const void *buf, const uint32_t nbytes
         return -3000 + fd;
     }
 
-    CORE_NET_EXEC_OP(send_to, -1, fd, buf, nbytes, addr, port);
+    struct sockaddr_in sock_addr;
+    __core_net_fill_sockaddr(&sock_addr, addr, port);
+
+    return sendto(fd, buf, nbytes, 0, (struct sockaddr *)&sock_addr, sizeof(sock_addr));
 }
 
 /**
@@ -482,7 +546,16 @@ TUYA_ERRNO core_net_recv(const int fd, void *buf, const uint32_t nbytes)
         return -3000 + fd;
     }
 
-    CORE_NET_EXEC_OP(recv, -1, fd, buf, nbytes);
+    TUYA_ERRNO ret = recv(fd, buf, nbytes, 0);
+    if (ret <= 0) {
+        TUYA_ERRNO err = core_net_get_errno();
+        if ((UNW_EINTR == err) || (UNW_EAGAIN == err)) {
+            core_system_sleep(10); /* 10ms retry pause */
+            ret = recv(fd, buf, nbytes, 0);
+        }
+    }
+
+    return ret;
 }
 
 /**
@@ -503,7 +576,27 @@ int core_net_recv_nd_size(const int fd, void *buf, const uint32_t buf_size, cons
         return -3000 + fd;
     }
 
-    CORE_NET_EXEC_OP(recv_nd_size, -1, fd, buf, buf_size, nd_size);
+    uint32_t rd_size = 0;
+    int ret = -1;
+
+    while (rd_size < nd_size) {
+        ret = recv(fd, ((uint8_t *)buf + rd_size), nd_size - rd_size, 0);
+        if (ret <= 0) {
+            TUYA_ERRNO err = core_net_get_errno();
+            if ((UNW_EWOULDBLOCK == err) || (UNW_EINTR == err) || (UNW_EAGAIN == err)) {
+                core_system_sleep(10); /* 10ms retry pause */
+                continue;
+            }
+            break;
+        }
+        rd_size += ret;
+    }
+
+    if (rd_size < nd_size) {
+        return -2;
+    }
+
+    return (int)rd_size;
 }
 
 /**
@@ -526,7 +619,16 @@ TUYA_ERRNO core_net_recvfrom(const int fd, void *buf, const uint32_t nbytes, TUY
         return -3000 + fd;
     }
 
-    CORE_NET_EXEC_OP(recvfrom, -1, fd, buf, nbytes, addr, port);
+    struct sockaddr_in sock_addr;
+    socklen_t addr_len = sizeof(sock_addr);
+    TUYA_ERRNO ret = recvfrom(fd, buf, nbytes, 0, (struct sockaddr *)&sock_addr, &addr_len);
+    if (ret <= 0) {
+        return ret;
+    }
+
+    __core_net_extract_addr_port(&sock_addr, addr, port);
+
+    return ret;
 }
 
 /**
@@ -546,7 +648,7 @@ TUYA_ERRNO core_net_recvfrom(const int fd, void *buf, const uint32_t nbytes, TUY
 OPERATE_RET core_net_setsockopt(const int fd, const TUYA_OPT_LEVEL level, const TUYA_OPT_NAME optname,
                                const void *optval, const int optlen)
 {
-    CORE_NET_EXEC_OP(setsockopt, OPRT_COM_ERROR, fd, level, optname, optval, optlen);
+    return setsockopt(fd, level, optname, optval, optlen);
 }
 
 /**
@@ -566,7 +668,11 @@ OPERATE_RET core_net_setsockopt(const int fd, const TUYA_OPT_LEVEL level, const 
 OPERATE_RET core_net_getsockopt(const int fd, const TUYA_OPT_LEVEL level, const TUYA_OPT_NAME optname, void *optval,
                                int *optlen)
 {
-    CORE_NET_EXEC_OP(getsockopt, OPRT_COM_ERROR, fd, level, optname, optval, optlen);
+    if (NULL == optlen) {
+        return OPRT_COM_ERROR;
+    }
+
+    return getsockopt(fd, level, optname, optval, (socklen_t *)optlen);
 }
 
 /**
@@ -587,7 +693,10 @@ OPERATE_RET core_net_set_timeout(const int fd, const int ms_timeout, const TUYA_
         return -3000 + fd;
     }
 
-    CORE_NET_EXEC_OP(set_timeout, OPRT_COM_ERROR, fd, ms_timeout, type);
+    struct timeval timeout = {ms_timeout / 1000, (ms_timeout % 1000) * 1000};
+    int optname = ((type == TRANS_RECV) ? SO_RCVTIMEO : SO_SNDTIMEO);
+
+    return core_net_setsockopt(fd, SOL_SOCKET, optname, (const char *)&timeout, sizeof(timeout));
 }
 
 /**
@@ -608,7 +717,10 @@ OPERATE_RET core_net_set_bufsize(const int fd, const int buf_size, const TUYA_TR
         return -3000 + fd;
     }
 
-    CORE_NET_EXEC_OP(set_bufsize, OPRT_COM_ERROR, fd, buf_size, type);
+    int size = buf_size;
+    int optname = ((type == TRANS_RECV) ? SO_RCVBUF : SO_SNDBUF);
+
+    return core_net_setsockopt(fd, SOL_SOCKET, optname, (const char *)&size, sizeof(size));
 }
 
 /**
@@ -627,7 +739,9 @@ OPERATE_RET core_net_set_reuse(const int fd)
         return -3000 + fd;
     }
 
-    CORE_NET_EXEC_OP(set_reuse, OPRT_COM_ERROR, fd);
+    int flag = 1;
+
+    return core_net_setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (const char *)&flag, sizeof(flag));
 }
 
 /**
@@ -646,7 +760,9 @@ OPERATE_RET core_net_disable_nagle(const int fd)
         return -3000 + fd;
     }
 
-    CORE_NET_EXEC_OP(disable_nagle, OPRT_COM_ERROR, fd);
+    int flag = 1;
+
+    return core_net_setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (const char *)&flag, sizeof(flag));
 }
 
 /**
@@ -665,7 +781,9 @@ OPERATE_RET core_net_set_broadcast(const int fd)
         return -3000 + fd;
     }
 
-    CORE_NET_EXEC_OP(set_broadcast, OPRT_COM_ERROR, fd);
+    int flag = 1;
+
+    return core_net_setsockopt(fd, SOL_SOCKET, SO_BROADCAST, (const char *)&flag, sizeof(flag));
 }
 
 /**
@@ -686,16 +804,17 @@ OPERATE_RET core_net_gethostbyname(const char *domain, TUYA_IP_ADDR_T *addr)
     }
 
     /* Notify ULP around the DNS lookup so it can keep the device awake for it. */
-    CORE_NETWORK_OPS_T *dns_ops = core_network_get_ops();
-    if (NULL != dns_ops && dns_ops->gethostbyname) {
-        OPERATE_RET rt = OPRT_OK;
-        tuya_dev_evt_notify(DEV_EVT_DNS_LOOKUP, ACTION_BEFORE, NULL);
-        rt = dns_ops->gethostbyname(domain, addr);
-        tuya_dev_evt_notify(DEV_EVT_DNS_LOOKUP, ACTION_AFTER, NULL);
-        return rt;
+    tuya_dev_evt_notify(DEV_EVT_DNS_LOOKUP, ACTION_BEFORE, NULL);
+    struct hostent *h = gethostbyname(domain);
+    tuya_dev_evt_notify(DEV_EVT_DNS_LOOKUP, ACTION_AFTER, NULL);
+
+    if (NULL == h) {
+        return -1;
     }
 
-    CORE_NET_EXEC_OP(gethostbyname, OPRT_COM_ERROR, domain, addr);
+    *addr = ntohl(((struct in_addr *)(h->h_addr_list[0]))->s_addr);
+
+    return OPRT_OK;
 }
 
 /**
@@ -721,7 +840,18 @@ OPERATE_RET core_net_set_keepalive(int fd, const BOOL_T alive, const uint32_t id
         return -3000 + fd;
     }
 
-    CORE_NET_EXEC_OP(set_keepalive, OPRT_COM_ERROR, fd, alive, idle, intr, cnt);
+    int keepalive = alive;
+    int keepidle = idle;
+    int keepinterval = intr;
+    int keepcount = cnt;
+    int ret = 0;
+
+    ret |= core_net_setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (void *)&keepalive, sizeof(keepalive));
+    ret |= core_net_setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, (void *)&keepidle, sizeof(keepidle));
+    ret |= core_net_setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, (void *)&keepinterval, sizeof(keepinterval));
+    ret |= core_net_setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, (void *)&keepcount, sizeof(keepcount));
+
+    return ret;
 }
 
 /**
@@ -737,7 +867,21 @@ OPERATE_RET core_net_set_keepalive(int fd, const BOOL_T alive, const uint32_t id
  */
 OPERATE_RET core_net_get_socket_ip(int fd, TUYA_IP_ADDR_T *addr)
 {
-    CORE_NET_EXEC_OP(get_socket_ip, OPRT_COM_ERROR, fd, addr);
+    if (NULL == addr) {
+        return OPRT_COM_ERROR;
+    }
+
+    struct sockaddr_in sock_addr;
+    socklen_t len = sizeof(sock_addr);
+
+    memset(&sock_addr, 0, sizeof(sock_addr));
+    if (0 != getsockname(fd, (struct sockaddr *)&sock_addr, &len)) {
+        return OPRT_COM_ERROR;
+    }
+
+    *addr = ntohl(sock_addr.sin_addr.s_addr);
+
+    return OPRT_OK;
 }
 
 /**
@@ -759,7 +903,17 @@ OPERATE_RET core_net_getsockname(int fd, TUYA_IP_ADDR_T *addr, uint16_t *port)
         return -3000 + fd;
     }
 
-    CORE_NET_EXEC_OP(getsockname, OPRT_COM_ERROR, fd, addr, port);
+    struct sockaddr_in sock_addr;
+    socklen_t len = sizeof(sock_addr);
+
+    memset(&sock_addr, 0, sizeof(sock_addr));
+    if (0 != getsockname(fd, (struct sockaddr *)&sock_addr, &len)) {
+        return OPRT_COM_ERROR;
+    }
+
+    __core_net_extract_addr_port(&sock_addr, addr, port);
+
+    return OPRT_OK;
 }
 
 /**
@@ -780,7 +934,17 @@ OPERATE_RET core_net_getpeername(int fd, TUYA_IP_ADDR_T *addr, uint16_t *port)
         return -3000 + fd;
     }
 
-    CORE_NET_EXEC_OP(getpeername, OPRT_COM_ERROR, fd, addr, port);
+    struct sockaddr_in sock_addr;
+    socklen_t len = sizeof(sock_addr);
+
+    memset(&sock_addr, 0, sizeof(sock_addr));
+    if (0 != getpeername(fd, (struct sockaddr *)&sock_addr, &len)) {
+        return OPRT_COM_ERROR;
+    }
+
+    __core_net_extract_addr_port(&sock_addr, addr, port);
+
+    return OPRT_OK;
 }
 
 /**
@@ -794,7 +958,11 @@ OPERATE_RET core_net_getpeername(int fd, TUYA_IP_ADDR_T *addr, uint16_t *port)
  */
 TUYA_IP_ADDR_T core_net_str2addr(const char *ip_str)
 {
-    CORE_NET_EXEC_OP(str2addr, 0, ip_str);
+    if (ip_str == NULL) {
+        return 0xFFFFFFFF;
+    }
+
+    return ntohl(inet_addr(ip_str));
 }
 
 /**
@@ -809,5 +977,9 @@ TUYA_IP_ADDR_T core_net_str2addr(const char *ip_str)
  */
 char *core_net_addr2str(TUYA_IP_ADDR_T ipaddr)
 {
-    CORE_NET_EXEC_OP(addr2str, NULL, ipaddr);
+    struct in_addr hostaddr;
+
+    hostaddr.s_addr = htonl(ipaddr);
+
+    return inet_ntoa(hostaddr);
 }
