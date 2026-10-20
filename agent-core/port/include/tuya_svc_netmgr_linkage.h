@@ -46,7 +46,7 @@ typedef enum {
     LINKAGE_TYPE_BT,         // BLE
     LINKAGE_TYPE_CAT1,       // CN/4G
     LINKAGE_TYPE_NB,         // NB-IoT
-    LINKAGE_TYPE_EXT_MODULE, // 插件
+    LINKAGE_TYPE_EXT_MODULE, // plug-in
     LINKAGE_TYPE_EXT2,       // reserved
     LINKAGE_TYPE_EXT3,       // reserved
     LINKAGE_TYPE_VIRTUAL,    // keep it last

@@ -86,10 +86,10 @@ void tuya_list_splice(const P_LIST_HEAD pList, const P_LIST_HEAD pHead)
 {
     P_LIST_HEAD pFirst = pList->next;
 
-    if (pFirst != pList) // 该链表不为空
+    if (pFirst != pList) // the list is not empty
     {
         P_LIST_HEAD pLast = pList->prev;
-        P_LIST_HEAD pAt = pHead->next; // list接合处的节点
+        P_LIST_HEAD pAt = pHead->next; // node at the list splice point
 
         pFirst->prev = pHead;
         pHead->next = pFirst;

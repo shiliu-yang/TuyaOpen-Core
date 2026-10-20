@@ -323,7 +323,7 @@ static void * MEM_AllocateDebug ( MEM_Heap_t * heap, unsigned long size , char* 
 	{
 		block = ( MEM_HeapBlock_t* ) ( ( unsigned long ) (intptr_t)p - MEM_BLOCK_HEAD_SIZE );
 
-		/*得到保存调试信息的地址*/
+		/* get the address where the debug information is saved */
 		leak = MEM_LEAK_DBG_ADDR ( block );
 		leak->filename = filename;
 		leak->line = line;

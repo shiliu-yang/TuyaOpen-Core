@@ -745,7 +745,7 @@ STATIC OPERATE_RET __ai_biz_handler(uint8_t direction, uint16_t id, AI_BIZ_ATTR_
         return OPRT_INVALID_PARM;
     }
 
-    // FIXME: 暂不支持分片报文,需要在底层协议处理部分将分片信息分实例进行管理，否则会导致分片标志乱序
+    // FIXME: fragmented packets are not supported yet; the underlying protocol layer must track fragment state per instance, otherwise fragment flags get out of order
     if (head->total_len > 0 && head->total_len != head->len) {
         PR_ERR("Unsupported fragmented message, total_len=%d, len=%d", head->total_len, head->len);
         return OPRT_NOT_SUPPORTED;

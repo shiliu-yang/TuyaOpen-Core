@@ -949,7 +949,7 @@ static OPERATE_RET __timer_list_serialize(const tuya_timer_task_list_t *list, ch
         return OPRT_MALLOC_FAILED;
     }
     cJSON_AddStringToObject(root, "sha256", sha256_hex);
-    cJSON_AddItemToObject(root, "data", data);   /* data 所有权转移给 root */
+    cJSON_AddItemToObject(root, "data", data);   /* ownership of data is transferred to root */
     data = NULL;
 
     char *result = cJSON_PrintUnformatted(root);
