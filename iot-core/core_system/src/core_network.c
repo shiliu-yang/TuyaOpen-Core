@@ -96,6 +96,14 @@ static void __core_net_extract_addr_port(const struct sockaddr_in *sin, TUYA_IP_
 }
 
 /***********************************************************
+************************macro define************************
+***********************************************************/
+
+/* TUYA_FD_SET_T is a fixed-size bitmap: reject fds that would write past it
+ * (FD_SET/FD_CLR/FD_ISSET do no bounds check of their own). */
+#define CORE_NET_FD_IS_VALID(fd) ((fd) >= 0 && (fd) < (int)(sizeof(TUYA_FD_SET_T) * 8))
+
+/***********************************************************
 ***********************function define**********************
 ***********************************************************/
 
@@ -136,7 +144,7 @@ TUYA_ERRNO core_net_get_errno(void)
  */
 OPERATE_RET core_net_fd_set(int fd, TUYA_FD_SET_T *fds)
 {
-    if ((fd < 0) || (fds == NULL)) {
+    if (!CORE_NET_FD_IS_VALID(fd) || (fds == NULL)) {
         return -3000 + fd;
     }
 
@@ -158,7 +166,7 @@ OPERATE_RET core_net_fd_set(int fd, TUYA_FD_SET_T *fds)
  */
 OPERATE_RET core_net_fd_clear(int fd, TUYA_FD_SET_T *fds)
 {
-    if ((fd < 0) || (fds == NULL)) {
+    if (!CORE_NET_FD_IS_VALID(fd) || (fds == NULL)) {
         return -3000 + fd;
     }
 
@@ -179,7 +187,7 @@ OPERATE_RET core_net_fd_clear(int fd, TUYA_FD_SET_T *fds)
  */
 OPERATE_RET core_net_fd_isset(int fd, TUYA_FD_SET_T *fds)
 {
-    if ((fd < 0) || (fds == NULL)) {
+    if (!CORE_NET_FD_IS_VALID(fd) || (fds == NULL)) {
         return -3000 + fd;
     }
 
@@ -224,6 +232,7 @@ int core_net_select(const int maxfd, TUYA_FD_SET_T *readfds, TUYA_FD_SET_T *writ
                    const uint32_t ms_timeout)
 {
     if (maxfd <= 0) {
+        /* No descriptor to watch: return immediately, do not sleep. */
         return maxfd;
     }
 
@@ -547,7 +556,7 @@ TUYA_ERRNO core_net_recv(const int fd, void *buf, const uint32_t nbytes)
     }
 
     TUYA_ERRNO ret = recv(fd, buf, nbytes, 0);
-    if (ret <= 0) {
+    if (ret < 0) {
         TUYA_ERRNO err = core_net_get_errno();
         if ((UNW_EINTR == err) || (UNW_EAGAIN == err)) {
             core_system_sleep(10); /* 10ms retry pause */
@@ -872,6 +881,10 @@ OPERATE_RET core_net_set_keepalive(int fd, const BOOL_T alive, const uint32_t id
  */
 OPERATE_RET core_net_get_socket_ip(int fd, TUYA_IP_ADDR_T *addr)
 {
+    if (fd < 0) {
+        return -3000 + fd;
+    }
+
     if (NULL == addr) {
         return OPRT_COM_ERROR;
     }

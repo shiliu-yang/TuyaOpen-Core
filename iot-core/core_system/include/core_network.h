@@ -52,7 +52,8 @@ TUYA_ERRNO core_net_get_errno(void);
  * @param[in] fd: file descriptor
  * @param[in] fds: set of file descriptor
  *
- * @note This API is used to add file descriptor to set.
+ * @note This API is used to add file descriptor to set. fd must be in
+ * [0, TUYA_FD_MAX_COUNT); an out-of-range fd is rejected without touching the set.
  *
  * @return OPRT_OK on success. Others on error, please refer to
  * tuya_error_code.h
@@ -65,7 +66,8 @@ OPERATE_RET core_net_fd_set(int fd, TUYA_FD_SET_T *fds);
  * @param[in] fd: file descriptor
  * @param[in] fds: set of file descriptor
  *
- * @note This API is used to clear file descriptor from set.
+ * @note This API is used to clear file descriptor from set. fd must be in
+ * [0, TUYA_FD_MAX_COUNT); an out-of-range fd is rejected without touching the set.
  *
  * @return OPRT_OK on success. Others on error, please refer to
  * tuya_error_code.h
@@ -78,7 +80,8 @@ OPERATE_RET core_net_fd_clear(int fd, TUYA_FD_SET_T *fds);
  * @param[in] fd: file descriptor
  * @param[in] fds: set of file descriptor
  *
- * @note This API is used to check the file descriptor is in set.
+ * @note This API is used to check the file descriptor is in set. fd must be in
+ * [0, TUYA_FD_MAX_COUNT); an out-of-range fd is rejected without touching the set.
  *
  * @return TRUE or FALSE
  */
@@ -115,6 +118,8 @@ OPERATE_RET core_net_fd_zero(TUYA_FD_SET_T *fds);
  * @param[in] ms_timeout: time out
  *
  * @note This API is used to get available file descriptors.
+ *       maxfd <= 0 returns maxfd immediately (no wait); ms_timeout == 0 waits
+ *       forever (NULL timeval).
  *
  * @return >0 the count of available file descriptors, <=0 error.
  */
@@ -291,8 +296,8 @@ int core_net_accept(const int fd, TUYA_IP_ADDR_T *addr, uint16_t *port);
  *
  * @note This API is used for receiving data from network
  *
- * @return >0 on num of recv, <0 please refer to the error no of the target
- * system
+ * @return >0 on num of recv, 0 when the peer closed the connection, <0 please
+ * refer to the error no of the target system
  */
 TUYA_ERRNO core_net_recv(const int fd, void *buf, const uint32_t nbytes);
 
