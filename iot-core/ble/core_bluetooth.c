@@ -661,11 +661,16 @@ OPERATE_RET core_ble_bt_deinit(CORE_BLE_ROLE_E role)
         return OPRT_NOT_SUPPORTED;
     }
 
+    /* Clear the pointers after freeing: core_ble_bt_init() allocates these
+     * tables only when they are NULL, so leaving them dangling would make a
+     * deinit -> init cycle skip the allocation and write into freed memory. */
     if (pcore_ble_service_char) {
         core_free(pcore_ble_service_char);
+        pcore_ble_service_char = NULL;
     }
     if (pcore_ble_service) {
         core_free(pcore_ble_service);
+        pcore_ble_service = NULL;
     }
 
     /* With an empty card (NULL card or NULL member) return
