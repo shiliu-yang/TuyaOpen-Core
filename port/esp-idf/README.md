@@ -78,9 +78,13 @@ thin entry `../tuyaopen-port/CMakeLists.txt` includes this file in the context
 of a component directory named `tuyaopen-port`; the application adds both
 `tuyaopen-core/` and `tuyaopen-core/port/tuyaopen-port` with
 `EXTRA_COMPONENT_DIRS` and depends on `tuyaopen-core` and `tuyaopen-port`.
-Keeping the port a real component matters for link order: the port archive must
-be scanned before its esp-idf dependencies (bt/NimBLE and its controller), and
-esp-idf's component ordering guarantees that through the REQUIRES edge.
+Keeping the port a real esp-idf component is a hard requirement: `REQUIRES`
+only resolves registered components, and esp-idf replays component
+requirements in `script()` mode where `add_subdirectory` is not scriptable.
+Registration also fixes the link order: this component REQUIRES
+`tuyaopen-core` and `bt`, so esp-idf processes (and links) them in dependency
+order -- core libraries, then the port archive, then bt/NimBLE and its
+controller (measured token order in the generated link line).
 
 This `CMakeLists.txt`:
 
@@ -96,9 +100,11 @@ This `CMakeLists.txt`:
   translation units get board macros through `tuya_kconfig.h` and resolve
   contract headers through `interface/`);
 - bridges core's mbedtls integration under esp-idf (adds the esp-idf
-  `esp_config.h` include directory to `tuyaopen-headers`) and puts the core
-  libraries and the port into one GNU ld link group (they have symbol-level
-  circular references; esp-idf component libraries have no `--start-group`).
+  `esp_config.h` include directory to `tuyaopen-headers`). No GNU ld link group
+  is used: the port references no core symbol (measured: zero undefined
+  `core_*` symbols in `libtuyaopen-port.a`), so there is no core<->port cycle;
+  core's references to the card instances are resolved by the component link
+  order above.
 
 **Deliberately does not link `core_system` and does not add core's header
 paths**: any include of core fails at compile time (a compile-time

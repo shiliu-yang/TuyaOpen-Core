@@ -152,26 +152,21 @@ if(TARGET tuyaopen-headers)
     target_include_directories(tuyaopen-headers INTERFACE ${_port_incs})
 endif()
 
-# core modules reference port-defined symbols (the api/kv/netif/ble card
-# instances; network now goes straight to lwIP and is no longer part of the
-# cycle), and esp-idf component libraries are sorted by dependency topology and
-# have no --start-group: a single link pass may leave those references
-# unresolved. Put all core libraries and the port into one GNU ld link group so
-# they are rescanned (the same mechanism as the --start-group in the linux-side
-# CMakeLists). TUYAOPEN_CORE_LIBS is exported by core's tuyaopen-core.cmake (the
-# list of core module target names).
-#
-# The port archive enters the group as $<TARGET_FILE:...> instead of a target
-# name: CMake de-duplicates target items against the `... INTERFACE
-# tuyaopen-port` line below and can place the archive outside the group, where
-# the core libraries' card references stay unresolved.
-if(DEFINED TUYAOPEN_CORE_LIBS)
-    target_link_libraries(${COMPONENT_LIB} INTERFACE
-        "-Wl,--start-group" ${TUYAOPEN_CORE_LIBS} $<TARGET_FILE:tuyaopen-port> "-Wl,--end-group")
-else()
-    target_link_libraries(${COMPONENT_LIB} INTERFACE
-        "-Wl,--start-group" $<TARGET_FILE:tuyaopen-port> "-Wl,--end-group")
-endif()
+# core modules reference the port's card instances (api/kv/netif/ble); the port
+# itself references no core symbol (measured: 0 undefined core_* symbols in
+# libtuyaopen-port.a), so there is NO core<->port link cycle and no GNU ld
+# --start-group is needed. What matters is the order
+#     core libraries -> port archive -> esp-idf dependencies (bt/NimBLE ...),
+# and that order follows from esp-idf component registration: this component is
+# REQUIRES-linked to tuyaopen-core and bt, so the components are processed and
+# linked in dependency order. A plain target created by add_subdirectory() is
+# not part of the component graph (REQUIRES cannot resolve it, and component
+# requirements are replayed in script() mode where add_subdirectory is not
+# scriptable) -- that is why the port stays a real esp-idf component. The port
+# is linked by target name; the former --start-group/$<TARGET_FILE:...> wrapper
+# was defensive and is not required (a peer experiment removing it links and
+# runs identically).
+target_link_libraries(${COMPONENT_LIB} INTERFACE tuyaopen-port)
 
 target_link_libraries(${COMPONENT_LIB} INTERFACE tuyaopen-port)
 
