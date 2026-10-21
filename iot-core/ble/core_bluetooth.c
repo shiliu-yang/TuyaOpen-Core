@@ -16,8 +16,8 @@
  * registered by core_ble_bt_init(). GAP translation covers stack
  * init/deinit, connect, disconnect, advertisement report, connection
  * parameter request/update and RSSI; GATT translation covers MTU exchange,
- * notify/write/read/subscribe events and, under TY_HS_BLE_ROLE_CENTRAL,
- * service, characteristic and descriptor discovery with CCCD enabling.
+ * notify/write/read/subscribe events (the GATT client discovery path was
+ * removed: the supported role is peripheral only).
  *
  * core_ble_bt_init() registers the callbacks first, allocates the service and
  * characteristic tables with the contract's maximum sizes, builds the common
@@ -31,9 +31,9 @@
  * PERIPHERAL/CENTRAL (BEACON and Mesh included) as unsupported.
  *
  * The remaining API covers address access, maximum link count, advertising
- * and scan control, RSSI, connection parameters, connect-and-discovery
- * (central only), disconnect, server notify/send/read updates, client
- * send/read, and MTU exchange. Before the service table exists, the notify
+ * and scan control, RSSI, connection parameters, disconnect and the GATT
+ * server notify/send/read/MTU paths. The GATT client / central API was
+ * removed together with the contract members. Before the service table exists, the notify
  * and read-update paths return OPRT_RESOURCE_NOT_READY instead of
  * dereferencing it.
  *
@@ -112,10 +112,6 @@ static uint16_t core_ble_common_connect_handle = CORE_BLE_GATT_INVALID_HANDLE;
 /**< Use CORE Definitions, CORE Only Support One GATT Link at one time, follow
  * Bluetooth Spec. */
 static CORE_BLE_EVT_FUNC_CB core_ble_event_callback;
-#if (TY_HS_BLE_ROLE_CENTRAL)
-static CORE_BLE_PEER_INFO_T core_ble_peer = {0};
-#endif
-
 static __attribute__((unused)) uint16_t core_ble_uuid16_convert(CORE_BLE_UUID_T *p_uuid)
 {
     uint16_t uuid16 = 0xFFFF;
@@ -179,25 +175,6 @@ static void core_ble_kernel_gap_event_callback(CORE_BLE_GAP_PARAMS_EVT_T *p_even
                 pcore_ble_service_char[CORE_MATTER_TUYA_T3_CHAR_INDEX].handle;
 #endif
 
-        } else {
-#if (TY_HS_BLE_ROLE_CENTRAL)
-            OPERATE_RET disc_ret = OPRT_OK;
-
-            core_ble_peer.conn_handle = p_event->conn_handle;
-            /* Try To Discovery All Service, And Find the correct service
-             * (with an empty card disc_ret=OPRT_NOT_SUPPORTED, reported as a
-             * discovery failure) */
-            CORE_BLUETOOTH_EXEC_OP_VAL(disc_ret, gattc_all_service_discovery, p_event->conn_handle);
-            if (disc_ret != 0) {
-                core_event.type = CORE_BLE_EVT_CENTRAL_CONNECT_DISCOVERY;
-                core_event.ble_event.connect.result = OPRT_OS_ADAPTER_BLE_SVC_DISC_FAILED;
-                memcpy(&core_event.ble_event.connect.peer, &core_ble_peer, sizeof(CORE_BLE_PEER_INFO_T));
-            } else {
-                /* We will still be in service finding procedure. Should not
-                 * report any states into CORE Application */
-                return;
-            }
-#endif
         }
     } break;
 
@@ -286,112 +263,6 @@ static void core_ble_kernel_gatt_event_callback(CORE_BLE_GATT_PARAMS_EVT_T *p_ev
         core_event.ble_event.exchange_mtu.conn_handle = p_event->conn_handle;
         core_event.ble_event.exchange_mtu.mtu = p_event->gatt_event.exchange_mtu;
     } break;
-#if (TY_HS_BLE_ROLE_CENTRAL)
-    case CORE_BLE_GATT_EVT_MTU_RSP: {
-        core_event.type = CORE_BLE_EVT_MTU_RSP;
-        core_event.ble_event.exchange_mtu.conn_handle = p_event->conn_handle;
-        core_event.ble_event.exchange_mtu.mtu = p_event->gatt_event.exchange_mtu;
-    } break;
-
-    case CORE_BLE_GATT_EVT_PRIM_SEV_DISCOVERY: {
-        CORE_BLE_GATT_SVC_DISC_TYPE_T *p_svc_disc = &p_event->gatt_event.svc_disc;
-        int svc_result = OPRT_INVALID_PARM;
-
-        core_event.type = CORE_BLE_EVT_CENTRAL_CONNECT_DISCOVERY;
-        if (p_event->result == OPRT_OK) {
-
-            /**< Find the All Characteristic. */
-            uint8_t i = 0;
-            for (i = 0; i < p_svc_disc->svc_num; i++) {
-                if (core_ble_uuid16_convert(&p_svc_disc->services[i].uuid) == CORE_BLE_CMD_SERVICE_UUID_V1 ||
-                    core_ble_uuid16_convert(&p_svc_disc->services[i].uuid) == CORE_BLE_CMD_SERVICE_UUID_V2) {
-                    CORE_BLUETOOTH_EXEC_OP_VAL(svc_result, gattc_all_char_discovery, p_event->conn_handle,
-                                              p_svc_disc->services[i].start_handle,
-                                              p_svc_disc->services[i].end_handle);
-                    if (svc_result == 0) {
-                        return;
-                    }
-                }
-            }
-            memcpy(&core_event.ble_event.connect.peer, &core_ble_peer, sizeof(CORE_BLE_PEER_INFO_T));
-            core_event.ble_event.connect.result = OPRT_OS_ADAPTER_BLE_SVC_DISC_FAILED;
-        } else {
-            /**< Return Error, Cannot Discovery Service */
-            memcpy(&core_event.ble_event.connect.peer, &core_ble_peer, sizeof(CORE_BLE_PEER_INFO_T));
-            core_event.ble_event.connect.result = p_event->result;
-        }
-    } break;
-
-    case CORE_BLE_GATT_EVT_CHAR_DISCOVERY: {
-
-        CORE_BLE_GATT_CHAR_DISC_TYPE_T *p_char_disc = &p_event->gatt_event.char_disc;
-        int char_result = OPRT_INVALID_PARM;
-
-        core_event.type = CORE_BLE_EVT_CENTRAL_CONNECT_DISCOVERY;
-        if (p_event->result == OPRT_OK) {
-            uint8_t i = 0;
-            for (i = 0; i < p_char_disc->char_num; i++) {
-                if (core_ble_uuid16_convert(&p_char_disc->characteristics[i].uuid) == CORE_BLE_CMD_WRITE_CHAR_UUID_V1 ||
-                    core_ble_uuid16_convert(&p_char_disc->characteristics[i].uuid) == CORE_BLE_CMD_WRITE_CHAR_UUID_V2) {
-
-                    core_ble_peer.char_handle[CORE_COMMON_WRITE_CHAR_INDEX] = p_char_disc->characteristics[i].handle;
-                } else if (core_ble_uuid16_convert(&p_char_disc->characteristics[i].uuid) ==
-                               CORE_BLE_CMD_NOTIFY_CHAR_UUID_V1 ||
-                           core_ble_uuid16_convert(&p_char_disc->characteristics[i].uuid) ==
-                               CORE_BLE_CMD_NOTIFY_CHAR_UUID_V2) {
-
-                    core_ble_peer.char_handle[CORE_COMMON_NOTIFY_CHAR_INDEX] = p_char_disc->characteristics[i].handle;
-                } else if (core_ble_uuid16_convert(&p_char_disc->characteristics[i].uuid) ==
-                           CORE_BLE_CMD_READ_CHAR_UUID_V2) {
-
-                    core_ble_peer.char_handle[CORE_COMMON_READ_CHAR_INDEX] = p_char_disc->characteristics[i].handle;
-                }
-            }
-
-            /**< Find Characteristic Descriptor */
-            if (core_ble_peer.char_handle[CORE_COMMON_NOTIFY_CHAR_INDEX] != CORE_BLE_GATT_INVALID_HANDLE) {
-                CORE_BLUETOOTH_EXEC_OP_VAL(char_result, gattc_char_desc_discovery, p_event->conn_handle,
-                                          core_ble_peer.char_handle[CORE_COMMON_NOTIFY_CHAR_INDEX], 0xFFFF);
-                if (char_result == OPRT_OK) {
-                    return;
-                }
-            }
-
-            memcpy(&core_event.ble_event.connect.peer, &core_ble_peer, sizeof(CORE_BLE_PEER_INFO_T));
-            core_event.ble_event.connect.result = OPRT_OS_ADAPTER_BLE_DESC_DISC_FAILED;
-        } else {
-            /**< Return Error, Cannot Discovery Service */
-            memcpy(&core_event.ble_event.connect.peer, &core_ble_peer, sizeof(CORE_BLE_PEER_INFO_T));
-            core_event.ble_event.connect.result = p_event->result;
-        }
-
-    } break;
-
-    case CORE_BLE_GATT_EVT_CHAR_DESC_DISCOVERY: {
-        CORE_BLE_GATT_DESC_DISC_TYPE_T *p_desc_disc = &p_event->gatt_event.desc_disc;
-        uint8_t cccd_enable[2] = {0x01, 0x00};
-        int desc_result;
-
-        core_event.type = CORE_BLE_EVT_CENTRAL_CONNECT_DISCOVERY;
-        if (p_event->result == OPRT_OK) {
-            CORE_BLUETOOTH_EXEC_OP_VAL(desc_result, gattc_write_without_rsp, p_event->conn_handle,
-                                      p_desc_disc->cccd_handle, cccd_enable, sizeof(cccd_enable));
-            if (desc_result != 0) {
-                core_event.ble_event.connect.result = OPRT_OS_ADAPTER_BLE_DESC_DISC_FAILED;
-            } else if (p_event->conn_handle != core_ble_peer.conn_handle) {
-                core_event.ble_event.connect.result = OPRT_OS_ADAPTER_BLE_HANDLE_ERROR;
-                memcpy(&core_event.ble_event.connect.peer, &core_ble_peer, sizeof(CORE_BLE_PEER_INFO_T));
-            } else {
-                core_event.ble_event.connect.result = OPRT_OK;
-                memcpy(&core_event.ble_event.connect.peer, &core_ble_peer, sizeof(CORE_BLE_PEER_INFO_T));
-            }
-        } else {
-            /**< Return Error, Cannot Discovery characteristic descriptor */
-            core_event.ble_event.connect.result = p_event->result;
-            memcpy(&core_event.ble_event.connect.peer, &core_ble_peer, sizeof(CORE_BLE_PEER_INFO_T));
-        }
-    } break;
-#endif
     case CORE_BLE_GATT_EVT_NOTIFY_TX: {
         core_event.type = CORE_BLE_EVT_NOTIFY_TX;
         core_event.ble_event.notify_result.conn_handle = p_event->conn_handle;
@@ -415,15 +286,6 @@ static void core_ble_kernel_gatt_event_callback(CORE_BLE_GATT_PARAMS_EVT_T *p_ev
         core_event.ble_event.data_report.report.len = p_event->gatt_event.data_report.report.len;
         core_event.ble_event.data_report.report.p_data = p_event->gatt_event.data_report.report.p_data;
     } break;
-#if (TY_HS_BLE_ROLE_CENTRAL)
-    case CORE_BLE_GATT_EVT_READ_RX: {
-        core_event.type = CORE_BLE_EVT_READ_RX;
-        core_event.ble_event.data_read.peer.conn_handle = p_event->conn_handle;
-        core_event.ble_event.data_read.peer.char_handle[0] = p_event->gatt_event.data_read.char_handle;
-        core_event.ble_event.data_read.report.len = p_event->gatt_event.data_read.report.len;
-        core_event.ble_event.data_read.report.p_data = p_event->gatt_event.data_read.report.p_data;
-    } break;
-#endif
     case CORE_BLE_GATT_EVT_SUBSCRIBE: {
         if (p_event->result == OPRT_OK) {
             core_event.type = CORE_BLE_EVT_SUBSCRIBE;
@@ -945,50 +807,6 @@ core_ble_conn_param_update(const CORE_BLE_PEER_INFO_T peer, CORE_BLE_CONN_PARAMS
  *          The connection event is given through CORE_BLE_EVT_CENTRAL_CONNECT_DISCOVERY
  * event !!!!!!
  */
-#if (TY_HS_BLE_ROLE_CENTRAL)
-OPERATE_RET
-core_ble_connect_and_discovery(const CORE_BLE_PEER_INFO_T peer, CORE_BLE_CONN_PARAMS_T const *p_conn_params)
-{
-    CORE_BLE_GAP_ADDR_T core_conn_addr = {0};
-    CORE_BLE_GAP_SCAN_PARAMS_T core_scan_params = {0};
-    CORE_BLE_GAP_CONN_PARAMS_T core_conn_params = {0};
-
-    if (p_conn_params == NULL) {
-        core_conn_params.conn_interval_max = 0x12;
-        core_conn_params.conn_interval_min = 0x12;
-        core_conn_params.conn_latency = 0;
-        core_conn_params.conn_sup_timeout = 0x100;
-    } else {
-        core_conn_params.conn_interval_max = p_conn_params->max_conn_interval;
-        core_conn_params.conn_interval_min = p_conn_params->min_conn_interval;
-        core_conn_params.conn_latency = p_conn_params->latency;
-        core_conn_params.conn_sup_timeout = p_conn_params->conn_sup_timeout;
-    }
-
-    core_scan_params.interval = 0x0010;
-    core_scan_params.window = 0x0010;
-
-    if (peer.peer_addr.type == CORE_BLE_ADDR_TYPE_RANDOM) {
-        core_conn_addr.type = CORE_BLE_GAP_ADDR_TYPE_RANDOM;
-    } else {
-        core_conn_addr.type = CORE_BLE_GAP_ADDR_TYPE_PUBLIC;
-    }
-    memcpy(core_conn_addr.addr, peer.peer_addr.addr, 6);
-
-    memset(&core_ble_peer, 0, sizeof(CORE_BLE_PEER_INFO_T));
-
-    core_ble_peer.char_handle[CORE_COMMON_WRITE_CHAR_INDEX] = CORE_BLE_GATT_INVALID_HANDLE;
-    core_ble_peer.char_handle[CORE_COMMON_NOTIFY_CHAR_INDEX] = CORE_BLE_GATT_INVALID_HANDLE;
-    core_ble_peer.char_handle[CORE_COMMON_READ_CHAR_INDEX] = CORE_BLE_GATT_INVALID_HANDLE;
-
-    /**Assign Peer Info Into CORE Peer Info*/
-    memcpy(&core_ble_peer, &peer, sizeof(CORE_BLE_PEER_INFO_T));
-
-    /**< After do connecting one device, we will discovery all service and char.
-     */
-    CORE_BLUETOOTH_EXEC_OP(gap_connect, &core_conn_addr, &core_scan_params, &core_conn_params);
-}
-#endif
 /**
  * @brief   Disconnect from peer
  * @param   [in] conn_handle: the connection handle
@@ -1126,44 +944,6 @@ OPERATE_RET core_ble_server_common_read_update(CORE_BLE_DATA_T *p_data)
 
     return OPRT_INVALID_PARM;
 }
-#if (TY_HS_BLE_ROLE_CENTRAL)
-/**
- * @brief   [Ble Central] write data to peer within command channel
- * @param   [in] p_data: pointer to data, refer to CORE_BLE_DATA_T
- * @return  SUCCESS
- *          ERROR Refer to platform error code
- * */
-OPERATE_RET core_ble_client_common_send(const CORE_BLE_PEER_INFO_T peer, CORE_BLE_DATA_T *p_data)
-{
-    if (p_data == NULL) {
-        return OPRT_INVALID_PARM;
-    }
-
-    if (peer.conn_handle != CORE_BLE_GATT_INVALID_HANDLE &&
-        peer.char_handle[CORE_COMMON_WRITE_CHAR_INDEX] != CORE_BLE_GATT_INVALID_HANDLE) {
-        CORE_BLUETOOTH_EXEC_OP(gattc_write_without_rsp, peer.conn_handle,
-                              peer.char_handle[CORE_COMMON_WRITE_CHAR_INDEX], p_data->p_data, p_data->len);
-    }
-
-    return OPRT_OS_ADAPTER_BLE_WRITE_FAILED;
-}
-
-/**
- * @brief   [Ble Central] read data from peer within command channel
- * @param   [in] p_data: pointer to data, refer to CORE_BLE_DATA_T
- * @return  SUCCESS
- *          ERROR Refer to platform error code
- * */
-OPERATE_RET core_ble_client_common_read(const CORE_BLE_PEER_INFO_T peer)
-{
-    if (peer.conn_handle != CORE_BLE_GATT_INVALID_HANDLE &&
-        peer.char_handle[CORE_COMMON_READ_CHAR_INDEX] != CORE_BLE_GATT_INVALID_HANDLE) {
-        CORE_BLUETOOTH_EXEC_OP(gattc_read, peer.conn_handle, peer.char_handle[CORE_COMMON_READ_CHAR_INDEX]);
-    }
-
-    return OPRT_OS_ADAPTER_BLE_READ_FAILED;
-}
-#endif
 /**
  * @brief   [Ble Peripheral] Reply to an ATT_MTU exchange request by sending an
  * Exchange MTU Response to the client.
@@ -1183,27 +963,3 @@ OPERATE_RET core_ble_server_exchange_mtu_reply(const CORE_BLE_PEER_INFO_T peer, 
 
     CORE_BLUETOOTH_EXEC_OP(gatts_exchange_mtu_reply, conn_handle, server_mtu);
 }
-
-#if (TY_HS_BLE_ROLE_CENTRAL)
-/**
- * @brief   [Ble Central] Start an ATT_MTU exchange by sending an Exchange MTU
- * Request to the server.
- * @param   [in] att_mtu: mtu size
- * @return  SUCCESS
- *          ERROR Refer to platform error code
- *          ERROR_INVALID_CONN_HANDLE Invalid connection handle.
- *          ERROR_INVALID_STATE Invalid connection state or an ATT_MTU exchange
- * was already requested once.
- * */
-OPERATE_RET core_ble_client_exchange_mtu_request(const CORE_BLE_PEER_INFO_T peer, uint16_t client_mtu)
-{
-    uint16_t conn_handle = peer.conn_handle;
-
-    if (client_mtu < 23 || client_mtu > 247) {
-        return OPRT_INVALID_PARM;
-    }
-
-    CORE_BLUETOOTH_EXEC_OP(gattc_exchange_mtu_request, conn_handle, client_mtu);
-}
-
-#endif

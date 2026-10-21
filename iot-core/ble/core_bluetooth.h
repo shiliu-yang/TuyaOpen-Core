@@ -16,8 +16,8 @@
  * registered by core_ble_bt_init(). GAP translation covers stack
  * init/deinit, connect, disconnect, advertisement report, connection
  * parameter request/update and RSSI; GATT translation covers MTU exchange,
- * notify/write/read/subscribe events and, under TY_HS_BLE_ROLE_CENTRAL,
- * service, characteristic and descriptor discovery with CCCD enabling.
+ * notify/write/read/subscribe events (the GATT client discovery path was
+ * removed: the supported role is peripheral only).
  *
  * core_ble_bt_init() registers the callbacks first, allocates the service and
  * characteristic tables with the contract's maximum sizes, builds the common
@@ -31,9 +31,9 @@
  * PERIPHERAL/CENTRAL (BEACON and Mesh included) as unsupported.
  *
  * The remaining API covers address access, maximum link count, advertising
- * and scan control, RSSI, connection parameters, connect-and-discovery
- * (central only), disconnect, server notify/send/read updates, client
- * send/read, and MTU exchange. Before the service table exists, the notify
+ * and scan control, RSSI, connection parameters, disconnect and the GATT
+ * server notify/send/read/MTU paths. The GATT client / central API was
+ * removed together with the contract members. Before the service table exists, the notify
  * and read-update paths return OPRT_RESOURCE_NOT_READY instead of
  * dereferencing it.
  *
@@ -175,24 +175,6 @@ OPERATE_RET
 core_ble_conn_param_update(const CORE_BLE_PEER_INFO_T peer, CORE_BLE_CONN_PARAMS_T const *p_conn_params);
 
 /**
- * @brief   Start connecting one peer
- * @param : [in] peer info.     include address and address type
- *          [in] conn_param:    connect parameters including interval, peer info
- * \
- * @return  SUCCESS             Successfully initiated connecting procedure.
- *
- *          The connection event is given through CORE_BLE_EVT_CENTRAL_CONNECT_DISCOVERY
- * event !!!!!!
- *
- * @note    Provided only for the central role (when the TY_HS_BLE_ROLE_CENTRAL
- *          build macro is enabled): the implementation is defined inside
- *          #if (TY_HS_BLE_ROLE_CENTRAL) in core_bluetooth.c. The macro is not
- *          defined anywhere in this tree.
- */
-OPERATE_RET
-core_ble_connect_and_discovery(const CORE_BLE_PEER_INFO_T peer, CORE_BLE_CONN_PARAMS_T const *p_conn_params);
-
-/**
  * @brief   Disconnect from peer
  * @param   [in] conn_handle: the connection handle
  * @return  SUCCESS         Successfully disconnected.
@@ -237,23 +219,6 @@ OPERATE_RET core_ble_server_common_read_update_ext(uint16_t index, CORE_BLE_DATA
  *          ERROR Refer to platform error code
  * */
 OPERATE_RET core_ble_server_common_read_update(CORE_BLE_DATA_T *p_data);
-
-/**
- * @brief   [Ble Central] write data to peer within command channel
- * @param   [in] p_data: pointer to data, refer to CORE_BLE_DATA_T
- * @return  SUCCESS
- *          ERROR Refer to platform error code
- * */
-OPERATE_RET core_ble_client_common_send(const CORE_BLE_PEER_INFO_T peer, CORE_BLE_DATA_T *p_data);
-
-/**
- * @brief   [Ble Central] read data from peer within command channel
- * @param   [in] p_data: pointer to data, refer to CORE_BLE_DATA_T
- * @return  SUCCESS
- *          ERROR Refer to platform error code
- * */
-OPERATE_RET core_ble_client_common_read(const CORE_BLE_PEER_INFO_T peer);
-
 /**
  * @brief   [Ble Peripheral] Reply to an ATT_MTU exchange request by sending an
  * Exchange MTU Response to the client.
@@ -264,19 +229,6 @@ OPERATE_RET core_ble_client_common_read(const CORE_BLE_PEER_INFO_T peer);
  * !!!!!!
  * */
 OPERATE_RET core_ble_server_exchange_mtu_reply(const CORE_BLE_PEER_INFO_T peer, uint16_t server_mtu);
-
-/**
- * @brief   [Ble Central] Start an ATT_MTU exchange by sending an Exchange MTU
- * Request to the server.
- * @param   [in] att_mtu: mtu size
- * @return  SUCCESS
- *          ERROR Refer to platform error code
- *          ERROR_INVALID_CONN_HANDLE Invalid connection handle.
- *          ERROR_INVALID_STATE Invalid connection state or an ATT_MTU exchange
- * was already requested once.
- * */
-OPERATE_RET core_ble_client_exchange_mtu_request(const CORE_BLE_PEER_INFO_T peer, uint16_t client_mtu);
-
 #ifdef __cplusplus
 }
 #endif
