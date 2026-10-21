@@ -1,29 +1,28 @@
 /**
  * @file core_bluetooth_ops.h
- * @brief 契约层（interface）：core_bluetooth 平台 ops 卡 + CORE_BLE_* 镜像类型集
+ * @brief Contract header for the CORE BLE ops card: CORE_BLUETOOTH_OPS_T and the
+ *        CORE_BLE_* type set used by its member signatures.
  *
- * **分层定位**：同 core_api_ops.h——core 与 port 之间的中性契约，物理上放在
- * port 下（每个芯片平台各一份，见 platform/<P>/port/interface）。依赖方向：
- *   core ──include──▶ 本头 ◀──include── port      # 谁都不依赖谁
- *   core ──extern core_bluetooth_ops_platform / 经卡调用──▶ port   # 上层→下层，允许
- *   port ──▶ core                                  # 禁止（include 与调用都不许）
+ * A types-only contract between core and port. The port assembles
+ * core_bluetooth_ops_platform from CORE_BLUETOOTH_OPS_T, and core's
+ * iot-core/ble/core_bluetooth.c dispatches all BLE operations through it. The
+ * card has 18 members covering stack control, GAP and GATT server (the GATT
+ * client / central and scan members were removed: the supported role is
+ * peripheral only, which neither scans nor initiates connections); member signatures use only the CORE_BLE_* types defined here and in
+ * core_bluetooth_def.h.
  *
- * 背景：core 的 iot-core/ble/core_bluetooth.c 原直调 tkl_ble_*（上游 TKL
- * 平台接口）并在内部用 TKL_BLE_* 类型搭值对象。2026-10 解耦为经卡分发：
- * 本文件定义 CORE_BLUETOOTH_OPS_T（27 成员，与 port 的 port_bluetooth.h 接口
- * 面一一对应）与**镜像类型集**（CORE_BLE_* 前缀，逐字段镜像 port 的
- * port_bluetooth_def.h）；公开类型集在同目录 core_bluetooth_def.h
- * （core 的公开 API core_bluetooth.h 亦引用它）。
- *
- * 约定：
- * - port 侧适配层（linux: port/src/port_bt/port_bluetooth_ops.c）以
- *   "布局逐字节一致 + 指针强转"接线，并用编译期 sizeof/offsetof 断言兜底
- *   （镜像一旦漂移即编译失败）；
- * - **注册次序约束**：gap/gatt 回调注册必须先于 stack_init 与
- *   gatts_service_add（bluez 层首次调用锁存回调指针，见
- *   core_bluetooth.c 的 core_ble_bt_init 次序）；
- * - gatts_service_add 的入参必须非 const（port 回写 handle）；
- * - 无 BLE 能力的平台（卡成员 NULL）由 core_bluetooth.c 统一优雅降级。
+ * Conventions:
+ * - the port adapter (linux: port/src/port_bluetooth.c, card section) wires the
+ *   members to its implementation by byte-identical layout plus pointer casts,
+ *   backed by compile-time sizeof/offsetof assertions (a drifting layout fails
+ *   the build);
+ * - callback registration (gap_callback_register / gatt_callback_register)
+ *   must precede stack_init and gatts_service_add, because the bluez layer
+ *   latches the callback pointers on first use;
+ * - gatts_service_add takes a non-const argument (the port writes back the
+ *   characteristic handles);
+ * - a platform without BLE leaves the card members NULL and
+ *   core_bluetooth.c degrades gracefully (dispatch returns OPRT_NOT_SUPPORTED).
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  *
@@ -31,7 +30,7 @@
 #ifndef __CORE_BLUETOOTH_OPS_H__
 #define __CORE_BLUETOOTH_OPS_H__
 
-#include "core_bluetooth_def.h"   /* 公开集（CORE_BLE_DATA_T 等复用） */
+#include "core_bluetooth_def.h"   /* public type set (reused for CORE_BLE_DATA_T etc.) */
 
 #ifndef __CORE_BLUETOOTH_OPS_TYPES_H__
 #define __CORE_BLUETOOTH_OPS_TYPES_H__
@@ -39,12 +38,14 @@
 #include "tuya_cloud_types.h"
 #include "tuya_error_code.h"
 
-/* 说明：本类型集为 TKL BLE 类型集的 CORE 自持镜像（CORE_BLE_* 前缀）——
- * 卡的成员签名只能用 CORE 类型，port 侧适配层靠"布局逐字节一致 + 强转"
- * 接线（见本文件头的布局断言约定）。
- * 与公开集（core_bluetooth_def.h）的冲突项已按改名表处理：
- *   DATA_T 复用公开 CORE_BLE_DATA_T；DATA_REPORT_T/SUBSCRBE_EVT_T/READ_CHAR_EVT_T
- *   加 GATT_ 前缀；ADV 报告枚举值加 GAP_ 前缀；SCAN_TYPE 宏不镜像（用位域）。 */
+/* Note: this type set carries the CORE_BLE_* prefix so card member signatures
+ * use CORE types only; the port adapter wires it to the platform BLE types by
+ * byte-identical layout plus a cast (see the layout assertion convention in
+ * the file header). Where this set overlaps the public set
+ * (core_bluetooth_def.h), the names are chosen as follows: DATA_T reuses the
+ * public CORE_BLE_DATA_T; the report/subscribe/read event types use a GATT_
+ * prefix; the ADV report enumerators use a GAP_ prefix; scan parameters use a
+ * bitfield instead of SCAN_TYPE macros. */
 
 #define CORE_BLE_ROLE_SERVER                                                 (0x01)  /**< Gatt Server Role, for ble peripheral.*/
 #define CORE_BLE_ROLE_CLIENT                                                 (0x02)  /**< Gatt Client Role, for ble central. */
@@ -148,8 +149,7 @@ typedef struct {
                                                             If set to 0, the scanner will not receive advertising packets
                                                             on secondary advertising channels, and will not be able
                                                             to receive long advertising PDUs. */
-    uint8_t                 active : 1;                 /**< [Tuya Need]!!!! If 1, perform active scanning by sending scan requests.
-                                                            This parameter is ignored when used with @ref gap_connect. */
+    uint8_t                 active : 1;                 /**< [Tuya Need]!!!! If 1, perform active scanning by sending scan requests. */
     uint8_t                 scan_phys;                  /**< Refer to @CORE_BLE_GAP_PHY_1MBPS. CORE_BLE_GAP_PHY_2MBPS*/
     uint16_t                interval;                   /**< Scan interval in 625 us units. */
     uint16_t                window;                     /**< Scan window in 625 us units. */
@@ -390,16 +390,16 @@ typedef void(*CORE_BLE_GATT_EVT_FUNC_CB)(CORE_BLE_GATT_PARAMS_EVT_T *p_event);
 
 
 /* ---------------------------------------------------------------------------
- * BLE 平台 ops 卡：port 组装（linux 为 port_bt 适配层；无 BLE 能力的平台
- * 全成员 NULL）。成员签名用上面的镜像类型；与 port 的 port_bluetooth.h
- * 27 个接口一一对应。
+ * BLE platform ops card: assembled by the port (platforms without BLE leave
+ * all members NULL). Member signatures use the types defined above; the card
+ * has one member per interface in the port's port_bluetooth.h.
  * --------------------------------------------------------------------------- */
 typedef struct {
     /* stack */
     OPERATE_RET (*stack_init)(uint8_t role);
     OPERATE_RET (*stack_deinit)(uint8_t role);
     OPERATE_RET (*stack_gatt_link)(uint16_t *p_link);
-    /* 事件注册（回调参数为镜像事件类型；注册须先于 stack_init） */
+    /* Event registration (callback arguments use the event types above; must precede stack_init) */
     OPERATE_RET (*gap_callback_register)(const CORE_BLE_GAP_EVT_FUNC_CB gap_evt);
     OPERATE_RET (*gatt_callback_register)(const CORE_BLE_GATT_EVT_FUNC_CB gatt_evt);
     /* GAP */
@@ -409,26 +409,14 @@ typedef struct {
     OPERATE_RET (*gap_adv_stop)(void);
     OPERATE_RET (*gap_adv_rsp_data_set)(CORE_BLE_DATA_T const *p_adv, CORE_BLE_DATA_T const *p_scan_rsp);
     OPERATE_RET (*gap_adv_rsp_data_update)(CORE_BLE_DATA_T const *p_adv, CORE_BLE_DATA_T const *p_scan_rsp);
-    OPERATE_RET (*gap_scan_start)(CORE_BLE_GAP_SCAN_PARAMS_T const *p_scan_params);
-    OPERATE_RET (*gap_scan_stop)(void);
-    OPERATE_RET (*gap_connect)(CORE_BLE_GAP_ADDR_T const *p_peer_addr, CORE_BLE_GAP_SCAN_PARAMS_T const *p_scan_params,
-                               CORE_BLE_GAP_CONN_PARAMS_T const *p_conn_params);
     OPERATE_RET (*gap_disconnect)(uint16_t conn_handle, uint8_t hci_reason);
     OPERATE_RET (*gap_conn_param_update)(uint16_t conn_handle, CORE_BLE_GAP_CONN_PARAMS_T const *p_conn_params);
     OPERATE_RET (*gap_rssi_get)(uint16_t conn_handle);
     /* GATT server */
-    OPERATE_RET (*gatts_service_add)(CORE_BLE_GATTS_PARAMS_T *p_service); /* 非 const：port 回写 handle */
+    OPERATE_RET (*gatts_service_add)(CORE_BLE_GATTS_PARAMS_T *p_service); /* non-const: port writes back handles */
     OPERATE_RET (*gatts_value_set)(uint16_t conn_handle, uint16_t char_handle, uint8_t *p_data, uint16_t length);
     OPERATE_RET (*gatts_value_notify)(uint16_t conn_handle, uint16_t char_handle, uint8_t *p_data, uint16_t length);
     OPERATE_RET (*gatts_exchange_mtu_reply)(uint16_t conn_handle, uint16_t server_rx_mtu);
-    /* GATT client */
-    OPERATE_RET (*gattc_all_service_discovery)(uint16_t conn_handle);
-    OPERATE_RET (*gattc_all_char_discovery)(uint16_t conn_handle, uint16_t start_handle, uint16_t end_handle);
-    OPERATE_RET (*gattc_char_desc_discovery)(uint16_t conn_handle, uint16_t start_handle, uint16_t end_handle);
-    OPERATE_RET (*gattc_write_without_rsp)(uint16_t conn_handle, uint16_t char_handle, uint8_t *p_data,
-                                           uint16_t length);
-    OPERATE_RET (*gattc_read)(uint16_t conn_handle, uint16_t char_handle);
-    OPERATE_RET (*gattc_exchange_mtu_request)(uint16_t conn_handle, uint16_t client_rx_mtu);
 } CORE_BLUETOOTH_OPS_T;
 
 /**

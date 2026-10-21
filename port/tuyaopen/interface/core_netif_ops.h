@@ -1,11 +1,12 @@
 /**
  * @file core_netif_ops.h
- * @brief 契约层（interface）：core_netif 平台 ops 卡类型 + 链路状态类型。
+ * @brief Contract header for the CORE network interface ops card:
+ *        CORE_NETIF_OPS_T, the link status enum and the link change callback.
  *
- * 分层定位与依赖方向见 core_api_ops.h 的文件头。本头只含类型：
- *  - `CORE_NETIF_LINK_STAT_E` / `CORE_NETIF_LINK_CHANGE_CB`（原在 core 的 core_netif.h，
- *    随契约一并迁到本层；core 的 core_netif.h 反向 include 本头以保持其 API 面不变）
- *  - `CORE_NETIF_OPS_T`（卡类型）
+ * A types-only contract. core's core_netif.h includes this header and
+ * dispatches core_netif_get_ip and core_netif_set_link_cb through the card,
+ * which the port assembles as core_netif_ops_platform. The port reports link
+ * up when at least one non-loopback interface is up and link down otherwise.
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
@@ -19,26 +20,26 @@
 extern "C" {
 #endif
 
-/* 网络接口链路状态 */
+/* Network interface link status */
 typedef enum {
-    CORE_NETIF_LINK_DOWN = 0, ///< 链路 down（无非回环接口 up）
-    CORE_NETIF_LINK_UP,       ///< 链路 up（至少一个非回环接口 up）
+    CORE_NETIF_LINK_DOWN = 0, ///< link down (no non-loopback interface is up)
+    CORE_NETIF_LINK_UP,       ///< link up (at least one non-loopback interface is up)
 } CORE_NETIF_LINK_STAT_E;
 
 /**
- * @brief 链路状态变化回调
+ * @brief Link status change callback
  *
- * @param[out] status 当前链路状态
+ * @param[out] status current link status
  */
 typedef void (*CORE_NETIF_LINK_CHANGE_CB)(CORE_NETIF_LINK_STAT_E status);
 
 /**
- * @brief core_netif 平台 ops：成员与 port 的 netif 实现一一对应
+ * @brief core_netif platform ops: one member per port netif implementation
  */
 typedef struct {
-    /* 取本机网络接口 IP；见 core_netif.h 的 core_netif_get_ip */
+    /* Get the local interface IP; see core_netif_get_ip in core_netif.h */
     OPERATE_RET (*get_ip)(NW_IP_S *ip);
-    /* 注册链路状态变化回调；见 core_netif.h 的 core_netif_set_link_cb */
+    /* Register the link status change callback; see core_netif_set_link_cb in core_netif.h */
     OPERATE_RET (*set_link_cb)(CORE_NETIF_LINK_CHANGE_CB cb);
 } CORE_NETIF_OPS_T;
 

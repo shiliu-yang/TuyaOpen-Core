@@ -1,17 +1,13 @@
 /**
  * @file core_bluetooth_def.h
- * @brief 契约层（interface）：CORE BLE 公开类型集（设备地址 / 广播与连接参数 /
- *        事件结构 / Tuya BLE 服务与特征 UUID）。
+ * @brief CORE BLE public type set: device addresses, advertising / scan /
+ *        connection parameters, GAP and GATT event structures and callbacks,
+ *        and the Tuya BLE service / characteristic UUIDs and index macros.
  *
- * **分层定位**：同 core_api_ops.h 的契约层——本头只含类型，core 与 port 都只
- * include、不定义。引用方：core 的公开 API iot-core/ble/core_bluetooth.h、
- * core 的 ble/ 实现，以及同目录的卡契约 core_bluetooth_ops.h（复用
- * CORE_BLE_DATA_T 等）。2026-10 从 core 的 iot-core/ble/ 迁出（分层整改）。
- *
- * The file is part of Tuya's Bluetooth SDK and is used to facilitate BLE
- * operations such as device discovery, connection, data exchange, and more. It
- * provides a comprehensive set of definitions that are essential for developing
- * BLE applications with Tuya devices.
+ * A types-only contract header: core's public API iot-core/ble/core_bluetooth.h
+ * and the ble/ implementation include it, and the card contract
+ * core_bluetooth_ops.h in the same directory reuses CORE_BLE_DATA_T and the
+ * related structures. Neither core nor the port defines anything here.
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *

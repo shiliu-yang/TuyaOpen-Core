@@ -1,17 +1,19 @@
 /**
  * @file core_api_ops.h
- * @brief 契约层（interface）：core_api 平台 ops 卡类型。
+ * @brief Contract header for the CORE main ops card: CORE_API_OPS_T plus the
+ *        handle and callback aliases used by its members.
  *
- * **分层定位**：本头是 core（上层）与 port（下层）之间的**中性契约**，物理上放在
- * port 下（每个芯片平台各一份，见 platform/<P>/port/interface）。依赖方向：
- *   core ──include──▶ 本头 ◀──include── port      # 谁都不依赖谁
- *   core ──extern core_api_ops_platform / 经卡调用──▶ port   # 上层→下层，允许
- *   port ──▶ core                                  # 禁止（include 与调用都不许）
- * 本头**只含类型**（结构体 + 句柄/回调别名），不含任何 core 实现声明。
+ * The card holds one member per port implementation of the log, memory,
+ * system, semaphore, mutex, thread and queue interfaces dispatched by the core
+ * layer; OTA is not a card member (it is callback-injected, see core_ota.h).
+ * The port assembles core_api_ops_platform from this card and core reaches it
+ * through core_api_get_ops(); the port never includes or calls core, and this
+ * header declares no implementation.
  *
- * 句柄/回调别名与 core 的 core_semaphore/core_mutex/core_thread/core_queue 定义逐字一致
- * （同为 void* / void(*)(void*) 别名）；C11 起重复 typedef 合法，core 的 TU 同时
- * include 两侧不会冲突。
+ * Handle/callback aliases are void* / void(*)(void*) aliases identical to
+ * core's core_semaphore / core_mutex / core_thread / core_queue definitions;
+ * repeated typedefs are legal since C11, so a translation unit including both
+ * sides compiles.
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
@@ -25,7 +27,7 @@
 extern "C" {
 #endif
 
-/* 句柄/回调别名（与 core 的 core_* 头定义一致） */
+/* Handle/callback aliases (identical to core's core_* headers) */
 typedef void *SEM_HANDLE;
 typedef void *MUTEX_HANDLE;
 typedef void *THREAD_HANDLE;
@@ -33,11 +35,11 @@ typedef void (*THREAD_FUNC_CB)(void *args);
 typedef void *QUEUE_HANDLE;
 
 /**
- * @brief core_api 平台 ops：成员与 port 的 memory/system/semaphore/mutex/thread/queue/log
- *        实现一一对应，只收编实际被 core 层分发的接口（OTA 为回调注入，见 core_ota.h）
+ * @brief core_api platform ops: one member per port memory/system/semaphore/
+ *        mutex/thread/queue implementation; only CORE-dispatched ones (OTA is callback-injected)
  */
 typedef struct {
-    //! log output（启动早期即被 core_log 回调与 QR 输出使用，置卡首位）
+    //! log output (used from early boot by the core_log callback and QR output; first in the card)
     void (*log_output)(const char *format, ...);
     //! memory
     void *(*malloc)(size_t size);
@@ -70,7 +72,7 @@ typedef struct {
     OPERATE_RET (*queue_fetch)(const QUEUE_HANDLE queue, void *msg, uint32_t timeout);
     void (*queue_free)(const QUEUE_HANDLE queue);
 #if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
-    //! ex ram（外部 RAM，如 PSRAM；宏隔离：未开启时卡不含这些成员，零开销）
+    //! ex ram (external RAM such as PSRAM; macro-guarded: card omits these when off)
     void *(*ex_ram_malloc)(size_t size);
     void (*ex_ram_free)(void *ptr);
 #endif
