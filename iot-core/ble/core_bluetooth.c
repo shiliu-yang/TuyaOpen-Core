@@ -31,8 +31,8 @@
  * PERIPHERAL/CENTRAL (BEACON and Mesh included) as unsupported.
  *
  * The remaining API covers address access, maximum link count, advertising
- * and scan control, RSSI, connection parameters, disconnect and the GATT
- * server notify/send/read/MTU paths. The GATT client / central API was
+ * control, RSSI, connection parameters, disconnect and the GATT server
+ * notify/send/read/MTU paths. The GATT client / central API was
  * removed together with the contract members. Before the service table exists, the notify
  * and read-update paths return OPRT_RESOURCE_NOT_READY instead of
  * dereferencing it.
@@ -187,32 +187,6 @@ static void core_ble_kernel_gap_event_callback(CORE_BLE_GAP_PARAMS_EVT_T *p_even
         core_event.type = CORE_BLE_EVT_DISCONNECT;
         core_event.ble_event.disconnect.peer.conn_handle = p_event->conn_handle;
         core_event.ble_event.disconnect.reason = p_event->gap_event.disconnect.reason;
-    } break;
-
-    case CORE_BLE_GAP_EVT_ADV_REPORT: {
-        core_event.type = CORE_BLE_EVT_ADV_REPORT;
-        core_event.ble_event.adv_report.rssi = p_event->gap_event.adv_report.rssi;
-        core_event.ble_event.adv_report.data_len = (uint8_t)p_event->gap_event.adv_report.data.len;
-        core_event.ble_event.adv_report.p_data = p_event->gap_event.adv_report.data.p_data;
-        memcpy(core_event.ble_event.adv_report.peer_addr.addr, p_event->gap_event.adv_report.peer_addr.addr, 6);
-
-        if (p_event->gap_event.adv_report.adv_type == CORE_BLE_GAP_ADV_DATA) {
-            core_event.ble_event.adv_report.adv_type = CORE_BLE_ADV_DATA;
-        } else if (p_event->gap_event.adv_report.adv_type == CORE_BLE_GAP_RSP_DATA) {
-            core_event.ble_event.adv_report.adv_type = CORE_BLE_RSP_DATA;
-        } else if (p_event->gap_event.adv_report.adv_type == CORE_BLE_GAP_ADV_RSP_DATA) {
-            core_event.ble_event.adv_report.adv_type = CORE_BLE_ADV_RSP_DATA;
-        }
-
-        if (p_event->gap_event.adv_report.peer_addr.type == CORE_BLE_GAP_ADDR_TYPE_PUBLIC) {
-            core_event.ble_event.adv_report.peer_addr.type = CORE_BLE_ADDR_TYPE_PUBLIC;
-        } else if (p_event->gap_event.adv_report.peer_addr.type == CORE_BLE_GAP_ADDR_TYPE_RANDOM) {
-            core_event.ble_event.adv_report.peer_addr.type = CORE_BLE_ADDR_TYPE_RANDOM;
-        } else {
-            /**< Currently, we not support other types. And Tuya Bluetooth
-             * Device will not use other types. */
-            return;
-        }
     } break;
 
     case CORE_BLE_GAP_EVT_CONN_PARAM_REQ: {
@@ -711,44 +685,6 @@ OPERATE_RET core_ble_advertising_data_update(CORE_BLE_DATA_T *p_adv, CORE_BLE_DA
     }
 
     CORE_BLUETOOTH_EXEC_OP(gap_adv_rsp_data_update, &adv_data, &scan_rsp_data);
-}
-
-/**
- * @brief   Start scanning
- * @param :
- *          [in] scan_param:    scan parameters including interval, windows
- * and timeout
- * @return  SUCCESS             Successfully initiated scanning procedure.
- *
- * @note    Other default scanning parameters : public address, no
- * whitelist.
- *          The scan response and adv data are given through
- * CORE_BLE_EVT_ADV_REPORT event !!!!!!
- */
-OPERATE_RET core_ble_scan_start(CORE_BLE_SCAN_PARAMS_T const *p_scan_param)
-{
-    CORE_BLE_GAP_SCAN_PARAMS_T core_scan_params = {0};
-
-    core_scan_params.extended = 0;
-    core_scan_params.active = ((p_scan_param->type == CORE_BLE_SCAN_TYPE_ACTIVE) ? 1 : 0);
-    core_scan_params.scan_phys = CORE_BLE_GAP_PHY_1MBPS;
-    core_scan_params.interval = p_scan_param->scan_interval;
-    core_scan_params.window = p_scan_param->scan_window;
-    core_scan_params.timeout = p_scan_param->timeout;
-    core_scan_params.scan_channel_map = 0x01 | 0x02 | 0x04;
-
-    CORE_BLUETOOTH_EXEC_OP(gap_scan_start, &core_scan_params);
-}
-
-/**
- * @brief   Stop scanning
- * @param   void
- * @return  SUCCESS         Successfully stopped scanning procedure.
- *          ERROR           Not in scanning state.
- * */
-OPERATE_RET core_ble_scan_stop(void)
-{
-    CORE_BLUETOOTH_EXEC_OP(gap_scan_stop);
 }
 
 /**

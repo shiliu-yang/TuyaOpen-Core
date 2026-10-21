@@ -31,8 +31,8 @@
  * PERIPHERAL/CENTRAL (BEACON and Mesh included) as unsupported.
  *
  * The remaining API covers address access, maximum link count, advertising
- * and scan control, RSSI, connection parameters, disconnect and the GATT
- * server notify/send/read/MTU paths. The GATT client / central API was
+ * control, RSSI, connection parameters, disconnect and the GATT server
+ * notify/send/read/MTU paths. The GATT client / central API was
  * removed together with the contract members. Before the service table exists, the notify
  * and read-update paths return OPRT_RESOURCE_NOT_READY instead of
  * dereferencing it.
@@ -126,28 +126,6 @@ OPERATE_RET core_ble_advertising_stop(void);
  *          If not being in advertising, we will only do set adv+rsp data.
  * */
 OPERATE_RET core_ble_advertising_data_update(CORE_BLE_DATA_T *p_adv, CORE_BLE_DATA_T *p_scan_rsp);
-
-/**
- * @brief   Start scanning
- * @param :
- *          [in] scan_param:    scan parameters including interval, windows
- * and timeout
- * @return  SUCCESS             Successfully initiated scanning procedure.
- *
- * @note    Other default scanning parameters : public address, no
- * whitelist.
- *          The scan response and adv data are given through
- * CORE_BLE_EVT_ADV_REPORT event !!!!!!
- */
-OPERATE_RET core_ble_scan_start(CORE_BLE_SCAN_PARAMS_T const *p_scan_param);
-
-/**
- * @brief   Stop scanning
- * @param   void
- * @return  SUCCESS         Successfully stopped scanning procedure.
- *          ERROR           Not in scanning state.
- * */
-OPERATE_RET core_ble_scan_stop(void);
 
 /**
  * @brief   Get the received signal strength for the last connection event.
