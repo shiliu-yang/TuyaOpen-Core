@@ -168,8 +168,6 @@ endif()
 # runs identically).
 target_link_libraries(${COMPONENT_LIB} INTERFACE tuyaopen-port)
 
-target_link_libraries(${COMPONENT_LIB} INTERFACE tuyaopen-port)
-
 unset(_port_srcs)
 unset(_port_incs)
 unset(_port_hdrs)
