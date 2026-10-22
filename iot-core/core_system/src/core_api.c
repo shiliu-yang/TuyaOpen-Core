@@ -1,7 +1,6 @@
 /**
  * @file core_api.c
- * @brief CORE dispatch for semaphores, mutexes, queues and OTA, plus optional
- * external RAM allocation.
+ * @brief CORE dispatch for semaphores, mutexes, queues and OTA.
  *
  * Every core_semaphore_*, core_mutex_* and core_queue_* function resolves the
  * platform ops card through core_api_get_ops(), which returns
