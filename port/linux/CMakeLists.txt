@@ -10,7 +10,7 @@ set(PORT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
 # Layout: include/ (headers) + src/ (implementations). The BLE adapter
 # (port_bluetooth.c, implementation + card) sits next to the other port_*.c
 # files; the Linux-only bluez backend and its third-party library live in
-# src/port_bt/.
+# src/port_bt/, and the KV card with its littlefs engine lives in src/port_kv/.
 # Generic utilities live in core (tuyaopen-core/iot-core/tuya_transport/src/utilities);
 # tuya_mem_heap is not used by the port (port_system_malloc maps to the platform
 # malloc, see src/port_api.c - layering: the port does not depend on core)
@@ -28,16 +28,12 @@ if(_port_srcs)
     list(REMOVE_DUPLICATES _port_srcs)
 endif()
 
-# littlefs (the storage engine behind core_kv, used directly by port_kv.c): it is
-# not under include/ or src/, so GLOB cannot see it and it is added explicitly
-if(EXISTS "${PORT_ROOT}/littlefs/lfs.c")
-    list(APPEND _port_srcs
-        "${PORT_ROOT}/littlefs/lfs_util.c"
-        "${PORT_ROOT}/littlefs/lfs.c"
-    )
-    # lfs_util.h expands lfs_config.h through LFS_CONFIG (under include/system/,
-    # injected via _port_incs below); its lfs_malloc / LFS_ERROR use this layer's
-    # port_system_malloc / PORT_LOG_ERR (layering: not core's core_malloc / PR_ERR)
+# littlefs lives in src/port_kv/littlefs, so the src/ GLOB above already picks up
+# lfs.c/lfs_util.c. lfs_util.h expands lfs_config.h through LFS_CONFIG (under
+# include/system/, injected via _port_incs below); its lfs_malloc / LFS_ERROR use
+# this layer's port_system_malloc / PORT_LOG_ERR (layering: not core's
+# core_malloc / PR_ERR)
+if(EXISTS "${PORT_ROOT}/src/port_kv/littlefs/lfs.c")
     set(_port_lfs_defs LFS_CONFIG=lfs_config.h)
 endif()
 
@@ -67,10 +63,6 @@ endif()
 if(IS_DIRECTORY "${PORT_ROOT}")
     list(APPEND _port_incs "${PORT_ROOT}")
 endif()
-# littlefs headers (lfs.h/lfs_util.h): port_kv.c includes "lfs.h" directly
-if(IS_DIRECTORY "${PORT_ROOT}/littlefs")
-    list(APPEND _port_incs "${PORT_ROOT}/littlefs")
-endif()
 list(REMOVE_DUPLICATES _port_incs)
 
 if(_port_srcs)
@@ -95,7 +87,7 @@ if(_port_srcs)
     # interface/core_network_platform.h.
 
     # Path coupled to the src file/directory names: keep in sync
-    if(EXISTS "${PORT_ROOT}/src/port_kv.c")
+    if(EXISTS "${PORT_ROOT}/src/port_kv/port_kv.c")
         # port_kv (littlefs + inline AES/SHA on OpenSSL libcrypto): **zero core
         # dependency** - card types from this layer's interface/core_kv_ops.h, crypto
         # in this layer (OpenSSL). Deliberately does not link core_system: any include
