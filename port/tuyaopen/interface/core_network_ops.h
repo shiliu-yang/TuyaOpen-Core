@@ -1,13 +1,9 @@
 /**
  * @file core_network_ops.h
- * @brief 契约层（interface）：标准网络 ops 类型（原在 core 的 core_network.h 末尾，
- *        2026-10 随契约下沉；原名 core_network_card.h）。
+ * @brief Contract header for the standard network ops card (CORE_NETWORK_OPS_T).
  *
- * 分层定位与依赖方向见 core_api_ops.h 的文件头。本头只含类型：
- *  - `CORE_NETWORK_OPS_T`（socket 操作面）
- * core 的 core_network.h 反向 include 本头（类型随契约迁到本层，其 API 面不变）。
- *
- * 平台在 port 中实现 socket 操作并在同文件定义标准实例 `core_network_ops_platform`。
+ * Types only. Core's core_network.h includes this header and dispatches through
+ * the card instance core_network_ops_platform, which the port defines.
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */
