@@ -22,8 +22,6 @@
  *
  * Platform implementation notes:
  * - memory: maps directly to the esp-idf system heap (a multi-region heap);
- *   external RAM (ENABLE_EXT_RAM) optionally maps to
- *   heap_caps_malloc(MALLOC_CAP_SPIRAM);
  * - sleep/reset/get_millisecond/get_random: FreeRTOS / esp-idf primitives;
  *   the millisecond clock uses esp_timer (microsecond resolution) rather than
  *   ticks (only 10ms resolution at 100Hz);
@@ -75,7 +73,6 @@ typedef void (*THREAD_FUNC_T)(void *);
 #include "esp_random.h"
 #include "esp_system.h"
 #include "esp_timer.h"
-#include "esp_heap_caps.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -139,24 +136,6 @@ void port_system_free(void *ptr)
         free(ptr);
     }
 }
-
-#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
-/* ---------------------------------------------------------------------------
- * ex ram (external RAM, such as PSRAM): heap_caps_malloc(MALLOC_CAP_SPIRAM) /
- * free. Isolated by a macro: ENABLE_EXT_RAM is off by default, and enabling it
- * also requires CONFIG_SPIRAM in sdkconfig and PSRAM hardware -- otherwise
- * heap_caps_malloc has no SPIRAM capability available and always returns NULL.
- * --------------------------------------------------------------------------- */
-static void *__ex_ram_malloc(const SIZE_T size)
-{
-    return heap_caps_malloc(size, MALLOC_CAP_SPIRAM);
-}
-
-static void __ex_ram_free(void *ptr)
-{
-    free(ptr);
-}
-#endif
 
 /* ---------------------------------------------------------------------------
  * system implementation: sleep/reset/get_millisecond/get_random are only
@@ -726,11 +705,6 @@ CORE_API_OPS_T core_api_ops_platform = {
     //! memory
     .malloc = port_system_malloc,
     .free = port_system_free,
-#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
-    //! ex ram (external RAM, such as PSRAM; isolated by a macro, off by default)
-    .ex_ram_malloc = __ex_ram_malloc,
-    .ex_ram_free = __ex_ram_free,
-#endif
     //! system
     .sleep = __system_sleep,
     .reset = __system_reset,

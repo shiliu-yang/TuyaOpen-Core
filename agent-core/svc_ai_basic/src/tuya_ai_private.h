@@ -26,12 +26,7 @@
 #include "core_memory.h"
 #include "core_thread.h"
 
-#if defined(AI_HEAP_IN_EXT_RAM) && (AI_HEAP_IN_EXT_RAM == 1) && defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
-#define OS_MALLOC(size)       core_ex_ram_malloc(size)
-#define OS_FREE(ptr)          core_ex_ram_free(ptr)
-#else
 #define OS_MALLOC(size)       core_malloc(size)
 #define OS_FREE(ptr)          core_free(ptr)
-#endif
 
 #endif

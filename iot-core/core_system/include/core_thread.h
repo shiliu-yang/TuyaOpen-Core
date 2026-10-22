@@ -3,8 +3,8 @@
  * @brief CORE thread interface: create and start, delete, state query and
  *        current-thread identity.
  *
- * A thread is described by THREAD_CFG_T (stack depth, priority, name and the
- * optional external-RAM stack flag) and runs its process function between the
+ * A thread is described by THREAD_CFG_T (stack depth, priority and name) and
+ * runs its process function between the
  * optional enter and exit hooks. Creation and deletion dispatch through the
  * CORE_API_OPS_T thread members. core_thread_get_id returns an opaque identity
  * of the calling thread that is stable for that thread's lifetime.
@@ -78,7 +78,6 @@ typedef struct {
     uint32_t stackDepth; // stack size
     uint8_t priority;    // thread priority
     char *thrdname;      // thread name
-    uint8_t ex_ram_mode : 1; // external RAM (e.g. PSRAM) thread stack flag: core only assigns it, never reads it (enabled via ENABLE_EXT_RAM in the board Kconfig)
 } THREAD_CFG_T;
 
 /**

@@ -18,8 +18,7 @@
  * flag): http_session_receive() returns only the status line, content length
  * and keep-alive flag, and this layer never reads the body.
  *
- * Session memory uses core_ex_ram_malloc/core_ex_ram_free when ENABLE_EXT_RAM is
- * enabled, and core_malloc/core_free otherwise.
+ * Session memory uses core_malloc/core_free.
  */
 
 #ifndef __HTTP_MANAGER_H__

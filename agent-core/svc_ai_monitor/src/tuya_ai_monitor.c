@@ -29,13 +29,8 @@
 #include "core_thread.h"
 #include <string.h>
 
-#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
-#define OS_MALLOC(size)       core_ex_ram_malloc(size)
-#define OS_FREE(ptr)          core_ex_ram_free(ptr)
-#else
 #define OS_MALLOC(size)       core_malloc(size)
 #define OS_FREE(ptr)          core_free(ptr)
-#endif
 
 // Protocol magic number
 #define AI_MONITOR_MAGIC 0x54594149
@@ -1037,9 +1032,6 @@ STATIC OPERATE_RET __start_log_server(VOID)
     thrd_param.priority = THREAD_PRIO_1;
     thrd_param.thrdname = "ai_mon_log";
     thrd_param.stackDepth = 4096;
-#if defined(AI_STACK_IN_EXT_RAM) && (AI_STACK_IN_EXT_RAM == 1)
-    thrd_param.ex_ram_mode = 1;
-#endif
 
     rt = core_thread_create_and_start(&g_ai_monitor_server.log_thread,
                                      NULL, NULL,

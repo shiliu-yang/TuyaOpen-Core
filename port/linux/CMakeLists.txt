@@ -94,14 +94,6 @@ if(_port_srcs)
     # socket API directly, and this port only provides
     # interface/core_network_platform.h.
 
-    # Mount condition for the external RAM (PSRAM) card members
-    # (.ex_ram_malloc/.ex_ram_free): same switch as core's ENABLE_EXT_RAM (off by
-    # default; see ENABLE_EXT_RAM in core Kconfig). Linux has no separate external
-    # RAM, so the implementation degrades to the normal heap.
-    if(CONFIG_ENABLE_EXT_RAM)
-        target_compile_definitions(tuyaopen-port PRIVATE ENABLE_EXT_RAM=1)
-    endif()
-
     # Path coupled to the src file/directory names: keep in sync
     if(EXISTS "${PORT_ROOT}/src/port_kv.c")
         # port_kv (littlefs + inline AES/SHA on OpenSSL libcrypto): **zero core

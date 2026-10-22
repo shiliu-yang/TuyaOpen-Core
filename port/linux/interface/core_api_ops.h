@@ -71,11 +71,6 @@ typedef struct {
     OPERATE_RET (*queue_post)(const QUEUE_HANDLE queue, void *data, uint32_t timeout);
     OPERATE_RET (*queue_fetch)(const QUEUE_HANDLE queue, void *msg, uint32_t timeout);
     void (*queue_free)(const QUEUE_HANDLE queue);
-#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
-    //! ex ram (external RAM such as PSRAM; macro-guarded: card omits these when off)
-    void *(*ex_ram_malloc)(size_t size);
-    void (*ex_ram_free)(void *ptr);
-#endif
 } CORE_API_OPS_T;
 
 #ifdef __cplusplus

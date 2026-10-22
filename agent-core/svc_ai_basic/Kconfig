@@ -50,16 +50,6 @@ menu "AI Protocol Config"
         int "AI_WRITE_SOCKET_BUF_SIZE: ai server write socket size"
         default 8192
 
-    config AI_HEAP_IN_EXT_RAM
-        bool "AI_HEAP_IN_EXT_RAM: use psram for heap"
-        default y if ENABLE_EXT_RAM
-        default n
-
-    config AI_STACK_IN_EXT_RAM
-        bool "AI_STACK_IN_EXT_RAM: use psram for stack"
-        default y if ENABLE_EXT_RAM
-        default n
-        
     config AI_SEND_PKT_TIMEOUT
         int "AI_SEND_PKT_TIMEOUT: ai send packet timeout, unit(s)"
         range 1 10

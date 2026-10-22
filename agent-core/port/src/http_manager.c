@@ -18,8 +18,7 @@
  * flag): http_session_receive() returns only the status line, content length
  * and keep-alive flag, and this layer never reads the body.
  *
- * Session memory uses core_ex_ram_malloc/core_ex_ram_free when ENABLE_EXT_RAM is
- * enabled, and core_malloc/core_free otherwise.
+ * Session memory uses core_malloc/core_free.
  */
 
 #include "http_manager.h"
@@ -46,13 +45,8 @@
 ***********************************************************/
 #define HTTP_TIMEOUT_MS_DEFAULT (60 * 1000)
 
-#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
-#define HTTP_MEMORY_MALLOC core_ex_ram_malloc
-#define HTTP_MEMORY_FREE   core_ex_ram_free
-#else
 #define HTTP_MEMORY_MALLOC core_malloc
 #define HTTP_MEMORY_FREE   core_free
-#endif
 
 /***********************************************************
 ***********************typedef define***********************

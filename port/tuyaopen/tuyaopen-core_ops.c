@@ -69,11 +69,6 @@ CORE_API_OPS_T core_api_ops_platform = {
     .queue_post        = tkl_queue_post,
     .queue_fetch       = tkl_queue_fetch,
     .queue_free        = tkl_queue_free,
-#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
-    //! external RAM
-    .ex_ram_malloc = tkl_system_psram_malloc,
-    .ex_ram_free   = tkl_system_psram_free,
-#endif
 };
 
 /* CORE_NETWORK_OPS_T: socket API */

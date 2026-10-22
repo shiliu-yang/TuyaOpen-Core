@@ -33,13 +33,8 @@
 #define HTTP_MAX_RESPONSE_CHUNK_ONCE_BYTES          (2048U)
 
 
-#if defined(ENABLE_EXT_RAM)&&(ENABLE_EXT_RAM==1)
-#define HTTP_MALLOC                                 core_ex_ram_malloc
-#define HTTP_FREE                                   core_ex_ram_free
-#else
 #define HTTP_MALLOC                                 core_malloc
 #define HTTP_FREE                                   core_free
-#endif
 /**
  * @brief The HTTP header "User-Agent" value.
  *

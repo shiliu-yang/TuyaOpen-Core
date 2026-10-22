@@ -7,8 +7,8 @@
  *      a) Build-system injection: under esp-idf, sdkconfig (Kconfig.projbuild ->
  *         CONFIG_*) is converted by tuyaopen-core.cmake's macro injection table
  *         into ENABLE_*=1 and injected into tuyaopen-headers (core modules);
- *         the port target only receives ENABLE_EXT_RAM (network no longer needs
- *         port-side switch macros);
+ *         the port target receives only ENABLE_BLUETOOTH (network no longer
+ *         needs port-side switch macros);
  *      b) Compiler command line / IDE global macros: -DENABLE_WIRED=1 (pass
  *         only the ones to enable);
  *      c) Uncomment the corresponding #define below.
@@ -37,9 +37,6 @@
 #endif */
 /* #ifndef ENABLE_LOCAL_LINK
 #define ENABLE_LOCAL_LINK 1
-#endif */
-/* #ifndef ENABLE_EXT_RAM
-#define ENABLE_EXT_RAM 1
 #endif */
 /* #ifndef LITTLE_END
 #define LITTLE_END 1

@@ -11,7 +11,7 @@
  * - log output / semaphore / thread / queue implementations are private to the
  *   ops card (static), keeping the adaptation surface to one card;
  * - memory malloc/free are **port-internal interfaces** (they back the card
- *   .malloc/.free/.ex_ram_* members and are also used across files by
+ *   .malloc/.free members and are also used across files by
  *   port_kv.c; declarations in include/system/port_memory.h). core reaches
  *   them only through card dispatch, never by calling this layer directly;
  *   allocation maps directly onto the platform heap (libc malloc/free on
@@ -48,7 +48,7 @@
  * the port-internal memory/mutex interfaces.
  * --------------------------------------------------------------------------- */
 
-/* malloc/free back the CORE_API_OPS_T .malloc/.free/.ex_ram_* members and are
+/* malloc/free back the CORE_API_OPS_T .malloc/.free members and are
  * **port-internal interfaces** (used by port_kv.c; declared in
  * include/system/port_memory.h). core only reaches them through the card. */
 #include "port_memory.h"
@@ -107,7 +107,7 @@ static void __log_output(const char *str, ...)
 }
 
 /* ---------------------------------------------------------------------------
- * memory: malloc/free back the card .malloc/.free/.ex_ram_* members and are
+ * memory: malloc/free back the card .malloc/.free members and are
  * **port-internal interfaces** (used by port_kv.c; declared in
  * include/system/port_memory.h). They map directly onto the platform heap
  * (libc malloc/free on Linux); this layer keeps no cap and no heap statistics.
@@ -1172,9 +1172,4 @@ CORE_API_OPS_T core_api_ops_platform = {
     .queue_post = __queue_post,
     .queue_fetch = __queue_fetch,
     .queue_free = __queue_free,
-#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
-    //! ex ram (Linux has no separate external RAM: mapped onto the normal heap)
-    .ex_ram_malloc = port_system_malloc,
-    .ex_ram_free = port_system_free,
-#endif
 };

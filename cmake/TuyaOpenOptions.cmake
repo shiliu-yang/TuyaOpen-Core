@@ -7,7 +7,6 @@ option(CONFIG_ENABLE_NIMBLE "Include NimBLE sources in core_bluetooth" OFF)
 option(CONFIG_ENABLE_CELLULAR "Build core_cellular and cellular netmgr sources" OFF)
 option(CONFIG_ENABLE_PLATFORM_MBEDTLS "Use platform mbedTLS instead of the bundled copy" OFF)
 option(CONFIG_ENABLE_DEVICE_TIMER "Include tuya_device_timer.c in tuya_cloud_service" OFF)
-option(CONFIG_ENABLE_EXT_RAM "Mount the ex-RAM (PSRAM) ops members and build core_ex_ram_* (default OFF)" OFF)
 option(CONFIG_ENABLE_TUYA_P2P "Build tuya_p2p subtree" OFF)
 # Default ON: when disabled, the LAN protocol is not compiled and the port does
 # not need to adapt LAN-related net ops (accept/listen/send_to/recvfrom/recv_nd_size).
@@ -47,7 +46,6 @@ foreach(_tuyaopen_opt
     CONFIG_ENABLE_CELLULAR
     CONFIG_ENABLE_PLATFORM_MBEDTLS
     CONFIG_ENABLE_DEVICE_TIMER
-    CONFIG_ENABLE_EXT_RAM
     CONFIG_ENABLE_TUYA_P2P
     CONFIG_ENABLE_LOCAL_LINK
     CONFIG_ENABLE_LOCAL_STORE

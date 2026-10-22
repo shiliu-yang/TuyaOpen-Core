@@ -7,9 +7,7 @@
  * never calls this layer directly: core-layer malloc / free dispatch through
  * the card, and a buffer allocated here may be released with core_free because
  * both sides end in this file. Allocation and release must be paired through
- * the same allocator. The ex-RAM members (.ex_ram_malloc / .ex_ram_free) have
- * a separate implementation in this port (heap_caps with SPIRAM) and do not
- * go through this allocator.
+ * the same allocator.
  *
  * @copyright Copyright (c) 2021-2026 Tuya Inc. All Rights Reserved.
  */

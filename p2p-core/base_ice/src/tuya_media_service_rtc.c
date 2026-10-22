@@ -55,9 +55,6 @@ static int __core_thread_spawn(THREAD_HANDLE *tid, SEM_HANDLE *join_sem, void *(
     cfg.stackDepth = stack ? stack : (24 * 1024);
     cfg.priority = THREAD_PRIO_2;
     cfg.thrdname = (char *)(name ? name : "rtc");
-#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
-    cfg.ex_ram_mode = 1;
-#endif
     if (core_thread_create_and_start(tid, NULL, NULL, __core_thr_entry, w, &cfg) != OPRT_OK) {
         core_semaphore_release(*join_sem);
         *join_sem = NULL;

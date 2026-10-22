@@ -18,10 +18,6 @@
  * default when no callback set is registered. The registrant keeps the
  * structure alive for the whole OTA flow.
  *
- * When ENABLE_EXT_RAM is enabled, core_ex_ram_malloc() and core_ex_ram_free()
- * dispatch to the ex_ram_* members of the same ops card and return NULL or do
- * nothing when those members are absent.
- *
  * @note This file is part of the Tuya IoT Development Platform and is intended
  * for use in Tuya-based applications. It is subject to the platform's license
  * and copyright terms.
@@ -179,16 +175,3 @@ void core_queue_free(QUEUE_HANDLE queue)
 {
     CORE_API_EXEC_OP_VOID(queue_free, queue);
 }
-
-#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
-//! ex ram (external RAM, e.g. PSRAM; macro-isolated, the port provides the implementation through the ex_ram_* members of CORE_API_OPS_T)
-void *core_ex_ram_malloc(size_t size)
-{
-    CORE_API_EXEC_OP(ex_ram_malloc, NULL, size);
-}
-
-void core_ex_ram_free(void *ptr)
-{
-    CORE_API_EXEC_OP_VOID(ex_ram_free, ptr);
-}
-#endif

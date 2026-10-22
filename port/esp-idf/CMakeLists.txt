@@ -25,11 +25,11 @@ if(_port_srcs)
 endif()
 
 # BLE gating. CONFIG_ENABLE_BLUETOOTH is core's switch, visible in the
-# component scope like CONFIG_ENABLE_EXT_RAM below; the implementation is built
-# on the esp-idf bundled NimBLE host, so CONFIG_BT_NIMBLE_ENABLED must be on as
-# well. src/port_bluetooth.c is always compiled: its own ENABLE_BLUETOOTH guard
-# selects the NimBLE implementation + real card, or the empty card (all members
-# NULL) so core degrades every BLE call to OPRT_NOT_SUPPORTED.
+# component scope; the implementation is built on the esp-idf bundled NimBLE
+# host, so CONFIG_BT_NIMBLE_ENABLED must be on as well. src/port_bluetooth.c is
+# always compiled: its own ENABLE_BLUETOOTH guard selects the NimBLE
+# implementation + real card, or the empty card (all members NULL) so core
+# degrades every BLE call to OPRT_NOT_SUPPORTED.
 if(CONFIG_ENABLE_BLUETOOTH AND NOT CONFIG_BT_NIMBLE_ENABLED)
     message(FATAL_ERROR
         "CONFIG_ENABLE_BLUETOOTH is on but CONFIG_BT_NIMBLE_ENABLED is off. "
@@ -106,13 +106,6 @@ if(_port_srcs)
     # socket API directly, and this port only provides
     # interface/core_network_platform.h. That header is included by core, so
     # the lwIP include path must reach core below.
-
-    # Mounting conditions for the external RAM (PSRAM) allocation card members
-    # (.ex_ram_malloc/.ex_ram_free): same name and same switch as core's
-    # ENABLE_EXT_RAM (off by default; see ENABLE_EXT_RAM in Kconfig).
-    if(CONFIG_ENABLE_EXT_RAM)
-        target_compile_definitions(tuyaopen-port PRIVATE ENABLE_EXT_RAM=1)
-    endif()
 
     # BLE: same switch shape as core's ENABLE_BLUETOOTH (the C-side guard in
     # src/port_bluetooth.c reads it).

@@ -513,9 +513,6 @@ STATIC OPERATE_RET __ai_client_create_task(VOID)
     thrd_param.priority     = THREAD_PRIO_1;
     thrd_param.thrdname     = "ai_client";
     thrd_param.stackDepth   = AI_CLIENT_STACK_SIZE;
-#if defined(AI_STACK_IN_EXT_RAM) && (AI_STACK_IN_EXT_RAM == 1)
-    thrd_param.ex_ram_mode = 1;
-#endif
 
     rt = core_thread_create_and_start(&ai_basic_client->thread, NULL, NULL, __ai_client_thread_cb, NULL, &thrd_param);
     if (OPRT_OK != rt) {

@@ -60,18 +60,6 @@ static tuya_tls_cert_load_cb    s_cert_load_cb = NULL;
 static mbedtls_entropy_context  ty_entropy;
 static mbedtls_ctr_drbg_context ty_ctr_drbg;
 
-#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM)
-static void *__ex_ram_calloc(size_t num, size_t size)
-{
-    size_t total = num * size;
-    void *p = core_ex_ram_malloc(total);
-    if (p) {
-        memset(p, 0, total);
-    }
-    return p;
-}
-#endif
-
 /* -------------------------------------------------------------------------- */
 /*                                  TLS Mutex                                 */
 /* -------------------------------------------------------------------------- */
@@ -125,11 +113,7 @@ static int __tuya_tls_mutex_unlock(mbedtls_threading_mutex_t *mutex)
 static __attribute__((unused)) void *__tuya_tls_calloc(size_t nmemb, size_t size)
 {
     size_t mem_size = nmemb * size;
-#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM)
-    void *ptr = core_ex_ram_malloc(mem_size);
-#else
     void *ptr = core_malloc(mem_size);
-#endif
     if (ptr != NULL) {
         memset(ptr, 0, mem_size);
     } else {
@@ -395,11 +379,7 @@ OPERATE_RET tuya_tls_init(void)
     mbedtls_threading_set_alt(__tuya_tls_mutex_init, __tuya_tls_mutex_free, __tuya_tls_mutex_lock,
                               __tuya_tls_mutex_unlock);
 
-#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM)
-    op_ret = mbedtls_platform_set_calloc_free(__ex_ram_calloc, core_ex_ram_free);
-#else
     op_ret = mbedtls_platform_set_calloc_free(core_calloc, core_free);
-#endif
     if (op_ret != 0) {
         PR_ERR("mbedtls_platform_set_calloc_free Fail. %x", op_ret);
         return op_ret;
@@ -443,11 +423,7 @@ const tuya_tls_config_t *tuya_tls_psk_mode_config_get(void)
 tuya_tls_hander *tuya_tls_connect_create(void)
 {
     OPERATE_RET ret = OPRT_OK;
-#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM)
-    tuya_mbedtls_context_t *p_tls_conn = core_ex_ram_malloc(sizeof(tuya_mbedtls_context_t));
-#else
     tuya_mbedtls_context_t *p_tls_conn = core_malloc(sizeof(tuya_mbedtls_context_t));
-#endif
     if (p_tls_conn == NULL) {
         PR_ERR("tuya_tls_connect_create Fail. %d", OPRT_MALLOC_FAILED);
         return NULL;
@@ -473,11 +449,7 @@ __err_exit:
         core_mutex_release(p_tls_conn->mutex);
     }
 
-#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM)
-    core_ex_ram_free(p_tls_conn);
-#else
     core_free(p_tls_conn);
-#endif
 
     return NULL;
 }
@@ -500,11 +472,7 @@ void tuya_tls_connect_destroy(tuya_tls_hander p_tls_hander)
     core_mutex_release(tls_context->mutex);
     core_mutex_release(tls_context->read_mutex);
 
-#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM)
-    core_ex_ram_free(p_tls_hander);
-#else
     core_free(p_tls_hander);
-#endif
 }
 
 /**

@@ -19,13 +19,8 @@
 ***********************************************************/
 #define DEF_URL_LEN 1024
 
-#if defined(ENABLE_EXT_RAM) && (ENABLE_EXT_RAM == 1)
-#define HTTP_MEMORY_MALLOC core_ex_ram_malloc
-#define HTTP_MEMORY_FREE   core_ex_ram_free
-#else
 #define HTTP_MEMORY_MALLOC core_malloc
 #define HTTP_MEMORY_FREE   core_free
-#endif
 
 /***********************************************************
 ***********************typedef define***********************
