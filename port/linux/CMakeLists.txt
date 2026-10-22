@@ -1,6 +1,8 @@
 # tuyaopen-port (LINUX platform port) build.
 # Prerequisite: add_subdirectory(tuyaopen-core) first (switches and tuyaopen-headers ready).
-# This directory is self-contained: collects sources/headers, trims by core switches, injects tuyaopen-headers.
+# This directory collects sources/headers, trims by core switches and injects
+# tuyaopen-headers; the KV card additionally links core's tuya_transport for
+# AES-CBC/SHA-256 (mbedtls-backed).
 if(TARGET tuyaopen-port)
     return()
 endif()
@@ -88,12 +90,11 @@ if(_port_srcs)
 
     # Path coupled to the src file/directory names: keep in sync
     if(EXISTS "${PORT_ROOT}/src/port_kv/port_kv.c")
-        # port_kv (littlefs + inline AES/SHA on OpenSSL libcrypto): **zero core
-        # dependency** - card types from this layer's interface/core_kv_ops.h, crypto
-        # in this layer (OpenSSL). Deliberately does not link core_system: any include
-        # of core fails the build (layering gate)
-        find_package(OpenSSL REQUIRED)
-        target_link_libraries(tuyaopen-port PRIVATE OpenSSL::Crypto)
+        # port_kv (littlefs + AES-CBC/SHA-256): crypto comes from core's
+        # mbedtls-backed tuya_transport (core_symmetry/core_hash), now that the
+        # port lives inside the core repository; the KV card contract still comes
+        # from this layer's interface/core_kv_ops.h.
+        target_link_libraries(tuyaopen-port PRIVATE tuya_transport)
     endif()
 
     if(EXISTS "${PORT_ROOT}/src/port_bluetooth.c" AND CONFIG_ENABLE_BLUETOOTH)

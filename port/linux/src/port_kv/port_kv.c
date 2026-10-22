@@ -11,16 +11,16 @@
  * delete all hold s_lfs_mutex (this layer's port_mutex_*); encryption and
  * decryption run outside the lock.
  *
- * Crypto (AES-128-CBC / SHA-256) is **implemented inline in this file** on top
- * of OpenSSL libcrypto (see the "crypto primitives" section below); core is
- * not called (the port depends downwards only). The stored ciphertext is the
- * AES-128-CBC output of the PKCS#7-padded plaintext under the derived key and
- * IV.
+ * Crypto (AES-128-CBC / SHA-256) uses core's mbedtls-backed interfaces
+ * (core_symmetry / core_hash): the port now lives inside the core repository
+ * and links tuya_transport, so no separate crypto library is needed. The
+ * stored ciphertext is the AES-128-CBC output of the PKCS#7-padded plaintext
+ * under the derived key and IV.
  *
  * Note: lfs_util.h picks up lfs_config.h through -DLFS_CONFIG=lfs_config.h
  * (injected by CMake), and memory/mutex/logging all come from this layer
- * (port_system_malloc / port_mutex_* / PORT_LOG_ERR). **No core call is made**
- * (the port depends downwards only; core reaches port through the card).
+ * (port_system_malloc / port_mutex_* / PORT_LOG_ERR). The KV card contract is
+ * still resolved from this layer's interface/.
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  */
@@ -33,8 +33,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include <openssl/evp.h>
-#include <openssl/sha.h>
+#include "core_hash.h"
+#include "core_symmetry.h"
 
 #include "port_log.h"
 #include "port_memory.h"
@@ -326,116 +326,6 @@ static OPERATE_RET kv_storage_remove(const char *key)
     return (LFS_ERR_OK == result || LFS_ERR_NOENT == result) ? OPRT_OK : OPRT_COM_ERROR;
 }
 
-/* ===== Inline crypto primitives (AES-128-CBC / SHA-256 on OpenSSL libcrypto)
- *
- * This layer implements the primitives locally on OpenSSL libcrypto; core is
- * not called (the port depends downwards only):
- *  - encode: alloc len+16 -> PKCS#7 padding (a full block when len%16==0) -> in-place CBC;
- *  - decode: alloc len+1 -> in-place CBC decrypt -> trailing '\0' (unpadding by the caller);
- *  - sha256: standard SHA-256.
- * Allocation uses the port allocator (same origin as card .malloc/.free, so
- * the caller may release with port_system_free).
- * =========================================================================== */
-
-#define KV_AES_BLOCK_LEN 16
-
-/* PKCS#7 padding: returns the padded length (a full 16-byte block when len%16==0) */
-static uint32_t __add_pkcs(uint8_t *p, uint32_t len)
-{
-    uint32_t cz = KV_AES_BLOCK_LEN - (len % KV_AES_BLOCK_LEN);
-
-    memset(p + len, (int)cz, cz);
-    return len + cz;
-}
-
-/* Single AES-128-CBC pass (in place; EVP padding is off, the caller controls padding) */
-static OPERATE_RET __aes128_cbc(uint8_t *buf, uint32_t len, const uint8_t *key, uint8_t *iv, int enc)
-{
-    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
-    int outl = 0;
-    int tmpl = 0;
-    OPERATE_RET ret = OPRT_COM_ERROR;
-
-    if (NULL == ctx) {
-        return OPRT_MALLOC_FAILED;
-    }
-    if (1 != EVP_CipherInit_ex(ctx, EVP_aes_128_cbc(), NULL, key, iv, enc)) {
-        goto exit;
-    }
-    if (1 != EVP_CIPHER_CTX_set_padding(ctx, 0)) {
-        goto exit;
-    }
-    if (1 != EVP_CipherUpdate(ctx, buf, &outl, buf, (int)len)) {
-        goto exit;
-    }
-    if (1 != EVP_CipherFinal_ex(ctx, buf + outl, &tmpl)) {
-        goto exit;
-    }
-    ret = OPRT_OK;
-
-exit:
-    EVP_CIPHER_CTX_free(ctx);
-    return ret;
-}
-
-static OPERATE_RET __sha256_ret(const uint8_t *input, size_t ilen, uint8_t output[32])
-{
-    if (NULL == input || NULL == output) {
-        return OPRT_INVALID_PARM;
-    }
-
-    if (NULL == SHA256(input, ilen, output)) {
-        return OPRT_COM_ERROR;
-    }
-    return OPRT_OK;
-}
-
-static OPERATE_RET __aes128_cbc_encode(uint8_t *data, uint32_t len, uint8_t *key, uint8_t *iv, uint8_t **ec_data,
-                                       uint32_t *ec_len)
-{
-    if (NULL == data || 0 == len || NULL == key || NULL == iv || NULL == ec_data || NULL == ec_len) {
-        return OPRT_INVALID_PARM;
-    }
-
-    *ec_data = (uint8_t *)port_system_malloc((SIZE_T)len + KV_AES_BLOCK_LEN);
-    if (NULL == *ec_data) {
-        return OPRT_MALLOC_FAILED;
-    }
-    memcpy(*ec_data, data, len);
-    *ec_len = __add_pkcs(*ec_data, len);
-
-    if (OPRT_OK != __aes128_cbc(*ec_data, *ec_len, key, iv, 1)) {
-        port_system_free(*ec_data);
-        *ec_data = NULL;
-        return OPRT_COM_ERROR;
-    }
-    return OPRT_OK;
-}
-
-static OPERATE_RET __aes128_cbc_decode(uint8_t *data, uint32_t len, uint8_t *key, uint8_t *iv, uint8_t **dec_data,
-                                       uint32_t *dec_len)
-{
-    if (NULL == data || 0 == len || NULL == key || NULL == iv || NULL == dec_data || NULL == dec_len) {
-        return OPRT_INVALID_PARM;
-    }
-
-    *dec_len = len;
-    *dec_data = (uint8_t *)port_system_malloc((SIZE_T)len + 1);
-    if (NULL == *dec_data) {
-        return OPRT_MALLOC_FAILED;
-    }
-    memcpy(*dec_data, data, len);
-    (*dec_data)[len] = 0;
-
-    if (OPRT_OK != __aes128_cbc(*dec_data, len, key, iv, 0)) {
-        port_system_free(*dec_data);
-        *dec_data = NULL;
-        return OPRT_COM_ERROR;
-    }
-    (*dec_data)[len] = 0;
-    return OPRT_OK;
-}
-
 static OPERATE_RET kv_encrypt(const uint8_t *value, size_t length, uint8_t **encrypted, uint32_t *encrypted_length)
 {
     uint8_t iv[16];
@@ -445,8 +335,8 @@ static OPERATE_RET kv_encrypt(const uint8_t *value, size_t length, uint8_t **enc
     }
 
     memcpy(iv, s_lfs_kv_cfg.seed, sizeof(iv));
-    return __aes128_cbc_encode((uint8_t *)value, (uint32_t)length, (uint8_t *)s_lfs_kv_cfg.key, iv, encrypted,
-                                 encrypted_length);
+    return core_aes128_cbc_encode((uint8_t *)value, (uint32_t)length, (uint8_t *)s_lfs_kv_cfg.key, iv, encrypted,
+                                  encrypted_length);
 }
 
 static OPERATE_RET kv_decrypt(uint8_t *encrypted, uint32_t encrypted_length, uint8_t **value, size_t *value_length)
@@ -463,25 +353,25 @@ static OPERATE_RET kv_decrypt(uint8_t *encrypted, uint32_t encrypted_length, uin
     }
 
     memcpy(iv, s_lfs_kv_cfg.seed, sizeof(iv));
-    result = __aes128_cbc_decode(encrypted, encrypted_length, (uint8_t *)s_lfs_kv_cfg.key, iv, &decrypted,
-                                   &decrypted_length);
+    result = core_aes128_cbc_decode(encrypted, encrypted_length, (uint8_t *)s_lfs_kv_cfg.key, iv, &decrypted,
+                                    &decrypted_length);
     if (OPRT_OK != result) {
         return result;
     }
 
     if (0 == decrypted_length || decrypted_length % 16U != 0U) {
-        port_system_free(decrypted);
+        core_aes_free_data(decrypted);
         return OPRT_KVS_RD_FAIL;
     }
 
     padding_length = decrypted[decrypted_length - 1U];
     if (0 == padding_length || padding_length > 16U || padding_length >= decrypted_length) {
-        port_system_free(decrypted);
+        core_aes_free_data(decrypted);
         return OPRT_KVS_RD_FAIL;
     }
     for (i = 0; i < padding_length; ++i) {
         if (decrypted[decrypted_length - 1U - i] != padding_length) {
-            port_system_free(decrypted);
+            core_aes_free_data(decrypted);
             return OPRT_KVS_RD_FAIL;
         }
     }
@@ -503,9 +393,9 @@ static OPERATE_RET __kv_init(core_kv_cfg_t *kv_cfg)
 
     /* Key derivation: refreshed from the passed config on every init */
     memset(&s_lfs_kv_cfg, 0, sizeof(s_lfs_kv_cfg));
-    __sha256_ret((const uint8_t *)kv_cfg->seed, CORE_LV_KEY_LEN, sha256_ret);
+    core_sha256_ret((const uint8_t *)kv_cfg->seed, CORE_LV_KEY_LEN, sha256_ret, 0);
     memcpy(s_lfs_kv_cfg.seed, sha256_ret, CORE_LV_KEY_LEN);
-    __sha256_ret((const uint8_t *)kv_cfg->key, CORE_LV_KEY_LEN, sha256_ret);
+    core_sha256_ret((const uint8_t *)kv_cfg->key, CORE_LV_KEY_LEN, sha256_ret, 0);
     memcpy(s_lfs_kv_cfg.key, sha256_ret, CORE_LV_KEY_LEN);
 
     if (NULL == s_lfs_mutex) {
@@ -555,7 +445,7 @@ static OPERATE_RET __kv_set(const char *key, const uint8_t *value, size_t length
     port_mutex_lock(s_lfs_mutex);
     result = kv_storage_write(key, encrypted, encrypted_length);
     port_mutex_unlock(s_lfs_mutex);
-    port_system_free(encrypted);
+    core_aes_free_data(encrypted);
     return result;
 }
 
@@ -590,8 +480,8 @@ static OPERATE_RET __kv_get(const char *key, uint8_t **value, size_t *length)
         return result;
     }
 
-    /* The plaintext buffer allocated by kv_decrypt (NUL-terminated) is handed to
-     * the caller, who releases it with port_system_free (same allocator) */
+    /* The plaintext buffer allocated by core_aes128_cbc_decode (NUL-terminated)
+     * is handed to the caller, who releases it with core_free (same allocator) */
     result = kv_decrypt(encrypted, encrypted_length, value, length);
     port_system_free(encrypted);
     if (OPRT_OK != result) {
