@@ -4,9 +4,9 @@
  *
  * The socket calls go directly to the platform socket API. The platform
  * difference (POSIX on LINUX, lwIP on ESP32) is confined to the port-provided
- * core_network_platform.h header; the only platform-conditional code here is
- * the best-effort interface pin used by core_net_bind(). The active IPv4
- * address is kept in a local static and pushed by the link owner on link events.
+ * core_network_platform.h header, so this file contains no ops table and no
+ * platform #if. The active IPv4 address is kept in a local static and pushed
+ * by the link owner on link events.
  *
  * @copyright Copyright (c) 2021-2024 Tuya Inc. All Rights Reserved.
  *
@@ -18,14 +18,6 @@
 #include "core_network_platform.h"
 #include "core_system.h"
 #include "dev_evt.h"
-
-#if defined(__linux__) && !defined(ESP_PLATFORM)
-#include <arpa/inet.h>
-#include <net/if.h>
-#include <string.h>
-#include <sys/ioctl.h>
-#include <unistd.h>
-#endif
 
 /* Active link source address: pushed by the link owner (application/port
  * layer) on link events */
@@ -415,64 +407,6 @@ TUYA_ERRNO core_net_connect_raw(const int fd, void *p_socket_addr, const int len
 
     return connect(fd, (struct sockaddr *)p_socket_addr, len);
 }
-
-/* Best-effort pin of the socket to the interface owning addr; ignored by the
- * caller. lwIP has no SO_BINDTODEVICE, but it routes by the bound source
- * address (ip4_route_src hook), so no pin is needed there. */
-#if defined(__linux__) && !defined(ESP_PLATFORM)
-static int core_net_platform_bind_interface(int fd, TUYA_IP_ADDR_T addr)
-{
-    struct if_nameindex *name_list;
-    struct ifreq ifr;
-    struct sockaddr_in *sin;
-    int sock_fd;
-    int ret = -1;
-    int i;
-
-    name_list = if_nameindex();
-    if (NULL == name_list) {
-        return -1;
-    }
-
-    sock_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock_fd < 0) {
-        if_freenameindex(name_list);
-        return -2;
-    }
-
-    for (i = 0; name_list[i].if_index != 0; i++) {
-        if (strcmp(name_list[i].if_name, "lo") == 0) {
-            continue;
-        }
-
-        memset(&ifr, 0, sizeof(ifr));
-        strncpy(ifr.ifr_name, name_list[i].if_name, sizeof(ifr.ifr_name) - 1);
-        if (ioctl(sock_fd, SIOCGIFADDR, &ifr) < 0) {
-            continue;
-        }
-
-        sin = (struct sockaddr_in *)&ifr.ifr_addr;
-        if (sin->sin_addr.s_addr == htonl(addr)) {
-            ret = setsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE, name_list[i].if_name,
-                             sizeof(ifr.ifr_name));
-            break;
-        }
-    }
-
-    close(sock_fd);
-    if_freenameindex(name_list);
-
-    return ret;
-}
-#else
-static int core_net_platform_bind_interface(int fd, TUYA_IP_ADDR_T addr)
-{
-    (void)fd;
-    (void)addr;
-
-    return 0;
-}
-#endif
 
 /**
  * @brief Bind to network
