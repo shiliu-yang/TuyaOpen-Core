@@ -42,15 +42,6 @@ this port only supplies the platform header it includes.
 > application that does not register the callbacks does not support OTA
 > (`core_ota_*` returns `OPRT_NOT_SUPPORTED`).
 
-> The main card also has **macro-isolated** ex-RAM members
-> (`.ex_ram_malloc/.ex_ram_free`), implemented with
-> `heap_caps_malloc(MALLOC_CAP_SPIRAM)`. The switch is
-> `CONFIG_ENABLE_EXT_RAM` (`tuyaopen-core/Kconfig`,
-> **default n**, same name and same gating as the linux side). Enabling it also
-> requires `CONFIG_SPIRAM` in sdkconfig and PSRAM hardware -- otherwise
-> `heap_caps_malloc` has no SPIRAM capability and always returns
-> NULL. When disabled, the members do not exist (zero cost).
-
 `include/` is the platform interface domain header root and contains:
 
 - `common/`: 4 cross-target common type headers + `port_log.h` (this layer's
