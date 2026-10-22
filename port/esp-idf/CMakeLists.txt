@@ -1,18 +1,12 @@
-# tuyaopen-port (ESP32 TKL) build.
+# ESP32 port (esp-idf component).
 # Layout: include/ (domain headers) + src/ (TKL implementation) + interface/
 # (contract layer).
 #
-# This file is included by the esp-idf component entry in ../tuyaopen-port:
 # esp-idf derives a component's name from its directory name, so this
-# platform-named directory (`port/esp-idf`) cannot itself be the component
-# `tuyaopen-port`. The include runs in that component's context, so
-# idf_component_register() below registers `tuyaopen-port`, and
-# CMAKE_CURRENT_LIST_DIR (not CMAKE_CURRENT_SOURCE_DIR) keeps the sources and
-# headers rooted in this directory.
-if(TARGET tuyaopen-port)
-    return()
-endif()
-
+# directory is the `esp-idf` component: the application adds it with
+# EXTRA_COMPONENT_DIRS and depends on `esp-idf`. The plain library target built
+# below is named `tuyaopen-port` (the port archive), independent of the
+# component name.
 idf_component_register(
     SRCS "" INCLUDE_DIRS ""
     REQUIRES tuyaopen-core esp_wifi esp_event esp_netif nvs_flash lwip esp_timer app_update bt
@@ -152,20 +146,9 @@ if(TARGET tuyaopen-headers)
     target_include_directories(tuyaopen-headers INTERFACE ${_port_incs})
 endif()
 
-# core modules reference the port's card instances (api/kv/netif/ble); the port
-# itself references no core symbol (measured: 0 undefined core_* symbols in
-# libtuyaopen-port.a), so there is NO core<->port link cycle and no GNU ld
-# --start-group is needed. What matters is the order
-#     core libraries -> port archive -> esp-idf dependencies (bt/NimBLE ...),
-# and that order follows from esp-idf component registration: this component is
-# REQUIRES-linked to tuyaopen-core and bt, so the components are processed and
-# linked in dependency order. A plain target created by add_subdirectory() is
-# not part of the component graph (REQUIRES cannot resolve it, and component
-# requirements are replayed in script() mode where add_subdirectory is not
-# scriptable) -- that is why the port stays a real esp-idf component. The port
-# is linked by target name; the former --start-group/$<TARGET_FILE:...> wrapper
-# was defensive and is not required (a peer experiment removing it links and
-# runs identically).
+# The port is linked by target name. esp-idf component ordering (REQUIRES
+# tuyaopen-core and bt) places the core libraries, the port archive and the
+# esp-idf dependencies in link order.
 target_link_libraries(${COMPONENT_LIB} INTERFACE tuyaopen-port)
 
 unset(_port_srcs)

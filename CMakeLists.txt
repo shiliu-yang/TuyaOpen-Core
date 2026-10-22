@@ -18,8 +18,8 @@ include(${CMAKE_CURRENT_LIST_DIR}/tuyaopen-core.cmake)
 
 target_link_libraries(${COMPONENT_LIB} INTERFACE tuyaopen-core)
 
-# The ESP32 port is a separate esp-idf component (port/tuyaopen-port, a thin
-# entry over the platform implementation in port/esp-idf). It depends on this
-# component through REQUIRES, which fixes the component processing/link order
-# (the port must be scanned before its esp-idf dependencies such as bt/NimBLE);
-# the application adds both directories with EXTRA_COMPONENT_DIRS.
+# The ESP32 port is a separate esp-idf component: port/esp-idf (esp-idf names
+# components after their directories). It depends on this component through
+# REQUIRES, which fixes the component processing/link order (the port must be
+# scanned before its esp-idf dependencies such as bt/NimBLE); the application
+# adds both directories with EXTRA_COMPONENT_DIRS.

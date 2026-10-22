@@ -72,19 +72,17 @@ Not yet adapted (add when needed, with the same gating as the linux port):
 
 ## Build integration
 
-esp-idf derives a component's name from its directory name, so this
-platform-named directory cannot itself be the component `tuyaopen-port`. The
-thin entry `../tuyaopen-port/CMakeLists.txt` includes this file in the context
-of a component directory named `tuyaopen-port`; the application adds both
-`tuyaopen-core/` and `tuyaopen-core/port/tuyaopen-port` with
-`EXTRA_COMPONENT_DIRS` and depends on `tuyaopen-core` and `tuyaopen-port`.
+esp-idf derives a component's name from its directory name, so this directory
+is the `esp-idf` component; the application adds `tuyaopen-core/` and
+`tuyaopen-core/port/esp-idf` with `EXTRA_COMPONENT_DIRS` and depends on
+`tuyaopen-core` and `esp-idf`.
 Keeping the port a real esp-idf component is a hard requirement: `REQUIRES`
 only resolves registered components, and esp-idf replays component
 requirements in `script()` mode where `add_subdirectory` is not scriptable.
 Registration also fixes the link order: this component REQUIRES
 `tuyaopen-core` and `bt`, so esp-idf processes (and links) them in dependency
 order -- core libraries, then the port archive, then bt/NimBLE and its
-controller (measured token order in the generated link line).
+controller.
 
 This `CMakeLists.txt`:
 
@@ -101,10 +99,8 @@ This `CMakeLists.txt`:
   contract headers through `interface/`);
 - bridges core's mbedtls integration under esp-idf (adds the esp-idf
   `esp_config.h` include directory to `tuyaopen-headers`). No GNU ld link group
-  is used: the port references no core symbol (measured: zero undefined
-  `core_*` symbols in `libtuyaopen-port.a`), so there is no core<->port cycle;
-  core's references to the card instances are resolved by the component link
-  order above.
+  is used; core's references to the card instances are resolved by the
+  component link order above.
 
 **Deliberately does not link `core_system` and does not add core's header
 paths**: any include of core fails at compile time (a compile-time
