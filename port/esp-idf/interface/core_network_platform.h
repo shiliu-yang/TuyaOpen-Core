@@ -36,17 +36,4 @@
 #define CORE_NET_NATIVE_FD_SET(fds) ((fd_set *)(fds))
 typedef char core_net_fd_set_size_check_t[(sizeof(TUYA_FD_SET_T) >= sizeof(fd_set)) ? 1 : -1];
 
-/**
- * @brief lwIP has no SO_BINDTODEVICE equivalent: keep the core bind path uniform
- *
- * @return always 0
- */
-static inline int core_net_platform_bind_interface(int fd, TUYA_IP_ADDR_T addr)
-{
-    (void)fd;
-    (void)addr;
-
-    return 0;
-}
-
 #endif /* __CORE_NETWORK_PLATFORM_H__ */
