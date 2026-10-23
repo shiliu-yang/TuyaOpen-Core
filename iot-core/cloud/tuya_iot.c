@@ -23,8 +23,7 @@
  * responses persist the schema and activation record in KV, sync the
  * timestamp, and publish the corresponding events; the activated-data
  * removal path clears the schema, activation record and endpoint data and
- * stops the LAN service and the BLE network-configuration service when their
- * build switches are enabled.
+ * stops the LAN service and the BLE network-configuration service.
  *
  * The public API also exposes start/stop/reconnect/reset/destroy, token
  * registration, activated-state queries, JSON DP reporting with optional
@@ -437,6 +436,11 @@ static void mqtt_client_connected_on(void *context, void *user_data)
         core_sw_timer_start(client->check_upgrade_timer, 1000 * 1, CORE_TIMER_ONCE);
     }
 
+    /* LAN retry: an activated device starts the service from tuya_iot_start()
+     * (it must serve the LAN even when the cloud is unreachable); this call
+     * only retries it if that attempt failed. tuya_lan_enable() is idempotent. */
+    tuya_lan_enable();
+
     /* Send connected event*/
     client->event.id = TUYA_EVENT_MQTT_CONNECTED;
     client->event.type = TUYA_DATE_TYPE_UNDEFINED;
@@ -700,6 +704,16 @@ int tuya_iot_start(tuya_iot_client_t *client)
     if (client->state != STATE_IDLE) {
         return OPRT_COM_ERROR;
     }
+
+    /* An activated device must serve the LAN even when the cloud MQTT is
+     * unreachable, so the service starts here, before any cloud I/O. The
+     * listening sockets bind to INADDR_ANY, so this is valid before the link
+     * is up. Upstream gets the same effect from the netmgr link-up timer;
+     * netmgr is not part of core. A second attempt runs on MQTT connect. */
+    if (client->is_activated) {
+        tuya_lan_enable();
+    }
+
     client->nextstate = STATE_START;
     return OPRT_OK;
 }
@@ -793,9 +807,7 @@ int tuya_iot_destroy(tuya_iot_client_t *client)
         return OPRT_INVALID_PARM;
     }
 
-#if defined(ENABLE_LOCAL_LINK) && (ENABLE_LOCAL_LINK == 1)
     tuya_lan_disable();
-#endif
 
 #if defined(ENABLE_BLUETOOTH) && (ENABLE_BLUETOOTH == 1)
     ble_netcfg_stop();
@@ -1028,6 +1040,10 @@ int tuya_iot_yield(tuya_iot_client_t *client)
         }
         client->is_activated = true;
 
+        /* The device is now activated: serve the LAN immediately, without
+         * waiting for MQTT (the cloud may be unreachable). */
+        tuya_lan_enable();
+
         /* Retry to load activate */
         client->nextstate = STATE_STARTUP_UPDATE;
         /* DP event send */
@@ -1138,9 +1154,7 @@ int tuya_iot_activated_data_remove(tuya_iot_client_t *client)
     }
 
     client->is_activated = false;
-#if defined(ENABLE_LOCAL_LINK) && (ENABLE_LOCAL_LINK == 1)
     tuya_lan_disable();
-#endif
 #if defined(ENABLE_BLUETOOTH) && (ENABLE_BLUETOOTH == 1)
     ble_netcfg_stop();
 #endif

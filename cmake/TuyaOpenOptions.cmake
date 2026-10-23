@@ -8,10 +8,8 @@ option(CONFIG_ENABLE_CELLULAR "Build core_cellular and cellular netmgr sources" 
 option(CONFIG_ENABLE_PLATFORM_MBEDTLS "Use platform mbedTLS instead of the bundled copy" OFF)
 option(CONFIG_ENABLE_DEVICE_TIMER "Include tuya_device_timer.c in tuya_cloud_service" OFF)
 option(CONFIG_ENABLE_TUYA_P2P "Build tuya_p2p subtree" OFF)
-# Default ON: when disabled, the LAN protocol is not compiled and the port does
-# not need to adapt LAN-related net ops (accept/listen/send_to/recvfrom/recv_nd_size).
-# lan/lan_sock.c (socket event loop) is not disabled along with it: the AI monitor reuses it.
-option(CONFIG_ENABLE_LOCAL_LINK "Build the LAN (local link) service: lan/tuya_lan.c" ON)
+# The LAN (local link) service (lan/tuya_lan.c) is always built, as upstream:
+# it has no build switch.
 option(CONFIG_ENABLE_LOCAL_STORE "Build tuya_p2p/local_store" OFF)
 option(CONFIG_ENABLE_IPC_RING_BUFFER "Build tuya_p2p/svc_ring_buffer" OFF)
 option(CONFIG_ENABLE_AI_COMPONENTS "Build the agent-core component layer on top of tuya_ai_service" OFF)
@@ -47,7 +45,6 @@ foreach(_tuyaopen_opt
     CONFIG_ENABLE_PLATFORM_MBEDTLS
     CONFIG_ENABLE_DEVICE_TIMER
     CONFIG_ENABLE_TUYA_P2P
-    CONFIG_ENABLE_LOCAL_LINK
     CONFIG_ENABLE_LOCAL_STORE
     CONFIG_ENABLE_IPC_RING_BUFFER
     CONFIG_ENABLE_AI_COMPONENTS

@@ -35,9 +35,6 @@
 /* #ifndef ENABLE_TUYA_P2P
 #define ENABLE_TUYA_P2P 1
 #endif */
-/* #ifndef ENABLE_LOCAL_LINK
-#define ENABLE_LOCAL_LINK 1
-#endif */
 /* #ifndef LITTLE_END
 #define LITTLE_END 1
 #endif */

@@ -305,7 +305,6 @@ int tuya_iot_dp_obj_report(tuya_iot_client_t *client, const char *devid, dp_obj_
 
     bool need_free_dpvalid = true;
 
-#if defined(ENABLE_LOCAL_LINK) && (ENABLE_LOCAL_LINK == 1)
     if (tuya_lan_is_connected()) {
         char *out = NULL;
         PR_DEBUG("lan channel report");
@@ -314,7 +313,6 @@ int tuya_iot_dp_obj_report(tuya_iot_client_t *client, const char *devid, dp_obj_
         core_free(out);
         tuya_iot_dp_sync_start(client, 5);
     }
-#endif
 
     if (tuya_iot_is_connected()) {
         PR_DEBUG("mqtt channel report");
@@ -466,14 +464,12 @@ int tuya_iot_dp_raw_report(tuya_iot_client_t *client, const char *devid, dp_raw_
         return OPRT_BUFFER_NOT_ENOUGH;
     }
 
-#if defined(ENABLE_LOCAL_LINK) && (ENABLE_LOCAL_LINK == 1)
     if (tuya_lan_is_connected()) {
         char *out = NULL;
         dp_rept_json_append(schema, dpout.dpsjson, NULL, NULL, 0, &out);
         ret = tuya_lan_dp_report(out);
         core_free(out);
     }
-#endif
 
     if (tuya_iot_is_connected()) {
         ret = tuya_iot_dp_report_json_async(client, dpout.dpsjson, NULL, dp_raw_async_cb, NULL, timeout);

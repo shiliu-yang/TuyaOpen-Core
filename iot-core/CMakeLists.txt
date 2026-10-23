@@ -18,13 +18,8 @@ if(NOT CONFIG_ENABLE_DEVICE_TIMER)
     list(REMOVE_ITEM _cloud_srcs "${CMAKE_CURRENT_SOURCE_DIR}/cloud/tuya_device_timer.c")
 endif()
 
-# The LAN protocol (tuya_lan.c) is gated by CONFIG_ENABLE_LOCAL_LINK (default ON):
-# when disabled it is not compiled, and the port's LAN net ops
-# (accept/listen/send_to/recvfrom/recv_nd_size) need no adaptation.
-# lan_sock.c (the socket event loop) is not gated -- AI monitor reuses it.
-if(NOT CONFIG_ENABLE_LOCAL_LINK)
-    list(REMOVE_ITEM _cloud_srcs "${CMAKE_CURRENT_SOURCE_DIR}/lan/tuya_lan.c")
-endif()
+# The LAN protocol (lan/tuya_lan.c) is always built, as upstream; lan_sock.c
+# (the socket event loop) is shared with the AI monitor.
 
 set(_cloud_incs
     ${CMAKE_CURRENT_SOURCE_DIR}/cloud

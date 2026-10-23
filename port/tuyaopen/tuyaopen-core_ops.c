@@ -94,18 +94,12 @@ CORE_NETWORK_OPS_T core_network_ops_platform = {
     .str2addr = tkl_net_str2addr,
     .addr2str = tkl_net_addr2str,
     .setsockopt = tkl_net_setsockopt,
-#if defined(ENABLE_LOCAL_LINK) || defined(ENABLE_TUYA_P2P) || defined(ENABLE_AI_COMPONENTS)
     //! local link / p2p members
     .listen = tkl_net_listen,
     .accept = tkl_net_accept,
-#endif
-#if defined(ENABLE_LOCAL_LINK) || defined(ENABLE_TUYA_P2P)
     .send_to = tkl_net_send_to,
     .recvfrom = tkl_net_recvfrom,
-#endif
-#if defined(ENABLE_LOCAL_LINK)
     .recv_nd_size = tkl_net_recv_nd_size,
-#endif
 #if defined(ENABLE_TUYA_P2P)
     .fd_clear = tkl_net_fd_clear,
     .shutdown = tkl_net_shutdown,

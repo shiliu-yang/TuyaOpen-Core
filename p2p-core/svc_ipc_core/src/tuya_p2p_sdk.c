@@ -36,9 +36,7 @@ OPERATE_RET httpc_gw_active(const GW_ACTV_IN_PARM_V41_S *param, cJSON **result);
 OPERATE_RET __p2p_v3_login_init(int preconnect, int max_client, int bitrate);
 void tuya_p2p_rtc_signaling_cb(char *remote_id, char *signaling, uint32_t len);
 void tuya_p2p_lan_signaling_cb(char *remote_id, char *signaling, uint32_t len);
-#if defined(ENABLE_LOCAL_LINK) && (ENABLE_LOCAL_LINK == 1)
 static int ipc_lan_cmd_cb(const uint8_t *data, uint8_t **out);
-#endif
 
 OPERATE_RET TUYA_APP_Start(TUYA_IPC_SDK_VAR_S *pSdkVar)
 {
@@ -252,18 +250,15 @@ OPERATE_RET __p2p_v3_login_init(int preconnect, int max_client, int bitrate)
         PR_ERR("mqtt p2p init failed");
         return -2;
     }
-    /* App LAN retry/signaling uses frame type 0x20 (this channel is absent when the LAN protocol is not built in) */
-#if defined(ENABLE_LOCAL_LINK) && (ENABLE_LOCAL_LINK == 1)
+    /* App LAN retry/signaling uses frame type 0x20 */
     mqttP2pRet = tuya_lan_register_cb(FRM_LAN_P2P_SIGNAL, ipc_lan_cmd_cb);
     if (OPRT_OK != mqttP2pRet) {
         PR_ERR("tuya_lan_register_cb(0x20) failed:%d", mqttP2pRet);
         return mqttP2pRet;
     }
-#endif
     return mqttP2pRet;
 }
 
-#if defined(ENABLE_LOCAL_LINK) && (ENABLE_LOCAL_LINK == 1)
 /**
  * @brief LAN Type=0x20 P2P signaling handler (App retry / LAN path)
  * @param[in] data decrypted LAN payload (NUL-terminated JSON)
@@ -292,7 +287,6 @@ static int ipc_lan_cmd_cb(const uint8_t *data, uint8_t **out)
     }
     return OPRT_OK;
 }
-#endif
 
 /**
  * @brief Send P2P answer/candidate signaling back to App over LAN Type=0x20
@@ -309,9 +303,7 @@ void tuya_p2p_lan_signaling_cb(char *remote_id, char *signaling, uint32_t len)
         return;
     }
     PR_DEBUG("lan signaling report len:%u", len);
-#if defined(ENABLE_LOCAL_LINK) && (ENABLE_LOCAL_LINK == 1)
     (void)tuya_lan_data_report(FRM_LAN_P2P_SIGNAL, 0, (uint8_t *)signaling, len);
-#endif
 }
 
 void tuya_p2p_rtc_signaling_cb(char *remote_id, char *signaling, uint32_t len)

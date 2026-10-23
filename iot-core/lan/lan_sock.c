@@ -6,9 +6,8 @@
  * A single LAN_SLOOP_S instance keeps a fixed-size reader table, the highest
  * socket number, a termination flag and a queue for adding, updating and
  * removing readers without taking a lock in the loop thread. The table holds
- * LAN_UDP_READER_CNT resident slots plus, when ENABLE_LOCAL_LINK is set,
- * tuya_lan_get_client_num() client slots; without the LAN protocol only the
- * resident slots remain, which is what the AI monitor registers against.
+ * LAN_UDP_READER_CNT resident slots plus tuya_lan_get_client_num() client
+ * slots.
  *
  * tuya_sock_loop_init() allocates the table, creates the queue and starts
  * the "lan_sock_loop" thread. Each iteration takes at most one queued reader
@@ -17,8 +16,7 @@
  * sets with a one-second timeout. Exception descriptors invoke their err
  * hook, readable descriptors their read hook, and the loop ends when
  * tuya_sock_loop_disable() clears the terminate flag; each reader's quit hook
- * then runs before the resources are released and, with ENABLE_LOCAL_LINK,
- * tuya_lan_exit() is called.
+ * then runs before the resources are released and tuya_lan_exit() is called.
  *
  * Registration and unregistration only enqueue a sloop_sock_t, so they are
  * safe from other threads; the loop performs the actual table update and
@@ -56,14 +54,7 @@ static P_LAN_SLOOP_S g_sloop = NULL;
 
 static uint32_t __ty_sock_get_reader_num(void)
 {
-#if defined(ENABLE_LOCAL_LINK) && (ENABLE_LOCAL_LINK == 1)
     return (LAN_UDP_READER_CNT + tuya_lan_get_client_num());
-#else
-    /* LAN protocol not compiled in: the reader table keeps only the resident
-     * slots for AI monitor registration (1 server + up to 3 clients, see
-     * AI_MONITOR_MAX_CLIENTS_DEFAULT) */
-    return LAN_UDP_READER_CNT;
-#endif
 }
 
 static void __sock_table_set_fds(TUYA_FD_SET_T *rfds, TUYA_FD_SET_T *efds)
@@ -285,9 +276,7 @@ Err:
         core_free(efds);
     }
 
-#if defined(ENABLE_LOCAL_LINK) && (ENABLE_LOCAL_LINK == 1)
     tuya_lan_exit();
-#endif
     __ty_sock_loop_deinit();
 
     return;
