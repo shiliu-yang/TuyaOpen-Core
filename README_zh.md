@@ -55,15 +55,34 @@ git submodule update --init --recursive
 - [集成到现有工程](https://tuyaopen.ai/docs/tuyaopen-core/add-to-project)
 - [移植到其他平台](https://tuyaopen.ai/docs/tuyaopen-core/port-to-platform)
 
+查看 Linux 示例及其使用文档：
+
+[示例总览](examples/linux/README_zh.md) · [IoT](examples/linux/iot_demo/README_zh.md) · [AI Agent](examples/linux/agent_demo/README_zh.md) · [P2P](examples/linux/p2p_demo/README_zh.md)
+
 ## 仓库目录
 
-| 路径 | 内容 |
-| --- | --- |
-| [iot-core](iot-core) | 云连接和 IoT 服务。 |
-| [agent-core](agent-core) | AI Agent 服务。 |
-| [p2p-core](p2p-core) | P2P 和媒体服务。 |
-| [port](port) | 平台适配与契约。 |
-| [third_party](third_party) | 外部库子模块。 |
+~~~text
+tuyaopen-core/
+├── agent-core/          # AI Agent 对话服务与 MCP 支持。
+├── iot-core/            # 云连接、设备管理和 IoT 服务。
+├── p2p-core/            # P2P 音视频和媒体服务。
+├── examples/            # 示例应用。
+│   └── linux/           # Linux 示例工程。
+│       ├── iot_demo/    # IoT 设备上云。
+│       ├── agent_demo/  # AI 对话。
+│       ├── p2p_demo/    # P2P 音视频。
+│       └── components/  # 示例共享组件。
+├── port/                # 平台适配与操作契约。
+│   ├── linux/           # Linux/POSIX 平台适配。
+│   ├── esp-idf/         # ESP-IDF/FreeRTOS 平台适配。
+│   └── tuyaopen/        # TuyaOpen 操作适配与共享契约。
+├── third_party/         # 外部库子模块。
+├── cmake/               # CMake 构建选项。
+├── CMakeLists.txt       # ESP-IDF 组件入口。
+├── tuyaopen-core.cmake  # 普通 CMake 集成入口。
+├── Kconfig              # 统一功能配置入口。
+└── Kconfig.projbuild    # ESP-IDF 菜单配置入口。
+~~~
 
 ## 文档与社区
 

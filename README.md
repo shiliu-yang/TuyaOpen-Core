@@ -55,15 +55,34 @@ Then follow the guide for your platform or integration:
 - [Add Core to an existing project](https://tuyaopen.ai/docs/tuyaopen-core/add-to-project)
 - [Port to another platform](https://tuyaopen.ai/docs/tuyaopen-core/port-to-platform)
 
+Explore the Linux examples and their documentation:
+
+[Overview](examples/linux/README.md) · [IoT](examples/linux/iot_demo/README.md) · [AI Agent](examples/linux/agent_demo/README.md) · [P2P](examples/linux/p2p_demo/README.md)
+
 ## Repository
 
-| Path | Contents |
-| --- | --- |
-| [iot-core](iot-core) | Cloud connectivity and IoT services. |
-| [agent-core](agent-core) | AI Agent services. |
-| [p2p-core](p2p-core) | P2P and media services. |
-| [port](port) | Platform adapters and contracts. |
-| [third_party](third_party) | External library submodules. |
+~~~text
+tuyaopen-core/
+├── agent-core/          # AI Agent conversation services and MCP support.
+├── iot-core/            # Cloud connectivity, device management and IoT services.
+├── p2p-core/            # P2P audio/video and media services.
+├── examples/            # Example applications.
+│   └── linux/           # Linux example projects.
+│       ├── iot_demo/    # IoT device connectivity to Tuya Cloud.
+│       ├── agent_demo/  # AI conversations.
+│       ├── p2p_demo/    # P2P audio and video.
+│       └── components/  # Shared example components.
+├── port/                # Platform adapters and operation contracts.
+│   ├── linux/           # Linux/POSIX platform adapter.
+│   ├── esp-idf/         # ESP-IDF/FreeRTOS platform adapter.
+│   └── tuyaopen/        # TuyaOpen operations adapter and shared contracts.
+├── third_party/         # External library submodules.
+├── cmake/               # CMake build options.
+├── CMakeLists.txt       # ESP-IDF component entry point.
+├── tuyaopen-core.cmake  # Plain CMake integration entry point.
+├── Kconfig              # Unified feature configuration entry point.
+└── Kconfig.projbuild    # ESP-IDF menu configuration entry point.
+~~~
 
 ## Documentation and community
 
