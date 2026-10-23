@@ -1,5 +1,7 @@
 # agent_demo
 
+English | [中文](README_zh.md)
+
 ## Introduction
 
 A Linux demo that runs the **whole link to the cloud AI agent**: it uploads a
@@ -78,7 +80,7 @@ Runtime behavior:
 
 | Symbol | Meaning | Default |
 |---|---|---|
-| `AGENT_DEMO` | Build this example; selects `ENABLE_AI_COMPONENTS`, `ENABLE_QRCODE`, `ENABLE_TUYA_CODEC` | y (no prompt) |
+| `AGENT_DEMO` | Build this example; selects `ENABLE_AI_COMPONENTS`, `ENABLE_QRCODE` | y (no prompt) |
 | `AGENT_DEMO_AUDIO_FILE` | Uplink voice sample path (16k/16bit/mono PCM); empty uses the bundled sample | "" |
 | `ENABLE_COMP_AI_MCP` (defined in core, see `agent-core/svc_ai_mcp/Kconfig`) | MCP link switch: the core server (`svc_ai_mcp`) + the application-side tool set (`src/components/ai_mcp`, see "MCP support"); the demo defaults it to ON in `CMakeLists.txt` | ON (built-in default) |
 
@@ -87,7 +89,7 @@ there is no need to disable it):
 
 ```bash
 pip3 install --user kconfiglib          # one-time
-cd linux
+cd tuyaopen-core/examples/linux/agent_demo
 KCONFIG_CONFIG=./.config menuconfig     # interactive configuration
 KCONFIG_CONFIG=./.config olddefconfig   # generate from defaults
 ```
@@ -149,9 +151,8 @@ cd build && ./agent_http_selftest
 ```
 
 > Verification discipline: use `cmake --build build` (**all targets**) as the
-> criterion — running a single selftest is not complete verification (for
-> example, with `CONFIG_ENABLE_TUYA_CODEC=OFF` all three selftests link but the
-> agent_demo main target fails to link because `tuya_ai_get_encoder` is missing).
+> criterion — running a single selftest is not complete verification: the
+> selftests can link while the agent_demo main target fails to link.
 
 - `agent_chain_selftest`: uplink audio source contract and sample frame
   splitting — total bytes 82944, split into 80ms frames (2560B) = 33 frames
@@ -209,8 +210,9 @@ and push capture semantics — those decisions belong to a conversation state
 machine that this demo does not implement.
 
 **Audio/video capabilities not implemented**:
-- **Uplink Opus encoding**: this demo sends PCM directly (`codec_enable=FALSE`);
-  add Opus through the `ENABLE_COMP_AI_AUDIO_CODEC_OPUS` path if needed;
+- **Uplink Opus encoding**: uplink audio is always PCM 16kHz/16bit/mono in this
+  demo; there is no Opus encoder path in this tree — adding one is
+  application-layer work;
 - **Downlink TTS playback**: when the AI audio module is disabled, downlink
   audio packets are dropped; when `ENABLE_COMP_AI_AUDIO` is enabled they are
   played through the application-side ALSA consumer;
@@ -241,10 +243,9 @@ interaction are not enabled.
   needs QR-code activation with the Tuya App; running from another directory
   means another device identity and requires scanning again (or copying the
   activated `tuyadb/` along).
-- **Uplink audio is PCM pass-through** (`codec_enable=FALSE`): Opus encoding is
-  not enabled. If the cloud requires an encoded uplink, enable
-  `ENABLE_COMP_AI_AUDIO_CODEC_OPUS` (which adds the libopus dependency) and
-  change the audio attribute branch in `ai_agent.c`.
+- **Uplink audio is PCM 16kHz/16bit/mono**: Opus encoding is not implemented.
+  If the cloud requires an encoded uplink, integrate an encoder in the
+  application and change the audio attribute branch in `ai_agent.c`.
 - **One upload only**: the trigger is one-shot; for multiple rounds, rerun or
   extend the trigger thread.
 - **Downlink audio is dropped** when `ENABLE_COMP_AI_AUDIO` is disabled; the

@@ -1,5 +1,7 @@
 # p2p_demo
 
+English | [中文](README_zh.md)
+
 ## Overview
 
 A Linux demo that pushes device video to the Tuya App over a P2P channel (the
@@ -67,7 +69,7 @@ instead of disabling it):
 
 ```bash
 pip3 install --user kconfiglib          # one-time
-cd linux
+cd tuyaopen-core/examples/linux/p2p_demo
 KCONFIG_CONFIG=./.config menuconfig     # interactive configuration
 KCONFIG_CONFIG=./.config olddefconfig   # generate from defaults
 ```

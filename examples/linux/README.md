@@ -1,5 +1,7 @@
 # tuyaopen-core linux target
 
+English | [中文](README_zh.md)
+
 ## Build
 
 The examples live in the core repository (`tuyaopen-core/examples/linux/`).
@@ -40,7 +42,7 @@ Note: once a `.config` exists, it takes precedence (the built-in defaults are
 no longer used as a fallback). Delete `.config` to return to the built-in
 defaults. `.config` is not committed (.gitignore).
 
-Manual equivalent without menuconfig: `-DCONFIG_ENABLE_WIFI=ON`, or edit the
+Manual equivalent without menuconfig: `-DCONFIG_ENABLE_WIRED=ON`, or edit the
 commented switches in
 `../../port/linux/include/common/tuya_kconfig.h` (`-D` takes priority).
 

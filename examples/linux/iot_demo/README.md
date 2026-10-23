@@ -1,5 +1,7 @@
 # iot_demo
 
+English | [中文](README_zh.md)
+
 ## Overview
 A simple, cross-platform, cross-system, and multi-connection switch example. By using the Tuya App and Tuya Cloud Services, you can pair, activate, upgrade, remotely control (when away), local area network control (within the same LAN), and Bluetooth control (when no network is available) for this switch.
 
